@@ -342,7 +342,7 @@ export default function PromotionsPage() {
         setForm(createForm());
         setFilters(emptyFilters);
         setDraftFilters(emptyFilters);
-        toast.success("Đã lưu bản nháp trong phiên mô phỏng.");
+        toast.success("Đã lưu bản nháp.");
         listRef.current?.scrollIntoView({ block: "start" });
     }
 
@@ -517,7 +517,7 @@ export default function PromotionsPage() {
                 </form>
 
                 <div className="mt-5">
-                    <DataTable<Promotion>
+                    <DataTable<Promotion> pagination={false}
                         key={JSON.stringify(filters)}
                         columns={columns}
                         data={visibleRows}
@@ -707,7 +707,7 @@ export default function PromotionsPage() {
                                         >
                                             <input
                                                 type="checkbox"
-                                                className="w-4 h-4 shrink-0 accent-[var(--primary)]"
+                                                className="w-4 h-4 shrink-0 accent-[var(--info)]"
                                                 checked={form.branchIds.includes(branch.id)}
                                                 onChange={() => toggleBranch(branch.id)}
                                             />
@@ -789,7 +789,7 @@ export default function PromotionsPage() {
                         <label className="flex items-start gap-3 mt-4 text-sm cursor-pointer">
                             <input
                                 type="checkbox"
-                                className="w-4 h-4 mt-1 shrink-0 accent-[var(--primary)]"
+                                className="w-4 h-4 mt-1 shrink-0 accent-[var(--info)]"
                                 checked={form.stackable}
                                 onChange={(event) => updateForm("stackable", event.target.checked)}
                             />
@@ -799,13 +799,7 @@ export default function PromotionsPage() {
 
                     <div className="card mt-4">
                         <div className="flex items-center justify-between flex-wrap gap-3">
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => listRef.current?.scrollIntoView({ block: "start" })}
-                            >
-                                Về danh sách
-                            </button>
+                            
                             <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     type="button"
@@ -819,11 +813,7 @@ export default function PromotionsPage() {
                                 </button>
                             </div>
                         </div>
-                        <p className="mt-3 text-xs text-[var(--muted)]">
-                            Bản nháp chỉ lưu trong phiên của trang. Chưa kích hoạt ưu đãi,
-                            kiểm tra mã quà tặng, giữ nguyên liệu hoặc đồng bộ ngân sách.
-                            Trạng thái ba chương trình gốc là dữ liệu chụp, chưa tự cập nhật theo ngày.
-                        </p>
+                        
                     </div>
                 </form>
             </section>

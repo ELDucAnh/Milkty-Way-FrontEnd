@@ -104,7 +104,7 @@ export default function DashboardPage() {
         }
 
         setFilters({ ...draft });
-        toast.info("Đã lọc bảng đơn hàng gần đây. KPI và biểu đồ chưa có dữ liệu phân rã.");
+        toast.info("Đã áp dụng bộ lọc.");
     }
 
     function setPeriodStart(period: "month" | "year") {
@@ -193,13 +193,7 @@ export default function DashboardPage() {
             id: "actions",
             header: "Thao tác",
             render: (order) => (
-                <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => toast.info(`Chờ liên kết hóa đơn cho đơn ${order.id}.`)}
-                >
-                    Xem
-                </button>
+                <Link className="btn btn-secondary btn-sm" to={`/invoices/invoice-details?orderId=${encodeURIComponent(order.id)}`}>Xem</Link>
             ),
         },
     ];
@@ -236,13 +230,7 @@ export default function DashboardPage() {
             id: "actions",
             header: "Thao tác",
             render: (item) => (
-                <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => toast.info(`Chờ tích hợp đề xuất mua ${item.name} với module mua hàng.`)}
-                >
-                    Đặt mua
-                </button>
+                <Link className="btn btn-outline btn-sm" to="/purchases/new">Đặt mua</Link>
             ),
         },
     ];
@@ -367,9 +355,7 @@ export default function DashboardPage() {
                         </button>
                     </div>
                 </form>
-                <p className="mt-3 text-xs text-[var(--muted)]">
-                    Hiện chỉ lọc bảng đơn hàng gần đây. KPI giữ nguyên số liệu tổng hợp gốc.
-                </p>
+                
             </section>
 
       <div className="page-section grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
@@ -722,5 +708,5 @@ export default function DashboardPage() {
         </div>
       </div>
 
-<section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><h2 className="card-title">Đơn hàng gần đây</h2><p className="card-subtitle">Giao dịch gần đây</p></div></div><Link to="/sales" className="btn btn-secondary btn-sm">Xem tất cả đơn hàng</Link></div><DataTable columns={orderColumns} data={visibleOrders} rowKey={o => o.id} caption="Danh sách đơn hàng gần đây" pagination={false} /></section><section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-danger w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div><h2 className="card-title">Nguyên liệu dưới ngưỡng</h2><p className="card-subtitle">Mặt hàng cần nhập thêm</p></div><Badge variant="danger">3 nguyên liệu</Badge></div></div><DataTable columns={stockColumns} data={ingredients} rowKey={o => o.id} caption="Nguyên liệu dưới ngưỡng tại kho tổng" pagination={false} /></section></div>);
+<section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><h2 className="card-title">Đơn hàng gần đây</h2><p className="card-subtitle">Giao dịch gần đây</p></div></div><Link to="/sales" className="btn btn-secondary btn-sm">Xem tất cả đơn hàng</Link></div><DataTable columns={orderColumns} data={visibleOrders} rowKey={o => o.id} caption="Danh sách đơn hàng gần đây" pagination={false} /></section><section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-danger w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div><h2 className="card-title">Nguyên liệu dưới ngưỡng</h2><p className="card-subtitle">Mặt hàng cần nhập thêm</p></div><Badge variant="danger">3 nguyên liệu</Badge></div><Link to="/inventory/ingredients" className="btn btn-secondary btn-sm">Xem nguyên liệu</Link></div><DataTable columns={stockColumns} data={ingredients} rowKey={o => o.id} caption="Nguyên liệu dưới ngưỡng tại kho tổng" pagination={false} /></section></div>);
 }

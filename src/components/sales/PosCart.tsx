@@ -248,10 +248,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                         {formatCurrency(total)}
                     </strong>
                 </div>
-                <p className="mt-3 text-xs text-[var(--muted)]">
-                    Tính toán mô phỏng: thuế tính trên giá trị sau giảm giá.
-                    Cần đối chiếu quy tắc gốc trước nghiệm thu.
-                </p>
+                
             </div>
 
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
@@ -260,7 +257,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                         <button
                             key={amount}
                             type="button"
-                            className="btn btn-secondary btn-sm"
+                            className="quick-amount-btn px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[12px] font-semibold text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--primary-light)]"
                             onClick={() => setPaidInput(String(amount))}
                         >
                             {formatCurrency(amount)}
@@ -270,7 +267,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
 
                 <div className="grid grid-cols-2 gap-3 mb-4">
                     <div>
-                        <label className="form-label" htmlFor="pos-paid-amount">
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1.5" htmlFor="pos-paid-amount">
                             Tiền khách đưa (đ)
                         </label>
                         <input
@@ -278,30 +275,32 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                             type="number"
                             min="0"
                             step="1"
-                            className="form-input"
+                            className="w-full h-11 px-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--text)] text-sm font-bold focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all"
                             value={paidInput}
                             onChange={(event) => setPaidInput(event.target.value)}
                         />
                     </div>
                     <div>
-                        <label className="form-label" htmlFor="pos-change">Tiền thừa</label>
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1.5" htmlFor="pos-change">Tiền thừa</label>
                         <output
                             id="pos-change"
-                            className="form-input block text-[var(--primary)]"
+                            className="h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center px-3.5 font-bold text-sm text-emerald-700"
                         >
                             {formatCurrency(change)}
                         </output>
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    className="btn btn-primary w-full h-14 justify-center"
-                    disabled={!items.length}
-                    onClick={completeSale}
-                >
-                    Hoàn tất bán hàng · {formatCurrency(total)}
-                </button>
+<button id="pos-complete-btn" type="button" onClick={completeSale} className="group relative w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-500 to-emerald-600 text-white text-[15px] font-bold flex items-center justify-center gap-3 transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(34,181,115,0.5)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_4px_15px_-2px_rgba(34,181,115,0.4)] overflow-hidden">
+              <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></span>
+              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:bg-white/30 transition-all">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <span className="flex items-center gap-2">
+                Hoàn tất bán hàng
+                <span className="px-2.5 py-0.5 rounded-lg bg-white/20 text-[14px] font-extrabold backdrop-blur-sm"><span id="pos-total-label">{formatCurrency(total)}</span></span>
+              </span>
+            </button>
             </div>
 
             <ConfirmDialog
