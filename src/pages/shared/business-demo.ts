@@ -471,3 +471,17 @@ export function usableLotQuantity(lot: IngredientLot, today = getTodayISO()): nu
     if (lot.quality !== "pass" || lot.quantity <= 0 || (lot.expiryDate !== null && lot.expiryDate < today)) return 0;
     return lot.quantity;
 }
+
+export function availableLotQuantity(
+    lot: IngredientLot,
+    today = getTodayISO()
+): number {
+    const usable = usableLotQuantity(lot, today);
+
+    return Math.max(
+        0,
+        usable
+            - (lot.reservedQuantity ?? 0)
+            - (lot.lockedQuantity ?? 0)
+    );
+}
