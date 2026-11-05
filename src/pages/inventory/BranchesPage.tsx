@@ -1,127 +1,55 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
-interface Branch {id:string;code:string;name:string;area:string;address:string;manager:string;pos:number;capacity:string;status:"active"|"suspended"|"connection"|"loss";note:string;}
-const BRANCHES:Branch[]=[
- {id:"b1",code:"CN01",name:"Bến Nghé",area:"Quận 1",address:"12 Nguyễn Huệ",manager:"CN Trưởng 01",pos:3,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b2",code:"CN02",name:"Bàn Cờ",area:"Quận 3",address:"45 Nguyễn Đình Chiểu",manager:"CN Trưởng 02",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b3",code:"CN03",name:"Chợ Lớn",area:"Quận 5",address:"18 Trần Hưng Đạo",manager:"CN Trưởng 03",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b4",code:"CN04",name:"Tân Hưng",area:"Quận 7",address:"88 Nguyễn Thị Thập",manager:"CN Trưởng 04",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b5",code:"CN05",name:"Hàng Xanh",area:"Bình Thạnh",address:"20 Xô Viết Nghệ Tĩnh",manager:"CN Trưởng 05",pos:3,capacity:"Cần cấu hình",status:"loss",note:"Cần kiểm tra tồn dưới mức an toàn."},
- {id:"b6",code:"CN06",name:"Làng Đại Học",area:"Thủ Đức",address:"Đường Võ Trường Toản",manager:"CN Trưởng 06",pos:2,capacity:"Cần cấu hình",status:"suspended",note:"Một số món đang tạm khóa do tình trạng nguyên liệu."},
- {id:"b7",code:"CN07",name:"Bảy Hiền",area:"Tân Bình",address:"100 Cách Mạng Tháng 8",manager:"CN Trưởng 07",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b8",code:"CN08",name:"Cityland",area:"Gò Vấp",address:"Khu Cityland",manager:"CN Trưởng 08",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b9",code:"CN09",name:"Phan Xích Long",area:"Phú Nhuận",address:"50 Phan Xích Long",manager:"CN Trưởng 09",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b10",code:"CN10",name:"Bắc Hải",area:"Quận 10",address:"12 Bắc Hải",manager:"CN Trưởng 10",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b11",code:"CN11",name:"Lãnh Binh Thăng",area:"Quận 11",address:"30 Lãnh Binh Thăng",manager:"CN Trưởng 11",pos:2,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
- {id:"b12",code:"CN12",name:"Kênh Nước Đen",area:"Tân Phú",address:"Khu Kênh Nước Đen",manager:"CN Trưởng 12",pos:1,capacity:"Cần cấu hình",status:"active",note:"Chi nhánh hoạt động bình thường."},
-];
-const LABEL={active:"Hoạt động",suspended:"Tạm ngừng / tạm khóa món",connection:"Mất điện / mất mạng",loss:"Cảnh báo tồn"};
-const VARIANT={active:"success",suspended:"warning",connection:"danger",loss:"warning"} as const;
-export default function BranchesPage(){const navigate=useNavigate();const [search,setSearch]=useState("");const [status,setStatus]=useState("all");const [applied,setApplied]=useState({search:"",status:"all"});const [selected,setSelected]=useState<Branch|null>(null);const rows=useMemo(()=>BRANCHES.filter(b=>(!applied.search||[b.code,b.name,b.area].some(x=>x.toLocaleLowerCase("vi-VN").includes(applied.search.toLocaleLowerCase("vi-VN"))))&&(applied.status==="all"||b.status===applied.status)),[applied]);
-  return (
-    <div>
-      <div className="page-header">
+import StatCard from "../../components/common/StatCard";
+import KpiIcon from "../shared/KpiIcon";
+import { makeId } from "../shared/formatters";
+import { SHIFTS } from "../shared/business-demo";
+import type { StoreBranch, StoreStatus } from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
+
+const STATUS_LABEL: Record<StoreStatus, string> = { active: "Hoạt động", suspended: "Tạm ngừng" };
+const EMPTY_FORM = { code: "", name: "", area: "", address: "", manager: "", openingHours: "08:00–22:00", posCount: "2", status: "active" as StoreStatus, receiptSchedule: { "Ca sáng": "05:30–06:30", "Ca chiều": "12:30–13:30", "Ca tối": "16:30–17:30" } };
+
+export default function BranchesPage() {
+    const [data, setData] = useDemoState();
+    const [search, setSearch] = useState("");
+    const [status, setStatus] = useState("all");
+    const [applied, setApplied] = useState({ search: "", status: "all" });
+    const [selected, setSelected] = useState<StoreBranch | null>(null);
+    const [editing, setEditing] = useState<StoreBranch | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [form, setForm] = useState(EMPTY_FORM);
+    const filtered = useMemo(() => data.stores.filter((store) => (!applied.search || `${store.code} ${store.name} ${store.area}`.toLocaleLowerCase("vi-VN").includes(applied.search.trim().toLocaleLowerCase("vi-VN"))) && (applied.status === "all" || store.status === applied.status)), [data.stores, applied]);
+    const activeCount = data.stores.filter((store) => store.status === "active").length;
+    const posCount = data.stores.reduce((sum, store) => sum + store.posCount, 0);
+
+    function openNew() { setEditing(null); setForm({ ...EMPTY_FORM, code: `CN${String(data.stores.length + 1).padStart(2, "0")}` }); setModalOpen(true); }
+    function openEdit(store: StoreBranch) { setEditing(store); setForm({ ...store, posCount: String(store.posCount), receiptSchedule: { ...store.receiptSchedule } }); setModalOpen(true); }
+    function saveStore(event: FormEvent) {
+        event.preventDefault();
+        const code = form.code.trim().toUpperCase();
+        if (!code || !form.name.trim() || !form.address.trim() || !form.manager.trim() || !Number.isInteger(Number(form.posCount)) || Number(form.posCount) < 0) return;
+        if (data.stores.some((store) => store.id !== editing?.id && store.code.toLowerCase() === code.toLowerCase())) return;
+        const store: StoreBranch = { id: editing?.id ?? makeId("store"), code, name: form.name.trim(), area: form.area.trim(), address: form.address.trim(), manager: form.manager.trim(), openingHours: form.openingHours, posCount: Number(form.posCount), status: form.status, receiptSchedule: form.receiptSchedule };
+        setData((current) => ({ ...current, stores: editing ? current.stores.map((item) => item.id === editing.id ? store : item) : [...current.stores, store] }));
+        setModalOpen(false);
+    }
+
+    return (
         <div>
-          <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
-            <span className="sep">/</span>
-            <Link to="/inventory">Kho hàng</Link>
-            <span className="sep">/</span>
-            <span className="current">Chi nhánh</span>
-          </nav>
-          <h1 className="page-title">Quản lý 12 chi nhánh</h1>
-          <p className="page-subtitle mt-1">Theo dõi thông tin chi nhánh, người phụ trách, số quầy POS và kho thuộc chi nhánh.</p>
+            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/inventory/products">Menu &amp; nguyên liệu</Link><span className="sep">/</span><span className="current">Cửa hàng</span></nav><h1 className="page-title">Quản lý cửa hàng</h1><p className="page-subtitle">Quản lý thông tin vận hành và lịch nhận nguyên liệu theo ca của 12 cửa hàng.</p></div><span className="text-xs text-[var(--muted)]">Tồn vận hành theo quầy; không có kho cửa hàng độc lập</span></div>
+            <section className="mb-6"><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><StatCard label="Cửa hàng toàn chuỗi" value={String(data.stores.length)} subLabel="Một doanh nghiệp / 12 cửa hàng demo" tone="primary" icon={<KpiIcon kind="branch" />} /><StatCard label="Đang hoạt động" value={String(activeCount)} subLabel="Có thể nhận cấp phát" tone="success" icon={<KpiIcon kind="document-check" />} /><StatCard label="Quầy POS" value={String(posCount)} subLabel="Số liệu vận hành minh họa" tone="info" icon={<KpiIcon kind="receipt" />} /><StatCard label="Lịch nhận theo ca" value={String(data.stores.length * SHIFTS.length)} subLabel="Ca sáng / chiều / tối" tone="warning" icon={<KpiIcon kind="clock" />} /></div></section>
+
+            <section className="card mb-6 border-l-4 border-[var(--info)]"><h2 className="text-sm font-bold mb-1">Mô hình tồn tại cửa hàng</h2><p className="text-sm text-[var(--muted)]">Cửa hàng không có kho độc lập và không chuyển nguyên liệu giữa cửa hàng. Chỉ lượng vận hành tại quầy, đã kiểm nhận theo ca, được theo dõi để phục vụ bán hàng.</p></section>
+            <section className="card mb-6"><div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><div><label className="form-label" htmlFor="store-search">Tìm cửa hàng</label><input id="store-search" className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã, tên hoặc khu vực..." /></div><div><label className="form-label" htmlFor="store-status">Trạng thái</label><select id="store-status" className="form-input form-select" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tất cả</option><option value="active">Hoạt động</option><option value="suspended">Tạm ngừng</option></select></div><div className="flex gap-2"><button type="button" className="btn btn-secondary" onClick={() => { setSearch(""); setStatus("all"); setApplied({ search: "", status: "all" }); }}>Xóa lọc</button><button type="button" className="btn btn-primary" onClick={() => setApplied({ search, status })}>Áp dụng</button></div></div></section>
+
+            <section className="card p-0 overflow-hidden"><div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3"><div><h2 className="font-bold">Cửa hàng TP.HCM</h2><p className="text-sm text-[var(--muted)] mt-1">Lịch nhận chỉ xác nhận thời gian; phiếu cấp phát được quản lý riêng theo từng ca.</p></div><button className="btn btn-primary" onClick={openNew}>Thêm cửa hàng</button></div><DataTable><table className="w-full min-w-[1050px] text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã", "Cửa hàng", "Khu vực / địa chỉ", "Quản lý", "Giờ hoạt động", "Quầy POS", "Lịch nhận", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="px-3 py-3 font-semibold whitespace-nowrap">{label}</th>)}</tr></thead><tbody>{filtered.map((store) => <tr key={store.id} className="border-t border-[var(--border)]"><td className="px-3 py-3 font-semibold">{store.code}</td><td className="px-3 py-3">{store.name}</td><td className="px-3 py-3">{store.area}<div className="text-xs text-[var(--muted)]">{store.address}</div></td><td className="px-3 py-3">{store.manager}</td><td className="px-3 py-3">{store.openingHours}</td><td className="px-3 py-3">{store.posCount}</td><td className="px-3 py-3">{SHIFTS.map((shift) => <div key={shift} className="whitespace-nowrap">{shift.replace("Ca ", "")} {store.receiptSchedule[shift]}</div>)}</td><td className="px-3 py-3"><Badge variant={store.status === "active" ? "success" : "warning"}>{STATUS_LABEL[store.status]}</Badge></td><td className="px-3 py-3"><div className="flex gap-2"><button className="btn btn-secondary" onClick={() => setSelected(store)}>Chi tiết</button><button className="btn btn-secondary" onClick={() => openEdit(store)}>Sửa</button></div></td></tr>)}</tbody></table></DataTable></section>
+
+            <Modal isOpen={!!selected} title="Thông tin vận hành cửa hàng" onClose={() => setSelected(null)}>{selected && <div className="space-y-3 text-sm"><p className="font-semibold">{selected.code} · {selected.name}</p><p>Địa chỉ: {selected.address}, {selected.area}</p><p>Quản lý: {selected.manager}</p><p>Giờ hoạt động: {selected.openingHours} · {selected.posCount} quầy POS</p><div><p className="font-semibold">Lịch nhận theo ca</p>{SHIFTS.map((shift) => <p key={shift}>{shift}: {selected.receiptSchedule[shift]}</p>)}</div><Badge variant={selected.status === "active" ? "success" : "warning"}>{STATUS_LABEL[selected.status]}</Badge><p className="text-[var(--muted)]">Thông tin này không tạo kho riêng; tồn tại cửa hàng chỉ là lượng đã nhận tại quầy.</p></div>}</Modal>
+            <Modal isOpen={modalOpen} title={editing ? "Cập nhật cửa hàng" : "Thêm cửa hàng"} onClose={() => setModalOpen(false)}><form className="space-y-3" onSubmit={saveStore}><div className="grid grid-cols-2 gap-3"><div><label className="form-label" htmlFor="store-code">Mã cửa hàng *</label><input id="store-code" className="form-input" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} required /></div><div><label className="form-label" htmlFor="store-name">Tên cửa hàng *</label><input id="store-name" className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></div></div><div><label className="form-label" htmlFor="store-area">Khu vực</label><input id="store-area" className="form-input" value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))} /></div><div><label className="form-label" htmlFor="store-address">Địa chỉ *</label><input id="store-address" className="form-input" value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} required /></div><div className="grid grid-cols-2 gap-3"><div><label className="form-label" htmlFor="store-manager">Quản lý *</label><input id="store-manager" className="form-input" value={form.manager} onChange={(event) => setForm((current) => ({ ...current, manager: event.target.value }))} required /></div><div><label className="form-label" htmlFor="store-pos">Số quầy POS</label><input id="store-pos" type="number" min="0" step="1" className="form-input" value={form.posCount} onChange={(event) => setForm((current) => ({ ...current, posCount: event.target.value }))} /></div></div><div><label className="form-label" htmlFor="store-hours">Giờ hoạt động</label><input id="store-hours" className="form-input" value={form.openingHours} onChange={(event) => setForm((current) => ({ ...current, openingHours: event.target.value }))} /></div>{SHIFTS.map((shift, index) => <div key={shift}><label className="form-label" htmlFor={`store-shift-${index}`}>Lịch nhận nguyên liệu · {shift}</label><input id={`store-shift-${index}`} className="form-input" value={form.receiptSchedule[shift]} onChange={(event) => setForm((current) => ({ ...current, receiptSchedule: { ...current.receiptSchedule, [shift]: event.target.value } }))} /></div>)}<div><label className="form-label" htmlFor="store-status-edit">Trạng thái</label><select id="store-status-edit" className="form-input form-select" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as StoreStatus }))}><option value="active">Hoạt động</option><option value="suspended">Tạm ngừng</option></select></div><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Hủy</button><button type="submit" className="btn btn-primary">Lưu cửa hàng</button></div></form></Modal>
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-      </div>
-
-      <section className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Chi nhánh toàn chuỗi" value="12" subLabel="Mỗi chi nhánh một kho" tone="primary" icon={<KpiIcon kind="branch"/>}/>
-          <StatCard label="POS hoạt động" value="26" subLabel="Số liệu minh họa" tone="success" icon={<KpiIcon kind="document-check"/>}/>
-          <StatCard label="Kho cần kiểm tra" value="1" subLabel="Tồn dưới mức an toàn" tone="warning" icon={<KpiIcon kind="warning"/>}/>
-          <StatCard label="Mất kết nối" value="0" subLabel="Theo dõi trạng thái kết nối" tone="info" icon={<KpiIcon kind="branch"/>}/>
-        </div>
-      </section>
-
-      <section className="card mb-6 border-l-4 border-[var(--info)]">
-        <h2 className="text-sm font-bold mb-1">Phạm vi quản lý kho</h2>
-        <p className="text-sm text-[var(--muted)]">Mỗi chi nhánh có một kho riêng. Trường sức chứa kho phải là thông tin cấu hình; không tự suy ra số lượng tồn từ sức chứa.</p>
-      </section>
-
-      <section className="card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div>
-            <label className="form-label" htmlFor="branch-search">Tìm kiếm</label>
-            <input id="branch-search" className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Mã, tên hoặc khu vực..."/>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="branch-status">Trạng thái</label>
-            <select id="branch-status" className="form-input form-select" value={status} onChange={e=>setStatus(e.target.value)}>
-              <option value="all">Tất cả trạng thái</option>
-              <option value="active">Hoạt động</option>
-              <option value="suspended">Tạm ngừng</option>
-              <option value="connection">Mất điện / mất mạng</option>
-              <option value="loss">Cảnh báo tồn / hiệu quả</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={()=>{setSearch("");setStatus("all");setApplied({search:"",status:"all"});}}>Xóa lọc</button>
-            <button className="btn btn-primary" onClick={()=>setApplied({search,status})}>Áp dụng</button>
-          </div>
-        </div>
-      </section>
-
-      <section className="card p-0 overflow-hidden">
-        <div className="p-4 md:p-5 border-b border-[var(--border)]">
-          <h2 className="font-bold">Danh sách chi nhánh TP.HCM</h2>
-          <p className="text-sm text-[var(--muted)] mt-1">Thông tin minh họa theo kế hoạch repository; địa chỉ chi tiết cần được nhóm xác nhận.</p>
-        </div>
-        <DataTable>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {["Mã CN","Tên chi nhánh","Khu vực","Địa chỉ","Quản lý phụ trách","Số quầy POS","Kho","Trạng thái","Liên kết"].map(x=><th key={x} className="px-3 py-3 font-semibold whitespace-nowrap">{x}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(b=><tr key={b.id} className="border-t border-[var(--border)]">
-                <td className="px-3 py-3 font-semibold">{b.code}</td>
-                <td className="px-3 py-3">{b.name}</td>
-                <td className="px-3 py-3">{b.area}</td>
-                <td className="px-3 py-3">{b.address}</td>
-                <td className="px-3 py-3">{b.manager}</td>
-                <td className="px-3 py-3">{b.pos}</td>
-                <td className="px-3 py-3">1 kho / {b.capacity}</td>
-                <td className="px-3 py-3"><Badge variant={VARIANT[b.status]}>{LABEL[b.status]}</Badge></td>
-                <td className="px-3 py-3"><button className="btn btn-secondary" onClick={()=>setSelected(b)}>Xem kho</button></td>
-              </tr>)}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-
-      <Modal isOpen={!!selected} title="Thông tin kho chi nhánh" onClose={()=>setSelected(null)}>
-        {selected && (
-          <div className="space-y-3 text-sm">
-            <p className="font-semibold">{selected.code} · {selected.name}</p>
-            <p>Địa chỉ: {selected.address}, {selected.area}</p>
-            <p>Quản lý: {selected.manager}</p>
-            <p>Số quầy POS: {selected.pos}</p>
-            <p>Kho: một kho riêng thuộc chi nhánh. Sức chứa: chưa có số liệu xác thực; cần cấu hình trong dữ liệu quản trị.</p>
-            <Badge variant={VARIANT[selected.status]}>{LABEL[selected.status]}</Badge>
-            <p className="text-[var(--muted)]">{selected.note}</p>
-            <div className="flex justify-end">
-              <button className="btn btn-primary" onClick={()=>setSelected(null)}>Đóng</button>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
-  );
+    );
 }

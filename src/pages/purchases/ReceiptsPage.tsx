@@ -1,156 +1,102 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
-import { useToast } from "../../contexts/ToastContext";
+import StatCard from "../../components/common/StatCard";
+import KpiIcon from "../shared/KpiIcon";
+import { formatDate, getTodayISO, makeId } from "../shared/formatters";
+import { getIngredient } from "../shared/business-demo";
+import type { PurchaseOrder, ReceiptLine, ReceiptRecord } from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
 
-type Quality = "unchecked" | "pass" | "partial" | "fail";
-type ReceiptStatus = "pending" | "partial" | "received" | "quarantine";
-interface Receipt { id: string; code: string; po: string; ingredient: string; lot: string; mfg: string; expiry: string; ordered: number; actual: number; unit: string; quality: Quality; status: ReceiptStatus; }
-const INITIAL: Receipt[] = [
-  { id: "1", code: "PN-2810-01", po: "PO-2026-042", ingredient: "Cốt hồng trà đặc", lot: "TR-201026", mfg: "20/10/2026", expiry: "20/04/2027", ordered: 30, actual: 30, unit: "kg", quality: "pass", status: "received" },
-  { id: "2", code: "PN-2810-02", po: "PO-2026-043", ingredient: "Sữa tươi thanh trùng", lot: "SUA-221026", mfg: "22/10/2026", expiry: "22/11/2026", ordered: 50, actual: 30, unit: "lít", quality: "partial", status: "partial" },
-  { id: "3", code: "PN-2810-03", po: "PO-2026-044", ingredient: "Ly nhựa 500 ml", lot: "LY-251026", mfg: "25/10/2026", expiry: "Không áp dụng", ordered: 5000, actual: 5000, unit: "cái", quality: "pass", status: "received" },
-  { id: "4", code: "PN-2810-04", po: "PO-2026-045", ingredient: "Syrup đào", lot: "SY-271026", mfg: "27/10/2026", expiry: "27/01/2027", ordered: 12, actual: 12, unit: "chai", quality: "fail", status: "quarantine" },
-];
-const QUALITY_LABEL: Record<Quality, string> = { unchecked: "Chưa kiểm tra", pass: "Đạt", partial: "Đạt một phần", fail: "Không đạt" };
-const STATUS_LABEL: Record<ReceiptStatus, string> = { pending: "Chờ xác nhận", partial: "Nhận một phần", received: "Đã nhập kho", quarantine: "Đang cách ly" };
+interface ReceiptDraftLine extends ReceiptLine { remainingQuantity: number; }
+
 export default function ReceiptsPage() {
-  const navigate = useNavigate(); const { showToast } = useToast(); const [receipts, setReceipts] = useState(INITIAL); const [search, setSearch] = useState(""); const [quality, setQuality] = useState("all"); const [status, setStatus] = useState("all"); const [applied, setApplied] = useState({ search: "", quality: "all", status: "all" }); const [selected, setSelected] = useState<Receipt | null>(null); const [actual, setActual] = useState(""); const [result, setResult] = useState<Quality>("unchecked"); const [note, setNote] = useState("");
-  const rows = useMemo(() => receipts.filter(r => (!applied.search || [r.code, r.po, r.ingredient, r.lot].some(x => x.toLowerCase().includes(applied.search.toLowerCase()))) && (applied.quality === "all" || r.quality === applied.quality) && (applied.status === "all" || r.status === applied.status)), [receipts, applied]);
-  function openReceipt(row: Receipt) { setSelected(row); setActual(String(row.actual)); setResult(row.quality); setNote(""); }
-  function submit(e: FormEvent) { e.preventDefault(); if (!selected) { return; } const received = Number(actual); if (!Number.isFinite(received) || received < 0) { showToast({ type: "error", title: "Số lượng không hợp lệ", message: "Số lượng thực nhận phải là số không âm." }); return; } if (result === "unchecked") { showToast({ type: "error", title: "Chưa kiểm tra chất lượng", message: "Cần chọn kết quả kiểm nhận trước khi xác nhận." }); return; } const nextStatus: ReceiptStatus = result === "fail" ? "quarantine" : received < selected.ordered ? "partial" : "received"; setReceipts(prev => prev.map(r => r.id === selected.id ? { ...r, actual: received, quality: result, status: nextStatus } : r)); setSelected(null); showToast({ type: "success", title: result === "fail" ? "Lô hàng đã cách ly" : "Đã cập nhật phiếu nhận", message: result === "fail" ? "Lô không đạt không được cộng vào tồn khả dụng." : "Thông tin nhận hàng đã được cập nhật trong mock state." }); }
-  return (
-    <div>
-      <div className="page-header">
+    const [data, setData] = useDemoState();
+    const [search, setSearch] = useState("");
+    const [qualityFilter, setQualityFilter] = useState("all");
+    const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+    const [lines, setLines] = useState<ReceiptDraftLine[]>([]);
+    const [document, setDocument] = useState("");
+    const [receiver, setReceiver] = useState("Nhân viên kho tổng");
+    const [note, setNote] = useState("");
+    const [error, setError] = useState("");
+    const ordersToReceive = data.purchaseOrders.filter((order) => order.lines.some((line) => line.receivedQuantity < line.orderedQuantity));
+    const historyRows = useMemo(() => data.receipts.flatMap((receipt) => receipt.lines.map((line) => ({ receipt, line }))).filter(({ receipt, line }) => {
+        const ingredient = getIngredient(data, line.ingredientId);
+        const query = search.trim().toLocaleLowerCase("vi-VN");
+        return (!query || `${receipt.code} ${receipt.document} ${ingredient?.name ?? ""} ${line.lotCode}`.toLocaleLowerCase("vi-VN").includes(query)) && (qualityFilter === "all" || line.quality === qualityFilter);
+    }), [data.receipts, data.ingredients, search, qualityFilter]);
+    const pendingReceipts = ordersToReceive.length;
+    const quarantineLots = data.lots.filter((lot) => lot.quality === "quarantine").length;
+    const partialOrders = data.purchaseOrders.filter((order) => order.lines.some((line) => line.receivedQuantity > 0 && line.receivedQuantity < line.orderedQuantity)).length;
+
+    function openOrder(order: PurchaseOrder) {
+        setSelectedOrder(order);
+        setDocument(""); setNote(""); setError("");
+        setLines(order.lines.filter((line) => line.receivedQuantity < line.orderedQuantity).map((line) => {
+            const ingredient = getIngredient(data, line.ingredientId);
+            const mfg = getTodayISO();
+            const expiry = ingredient?.shelfLifeDays ? new Date(Date.now() + ingredient.shelfLifeDays * 86400000).toISOString().slice(0, 10) : "";
+            return { id: line.id, ingredientId: line.ingredientId, orderedQuantity: line.orderedQuantity, receivedQuantity: line.orderedQuantity - line.receivedQuantity, remainingQuantity: line.orderedQuantity - line.receivedQuantity, unit: line.unit, lotCode: "", manufactureDate: ingredient?.shelfLifeDays ? mfg : "", expiryDate: expiry, unitPrice: line.unitPrice, quality: "pass" as const, note: "" };
+        }));
+    }
+    function updateLine(id: string, patch: Partial<ReceiptDraftLine>) { setLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line)); }
+    function confirmReceipt(event: FormEvent) {
+        event.preventDefault();
+        if (!selectedOrder) return;
+        const today = getTodayISO();
+        for (const line of lines) {
+            const ingredient = getIngredient(data, line.ingredientId);
+            if (!Number.isFinite(line.receivedQuantity) || line.receivedQuantity < 0 || line.receivedQuantity > line.remainingQuantity) {
+                setError("Số lượng thực nhận phải từ 0 đến số lượng còn lại của đơn."); return;
+            }
+            if (line.receivedQuantity > 0 && !line.lotCode.trim()) { setError("Mỗi dòng có nhận hàng cần mã lô."); return; }
+            if (line.receivedQuantity > 0 && ingredient?.shelfLifeDays !== null) {
+                if (!line.manufactureDate || !line.expiryDate || line.manufactureDate > today || line.expiryDate <= line.manufactureDate || line.expiryDate <= today) {
+                    setError("Ngày sản xuất phải không sau ngày nhận; hạn dùng phải sau ngày sản xuất và ngày nhập."); return;
+                }
+            }
+            if (line.receivedQuantity === 0 && !line.note.trim() && !note.trim()) { setError("Dòng từ chối/nhận 0 cần ghi lý do."); return; }
+            if (line.quality === "fail" && !line.note.trim() && !note.trim()) { setError("Lô không đạt cần ghi lý do cách ly/từ chối."); return; }
+        }
+        if (!lines.some((line) => line.receivedQuantity > 0) && !note.trim()) { setError("Cần ghi biên bản khi không nhận dòng hàng nào."); return; }
+        const receipt: ReceiptRecord = { id: makeId("receipt"), code: `PN-${today.replace(/-/g, "")}-${String(data.receipts.length + 1).padStart(2, "0")}`, purchaseOrderId: selectedOrder.id, document: document.trim(), receivedAt: today, receiver: receiver.trim(), lines: lines.map(({ remainingQuantity: _remaining, ...line }) => line), note: note.trim() };
+        const orderLines = selectedOrder.lines.map((orderLine) => {
+            const receivedNow = lines.find((line) => line.id === orderLine.id)?.receivedQuantity ?? 0;
+            return { ...orderLine, receivedQuantity: orderLine.receivedQuantity + receivedNow };
+        });
+        const allReceived = orderLines.every((line) => line.receivedQuantity >= line.orderedQuantity);
+        const anyReceived = orderLines.some((line) => line.receivedQuantity > 0);
+        const newLots = receipt.lines.filter((line) => line.receivedQuantity > 0).map((line) => ({
+            id: makeId("lot"), ingredientId: line.ingredientId, lotCode: line.lotCode.trim(), manufactureDate: line.manufactureDate || null,
+            expiryDate: line.expiryDate || null, quantity: line.receivedQuantity, unitCost: line.unitPrice,
+            quality: line.quality === "pass" ? "pass" as const : "quarantine" as const, location: "central" as const, locationId: "central", batchId: null,
+        }));
+        setData((current) => ({
+            ...current,
+            receipts: [receipt, ...current.receipts],
+            lots: [...newLots, ...current.lots],
+            purchaseOrders: current.purchaseOrders.map((order) => order.id === selectedOrder.id ? { ...order, lines: orderLines, status: allReceived ? "received" : anyReceived ? "partial" : order.status } : order),
+        }));
+        setSelectedOrder(null); setError("");
+    }
+
+    return (
         <div>
-          <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
-            <span className="sep">/</span>
-            <Link to="/purchases">Nhập hàng</Link>
-            <span className="sep">/</span>
-            <span className="current">Phiếu nhập kho</span>
-          </nav>
-          <h1 className="page-title">Phiếu nhận hàng / nhập kho</h1>
-          <p className="page-subtitle mt-1">Kiểm nhận nguyên liệu theo lô, HSD, số lượng thực nhận và chất lượng trước khi vào tồn.</p>
+            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/purchases">Mua hàng</Link><span className="sep">/</span><span className="current">Phiếu nhận hàng</span></nav><h1 className="page-title">Phiếu nhận hàng / nhập kho</h1><p className="page-subtitle">Kiểm nhận đơn giao tại kho tổng theo lượng thực nhận, lô, hạn dùng và chất lượng.</p></div><span className="text-xs text-[var(--muted)]">Không cộng tồn trước khi xác nhận</span></div>
+            <section className="mb-6"><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><StatCard label="Đơn còn hàng chờ nhận" value={String(pendingReceipts)} subLabel="Nhận tập trung tại kho tổng" tone="info" icon={<KpiIcon kind="receipt" />} /><StatCard label="Đơn nhận một phần" value={String(partialOrders)} subLabel="Còn lượng chưa giao" tone="warning" icon={<KpiIcon kind="clock" />} /><StatCard label="Lô cách ly" value={String(quarantineLots)} subLabel="Không cộng tồn khả dụng" tone="danger" icon={<KpiIcon kind="warning" />} /><StatCard label="Lô đã xác nhận" value={String(data.lots.filter((lot) => lot.location === "central" && lot.quality === "pass").length)} subLabel="Tại kho tổng" tone="success" icon={<KpiIcon kind="box" />} /></div></section>
+            <section className="card mb-6 border-l-4 border-[var(--warning)]"><h2 className="text-sm font-bold mb-1">Kiểm nhận trước khi nhập khả dụng</h2><p className="text-sm text-[var(--muted)]">Hàng đạt mới được thêm vào lô khả dụng tại kho tổng. Hàng không đạt được ghi nhận nhưng cách ly; thiếu/0 nhận cần lý do.</p></section>
+
+            <section className="card p-0 overflow-hidden mb-6"><div className="p-4 md:p-5 border-b border-[var(--border)]"><h2 className="font-bold">Đơn mua còn hàng cần nhận</h2><p className="text-sm text-[var(--muted)] mt-1">Số lượng còn lại được tính từ đơn mua trừ các lần nhận đã ghi.</p></div><DataTable><table className="w-full min-w-[850px] text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã PO", "Nhà cung cấp", "Ngày đặt", "Dự kiến giao", "Dòng còn nhận", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="px-3 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{ordersToReceive.map((order) => <tr key={order.id} className="border-t border-[var(--border)]"><td className="px-3 py-3 font-semibold">{order.code}</td><td className="px-3 py-3">{order.supplier}</td><td className="px-3 py-3">{formatDate(order.orderDate)}</td><td className="px-3 py-3">{formatDate(order.expectedDelivery)}</td><td className="px-3 py-3">{order.lines.filter((line) => line.receivedQuantity < line.orderedQuantity).length}</td><td className="px-3 py-3"><Badge variant={order.status === "partial" ? "info" : "warning"}>{order.status === "partial" ? "Nhận một phần" : order.status === "draft" ? "Bản nháp" : "Đã đặt"}</Badge></td><td className="px-3 py-3"><button className="btn btn-primary" disabled={order.status === "draft"} onClick={() => openOrder(order)}>Kiểm nhận hàng</button></td></tr>)}</tbody></table></DataTable></section>
+
+            <section className="card p-0 overflow-hidden"><div className="p-4 md:p-5 border-b border-[var(--border)]"><h2 className="font-bold">Lịch sử kiểm nhận</h2></div><DataTable><table className="w-full min-w-[1050px] text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã phiếu", "Mã PO", "Chứng từ", "Ngày nhận", "Người nhận", "Nguyên liệu", "Lô", "Thực nhận", "Chất lượng", "Vị trí"].map((label) => <th key={label} className="px-3 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{data.receipts.flatMap((receipt) => receipt.lines.map((line) => <tr key={`${receipt.id}-${line.id}`} className="border-t border-[var(--border)]"><td className="px-3 py-3 font-semibold">{receipt.code}</td><td className="px-3 py-3">{data.purchaseOrders.find((order) => order.id === receipt.purchaseOrderId)?.code ?? "—"}</td><td className="px-3 py-3">{receipt.document || "—"}</td><td className="px-3 py-3">{formatDate(receipt.receivedAt)}</td><td className="px-3 py-3">{receipt.receiver}</td><td className="px-3 py-3">{getIngredient(data, line.ingredientId)?.name}</td><td className="px-3 py-3">{line.lotCode || "—"}</td><td className="px-3 py-3">{line.receivedQuantity} {line.unit}</td><td className="px-3 py-3"><Badge variant={line.quality === "pass" ? "success" : "danger"}>{line.quality === "pass" ? "Đạt" : "Cách ly / từ chối"}</Badge></td><td className="px-3 py-3">{line.quality === "pass" ? "Kho tổng · khả dụng" : "Kho tổng · cách ly"}</td></tr>))}</tbody></table></DataTable></section>
+
+            <Modal isOpen={!!selectedOrder} title={`Kiểm nhận · ${selectedOrder?.code ?? ""}`} onClose={() => setSelectedOrder(null)}>{selectedOrder && <form className="space-y-4" onSubmit={confirmReceipt}><p className="text-sm text-[var(--muted)]">Nhà cung cấp: {selectedOrder.supplier} · Kho nhận: Kho tổng</p><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label className="form-label" htmlFor="receipt-document">Chứng từ / hóa đơn</label><input id="receipt-document" className="form-input" value={document} onChange={(event) => setDocument(event.target.value)} /></div><div><label className="form-label" htmlFor="receipt-receiver">Người nhận *</label><input id="receipt-receiver" className="form-input" value={receiver} onChange={(event) => setReceiver(event.target.value)} required /></div></div>
+                <DataTable><table className="w-full min-w-[1000px] text-sm text-left"><thead><tr>{["Nguyên liệu", "Còn đặt", "Thực nhận", "Mã lô", "Ngày SX", "Hạn dùng", "Đơn giá", "Chất lượng", "Ghi chú"].map((label) => <th key={label} className="px-2 py-2">{label}</th>)}</tr></thead><tbody>{lines.map((line) => { const ingredient = getIngredient(data, line.ingredientId); return <tr key={line.id} className="border-t border-[var(--border)]"><td className="px-2 py-2">{ingredient?.name}<div className="text-xs text-[var(--muted)]">{line.unit}</div></td><td className="px-2 py-2">{line.remainingQuantity}</td><td className="px-2 py-2"><input aria-label={`Thực nhận ${ingredient?.name}`} type="number" min="0" max={line.remainingQuantity} step="0.001" className="form-input w-28" value={line.receivedQuantity} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, receivedQuantity: Number(event.target.value) } : item))} /></td><td className="px-2 py-2"><input aria-label={`Mã lô ${ingredient?.name}`} className="form-input w-32" value={line.lotCode} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, lotCode: event.target.value } : item))} /></td><td className="px-2 py-2"><input aria-label={`Ngày SX ${ingredient?.name}`} type="date" className="form-input min-w-[135px]" value={line.manufactureDate} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, manufactureDate: event.target.value } : item))} /></td><td className="px-2 py-2">{ingredient?.shelfLifeDays === null ? <span className="text-xs text-[var(--muted)]">Không áp dụng</span> : <input aria-label={`Hạn dùng ${ingredient?.name}`} type="date" className="form-input min-w-[135px]" value={line.expiryDate} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, expiryDate: event.target.value } : item))} />}</td><td className="px-2 py-2">{line.unitPrice.toLocaleString("vi-VN")}</td><td className="px-2 py-2"><select aria-label={`Chất lượng ${ingredient?.name}`} className="form-input form-select" value={line.quality} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, quality: event.target.value as "pass" | "fail" } : item))}><option value="pass">Đạt</option><option value="fail">Không đạt</option></select></td><td className="px-2 py-2"><input aria-label={`Ghi chú ${ingredient?.name}`} className="form-input min-w-[120px]" value={line.note} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, note: event.target.value } : item))} /></td></tr>; })}</tbody></table></DataTable>
+                <div><label className="form-label" htmlFor="receipt-note">Biên bản / ghi chú chung</label><textarea id="receipt-note" rows={2} className="form-input form-textarea" value={note} onChange={(event) => setNote(event.target.value)} /></div>{error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setSelectedOrder(null)}>Hủy</button><button type="submit" className="btn btn-primary">Xác nhận kiểm nhận</button></div>
+            </form>}</Modal>
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-      </div>
-
-      <section className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Phiếu nhập hôm nay" value="6" subLabel="Tại kho tổng" tone="info" icon={<KpiIcon kind="receipt" />} />
-          <StatCard label="Chờ kiểm nhận" value={String(receipts.filter(r => r.status === "pending").length)} subLabel="Chưa xác nhận vào tồn" tone="warning" icon={<KpiIcon kind="clock" />} />
-          <StatCard label="Nhận thiếu" value={String(receipts.filter(r => r.status === "partial").length)} subLabel="Cần lập biên bản" tone="danger" icon={<KpiIcon kind="warning" />} />
-          <StatCard label="Lô không đạt" value={String(receipts.filter(r => r.status === "quarantine").length)} subLabel="Đang cách ly" tone="danger" icon={<KpiIcon kind="box" />} />
-        </div>
-      </section>
-
-      <section className="card mb-6 border-l-4 border-[var(--warning)]">
-        <h2 className="text-sm font-bold mb-1">Trình tự nhập kho</h2>
-        <p className="text-sm text-[var(--muted)]">Kiểm số lượng thực nhận, mã lô, ngày sản xuất, hạn dùng, chất lượng và chứng từ. Chỉ xác nhận nhập kho sau khi hoàn tất kiểm nhận; lô không đạt phải cách ly.</p>
-      </section>
-
-      <section className="card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="form-label" htmlFor="receipt-search">Tìm kiếm</label>
-            <input id="receipt-search" className="form-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="Mã phiếu, PO, nguyên liệu, lô..." />
-          </div>
-          <div>
-            <label className="form-label" htmlFor="receipt-quality">Chất lượng</label>
-            <select id="receipt-quality" className="form-input form-select" value={quality} onChange={e => setQuality(e.target.value)}>
-              <option value="all">Tất cả</option>
-              <option value="unchecked">Chưa kiểm tra</option>
-              <option value="pass">Đạt</option>
-              <option value="partial">Đạt một phần</option>
-              <option value="fail">Không đạt</option>
-            </select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="receipt-status">Trạng thái phiếu</label>
-            <select id="receipt-status" className="form-input form-select" value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="all">Tất cả</option>
-              <option value="pending">Chờ xác nhận</option>
-              <option value="partial">Nhận một phần</option>
-              <option value="received">Đã nhập kho</option>
-              <option value="quarantine">Đang cách ly</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={() => { setSearch(""); setQuality("all"); setStatus("all"); setApplied({ search: "", quality: "all", status: "all" }); }}>Xóa lọc</button>
-            <button className="btn btn-primary" onClick={() => setApplied({ search, quality, status })}>Áp dụng</button>
-          </div>
-        </div>
-      </section>
-
-      <section className="card p-0 overflow-hidden">
-        <div className="p-4 md:p-5 border-b border-[var(--border)]">
-          <h2 className="font-bold">Phiếu nhận hàng</h2>
-          <p className="text-sm text-[var(--muted)] mt-1">Ghi nhận số lượng đặt, số lượng thực nhận và trạng thái kiểm tra chất lượng.</p>
-        </div>
-        <DataTable>
-          <table className="w-full min-w-[1050px] text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {["Mã phiếu", "Mã PO", "Nguyên liệu", "Mã lô", "Ngày SX", "Hạn dùng", "Đặt", "Thực nhận", "Chất lượng", "Trạng thái", "Thao tác"].map(x => <th key={x} className="px-3 py-3 font-semibold">{x}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => <tr key={r.id} className="border-t border-[var(--border)]">
-                <td className="px-3 py-3 font-semibold">{r.code}</td>
-                <td className="px-3 py-3">{r.po}</td>
-                <td className="px-3 py-3">{r.ingredient}</td>
-                <td className="px-3 py-3">{r.lot}</td>
-                <td className="px-3 py-3">{r.mfg}</td>
-                <td className="px-3 py-3">{r.expiry}</td>
-                <td className="px-3 py-3">{r.ordered} {r.unit}</td>
-                <td className="px-3 py-3">{r.actual} {r.unit}</td>
-                <td className="px-3 py-3"><Badge variant={r.quality === "pass" ? "success" : r.quality === "fail" ? "danger" : "warning"}>{QUALITY_LABEL[r.quality]}</Badge></td>
-                <td className="px-3 py-3"><Badge variant={r.status === "received" ? "success" : r.status === "quarantine" ? "danger" : "warning"}>{STATUS_LABEL[r.status]}</Badge></td>
-                <td className="px-3 py-3"><button className="btn btn-secondary" disabled={r.status === "received" || r.status === "quarantine"} onClick={() => openReceipt(r)}>Kiểm nhận</button></td>
-              </tr>)}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-
-      <Modal isOpen={!!selected} title="Xác nhận nhận hàng (mẫu)" onClose={() => setSelected(null)}>
-        {selected && (
-          <form className="space-y-3" onSubmit={submit}>
-            <p className="text-sm font-semibold">{selected.code} · {selected.po}</p>
-            <p className="text-sm text-[var(--muted)]">{selected.ingredient} · Lô {selected.lot}</p>
-            <div>
-              <label className="form-label" htmlFor="receipt-actual">Số lượng thực nhận *</label>
-              <input id="receipt-actual" type="number" min="0" step="0.01" className="form-input" value={actual} onChange={e => setActual(e.target.value)} required />
-              <p className="text-xs text-[var(--muted)] mt-1">Số lượng đặt: {selected.ordered} {selected.unit}</p>
-            </div>
-            <div>
-              <label className="form-label" htmlFor="receipt-quality-new">Chất lượng *</label>
-              <select id="receipt-quality-new" className="form-input form-select" value={result} onChange={e => setResult(e.target.value as Quality)}>
-                <option value="unchecked">Chưa kiểm tra</option>
-                <option value="pass">Đạt</option>
-                <option value="partial">Đạt một phần</option>
-                <option value="fail">Không đạt</option>
-              </select>
-            </div>
-            <div>
-              <label className="form-label" htmlFor="receipt-note">Ghi chú / biên bản chênh lệch</label>
-              <textarea id="receipt-note" rows={3} className="form-input form-textarea" value={note} onChange={e => setNote(e.target.value)} />
-            </div>
-            {result === "fail" && (
-              <p className="text-sm text-[var(--danger)]">Lô không đạt sẽ được chuyển sang trạng thái cách ly và không tính vào tồn khả dụng.</p>
-            )}
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn btn-secondary" onClick={() => setSelected(null)}>Hủy</button>
-              <button type="submit" className="btn btn-primary">Xác nhận kiểm nhận</button>
-            </div>
-          </form>
-        )}
-      </Modal>
-    </div>
-  );
+    );
 }

@@ -1,141 +1,105 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
-import { useToast } from "../../contexts/ToastContext";
+import StatCard from "../../components/common/StatCard";
+import KpiIcon from "../shared/KpiIcon";
+import { getTodayISO, makeId } from "../shared/formatters";
+import { usableLotQuantity } from "../shared/business-demo";
+import type { Ingredient, IngredientDimension, IngredientGroup, IngredientLot } from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
 
- type IngredientGroup = "tea" | "dairy" | "syrup" | "topping" | "packaging";
- type IngredientStatus = "active" | "low" | "expiring" | "quarantine";
- interface Ingredient { id: string; code: string; name: string; group: IngredientGroup; unit: string; stock: number; reserved: number; locked: number; minimum: number; storage: string; status: IngredientStatus; lot: string; expiry: string; }
- const GROUPS: Record<IngredientGroup,string> = { tea:"Trà", dairy:"Sữa & bột kem", syrup:"Đường & syrup", topping:"Topping", packaging:"Bao bì" };
- const STATUS: Record<IngredientStatus,string> = { active:"Đủ tồn", low:"Dưới tồn an toàn", expiring:"Lô cận hạn", quarantine:"Cách ly" };
- const VARIANT: Record<IngredientStatus,"success"|"warning"|"danger"> = { active:"success", low:"warning", expiring:"warning", quarantine:"danger" };
- const INITIAL: Ingredient[] = [
-  {id:"nl1",code:"NL-001",name:"Cốt hồng trà đặc",group:"tea",unit:"ml",stock:12500,reserved:0,locked:0,minimum:3000,storage:"Thường",status:"active",lot:"TR-2610",expiry:"2027-04-20"},
-  {id:"nl2",code:"NL-002",name:"Bột kem béo sữa",group:"dairy",unit:"kg",stock:18,reserved:0,locked:0,minimum:5,storage:"Khô, thoáng",status:"active",lot:"SUA-2609",expiry:"2027-03-15"},
-  {id:"nl3",code:"NL-003",name:"Trân châu đen đã nấu",group:"topping",unit:"kg",stock:2,reserved:0,locked:0,minimum:4,storage:"Mát, dùng trong ngày",status:"low",lot:"TC-2810",expiry:"2026-10-31"},
-  {id:"nl4",code:"NL-004",name:"Sữa tươi thanh trùng",group:"dairy",unit:"lít",stock:26,reserved:0,locked:0,minimum:10,storage:"Bảo quản lạnh",status:"expiring",lot:"SUA-221026",expiry:"2026-11-02"},
-  {id:"nl5",code:"NL-005",name:"Ly nhựa 500 ml",group:"packaging",unit:"cái",stock:1800,reserved:0,locked:0,minimum:500,storage:"Khô, sạch",status:"active",lot:"LY-251026",expiry:""},
-  {id:"nl6",code:"NL-006",name:"Syrup đào",group:"syrup",unit:"chai",stock:0,reserved:0,locked:4,minimum:6,storage:"Chờ kiểm tra chất lượng",status:"quarantine",lot:"SY-271026",expiry:"2027-01-27"},
- ];
- export default function IngredientsPage() {
-  const navigate=useNavigate(); const {showToast}=useToast(); const [items]=useState(INITIAL);
-  const [search,setSearch]=useState(""); const [group,setGroup]=useState("all"); const [status,setStatus]=useState("all"); const [applied,setApplied]=useState({search:"",group:"all",status:"all"}); const [selected,setSelected]=useState<Ingredient|null>(null);
-  const filtered=useMemo(()=>items.filter(i=>{const q=applied.search.toLocaleLowerCase("vi-VN");return(!q||i.code.toLocaleLowerCase("vi-VN").includes(q)||i.name.toLocaleLowerCase("vi-VN").includes(q))&&(applied.group==="all"||i.group===applied.group)&&(applied.status==="all"||i.status===applied.status);}),[items,applied]);
-  const apply=()=>{setApplied({search,group,status});showToast({type:"success",title:"Đã áp dụng bộ lọc",message:"Danh mục nguyên liệu đã được lọc."});};
-  const clear=()=>{setSearch("");setGroup("all");setStatus("all");setApplied({search:"",group:"all",status:"all"});};
-  return (
-    <div>
-      <div className="page-header">
+const GROUP_LABEL: Record<IngredientGroup, string> = { tea: "Trà", dairy: "Sữa & bột kem", syrup: "Đường & syrup", topping: "Topping", packaging: "Bao bì", prepared: "Bán thành phẩm" };
+type Status = "active" | "low" | "expiring" | "quarantine" | "empty";
+const STATUS_LABEL: Record<Status, string> = { active: "Đủ tồn", low: "Dưới tồn an toàn", expiring: "Lô cận hạn", quarantine: "Có lô cách ly", empty: "Hết tồn khả dụng" };
+const STATUS_VARIANT = { active: "success", low: "warning", expiring: "warning", quarantine: "danger", empty: "danger" } as const;
+const GROUPS: IngredientGroup[] = ["tea", "dairy", "syrup", "topping", "packaging", "prepared"];
+
+export default function IngredientsPage() {
+    const [data, setData] = useDemoState();
+    const [search, setSearch] = useState("");
+    const [group, setGroup] = useState("all");
+    const [status, setStatus] = useState("all");
+    const [applied, setApplied] = useState({ search: "", group: "all", status: "all" });
+    const [selected, setSelected] = useState<Ingredient | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [form, setForm] = useState({ code: "", name: "", group: "tea" as IngredientGroup, dimension: "mass" as IngredientDimension, baseUnit: "g", minimum: "", storage: "Khô, thoáng", shelfLifeDays: "365" });
+
+    function lotsOf(ingredientId: string): IngredientLot[] {
+        return data.lots.filter((lot) => lot.ingredientId === ingredientId && lot.location === "central");
+    }
+    function availableOf(ingredientId: string): number {
+        return Math.max(0, lotsOf(ingredientId).reduce((sum, lot) => sum + usableLotQuantity(lot) - (lot.reservedQuantity ?? 0) - (lot.lockedQuantity ?? 0), 0));
+    }
+    function statusOf(ingredient: Ingredient): Status {
+        const lots = lotsOf(ingredient.id);
+        const usable = Math.max(0, lots.reduce((sum, lot) => sum + usableLotQuantity(lot) - (lot.reservedQuantity ?? 0) - (lot.lockedQuantity ?? 0), 0));
+        if (lots.some((lot) => lot.quality === "quarantine")) return "quarantine";
+        if (lots.some((lot) => lot.expiryDate && lot.expiryDate >= getTodayISO() && lot.expiryDate <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10))) return "expiring";
+        if (usable === 0) return "empty";
+        if (usable < ingredient.minimum) return "low";
+        return "active";
+    }
+    const filtered = useMemo(() => data.ingredients.filter((ingredient) => {
+        const query = applied.search.trim().toLocaleLowerCase("vi-VN");
+        const currentStatus = statusOf(ingredient);
+        return (!query || `${ingredient.code} ${ingredient.name}`.toLocaleLowerCase("vi-VN").includes(query))
+            && (applied.group === "all" || ingredient.group === applied.group)
+            && (applied.status === "all" || currentStatus === applied.status);
+    }), [data.ingredients, data.lots, applied]);
+    const availableCount = data.ingredients.filter((item) => statusOf(item) === "active").length;
+    const lowCount = data.ingredients.filter((item) => statusOf(item) === "low" || statusOf(item) === "empty").length;
+    const expiringCount = data.ingredients.filter((item) => statusOf(item) === "expiring").length;
+    const quarantineCount = data.ingredients.filter((item) => statusOf(item) === "quarantine").length;
+
+    function clearFilters() {
+        setSearch(""); setGroup("all"); setStatus("all"); setApplied({ search: "", group: "all", status: "all" });
+    }
+    function addIngredient(event: FormEvent) {
+        event.preventDefault();
+        const minimum = Number(form.minimum);
+        if (!form.code.trim() || !form.name.trim() || !Number.isFinite(minimum) || minimum < 0) return;
+        if (data.ingredients.some((item) => item.code.toLowerCase() === form.code.trim().toLowerCase() || item.name.toLocaleLowerCase("vi-VN") === form.name.trim().toLocaleLowerCase("vi-VN"))) return;
+        const ingredient: Ingredient = { id: makeId("ingredient"), code: form.code.trim().toUpperCase(), name: form.name.trim(), group: form.group, dimension: form.dimension, baseUnit: form.baseUnit, minimum, storage: form.storage.trim(), shelfLifeDays: form.shelfLifeDays ? Number(form.shelfLifeDays) : null };
+        setData((current) => ({ ...current, ingredients: [...current.ingredients, ingredient] }));
+        setModalOpen(false);
+        setForm({ code: "", name: "", group: "tea", dimension: "mass", baseUnit: "g", minimum: "", storage: "Khô, thoáng", shelfLifeDays: "365" });
+    }
+
+    return (
         <div>
-          <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
-            <span className="sep">/</span>
-            <Link to="/inventory">Kho hàng</Link>
-            <span className="sep">/</span>
-            <span className="current">Nguyên vật liệu</span>
-          </nav>
-          <h1 className="page-title">Quản lý nguyên liệu</h1>
-          <p className="page-subtitle mt-1">Theo dõi nguyên liệu thô, vật tư bao bì, đơn vị tính, tồn an toàn và điều kiện bảo quản.</p>
+            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/inventory/products">Menu &amp; nguyên liệu</Link><span className="sep">/</span><span className="current">Nguyên liệu</span></nav><h1 className="page-title">Quản lý nguyên liệu</h1><p className="page-subtitle">Danh mục nguyên liệu tách biệt với các lô nhập và lô chế biến.</p></div><span className="text-xs text-[var(--muted)]">Kho tổng &amp; khu chế biến</span></div>
+
+            <section className="mb-6"><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard label="Danh mục nguyên liệu" value={String(data.ingredients.length)} subLabel="Nguyên liệu và vật tư" tone="primary" icon={<KpiIcon kind="box" />} />
+                <StatCard label="Dưới tồn an toàn" value={String(lowCount)} subLabel="Tính theo tồn khả dụng" tone="warning" icon={<KpiIcon kind="warning" />} />
+                <StatCard label="Lô cận hạn 7 ngày" value={String(expiringCount)} subLabel="Ưu tiên xuất FEFO" tone="warning" icon={<KpiIcon kind="clock" />} />
+                <StatCard label="Có lô cách ly" value={String(quarantineCount)} subLabel={`${availableCount} nguyên liệu đủ tồn`} tone="danger" icon={<KpiIcon kind="warning" />} />
+            </div></section>
+
+            <section className="card mb-6 border-l-4 border-[var(--warning)]"><h2 className="text-sm font-bold mb-1">Tồn khả dụng theo lô</h2><p className="text-sm text-[var(--muted)]">Tồn khả dụng là tổng số lượng các lô còn hạn, đạt chất lượng và chưa bị khóa tại vị trí đang xem. Lô cách ly/hết hạn không được tính vào khả dụng.</p></section>
+
+            <section className="card mb-6"><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
+                <div><label className="form-label" htmlFor="ingredient-search">Tìm kiếm</label><input id="ingredient-search" className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã hoặc tên nguyên liệu..." /></div>
+                <div><label className="form-label" htmlFor="ingredient-group">Nhóm</label><select id="ingredient-group" className="form-input form-select" value={group} onChange={(event) => setGroup(event.target.value)}><option value="all">Tất cả nhóm</option>{GROUPS.map((value) => <option key={value} value={value}>{GROUP_LABEL[value]}</option>)}</select></div>
+                <div><label className="form-label" htmlFor="ingredient-status">Trạng thái lô/tồn</label><select id="ingredient-status" className="form-input form-select" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tất cả</option>{Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+                <div className="flex gap-2"><button type="button" className="btn btn-secondary" onClick={clearFilters}>Xóa lọc</button><button type="button" className="btn btn-primary" onClick={() => setApplied({ search, group, status })}>Áp dụng</button></div>
+            </div></section>
+
+            <section className="card p-0 overflow-hidden"><div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3"><div><h2 className="font-bold">Danh mục nguyên liệu</h2><p className="text-sm text-[var(--muted)] mt-1">Một nguyên liệu có thể có nhiều lô với hạn dùng và chất lượng khác nhau.</p></div><button className="btn btn-primary" onClick={() => setModalOpen(true)}>Thêm nguyên liệu</button></div>
+                <DataTable><table className="w-full text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã", "Tên nguyên liệu", "Nhóm", "Đơn vị chuẩn", "Lô đang quản lý", "Khả dụng kho tổng", "Tồn an toàn", "Trạng thái"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>
+                    {filtered.length === 0 ? <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--muted)]">Không tìm thấy nguyên liệu phù hợp.</td></tr> : filtered.map((ingredient) => <tr key={ingredient.id} className="border-t border-[var(--border)] hover:bg-[var(--background)]"><td className="px-4 py-3 font-semibold">{ingredient.code}</td><td className="px-4 py-3"><button className="text-left font-medium text-[var(--primary)]" onClick={() => setSelected(ingredient)}>{ingredient.name}</button></td><td className="px-4 py-3">{GROUP_LABEL[ingredient.group]}</td><td className="px-4 py-3">{ingredient.baseUnit} · {ingredient.dimension === "mass" ? "khối lượng" : ingredient.dimension === "volume" ? "thể tích" : "đếm"}</td><td className="px-4 py-3">{lotsOf(ingredient.id).length}</td><td className="px-4 py-3">{availableOf(ingredient.id).toLocaleString("vi-VN")} {ingredient.baseUnit}</td><td className="px-4 py-3">{ingredient.minimum.toLocaleString("vi-VN")} {ingredient.baseUnit}</td><td className="px-4 py-3"><Badge variant={STATUS_VARIANT[statusOf(ingredient)]}>{STATUS_LABEL[statusOf(ingredient)]}</Badge></td></tr>)}
+                </tbody></table></DataTable>
+            </section>
+
+            <Modal isOpen={!!selected} title="Các lô của nguyên liệu" onClose={() => setSelected(null)}>
+                {selected && <div className="space-y-3"><p className="font-semibold">{selected.code} · {selected.name}</p><p className="text-sm text-[var(--muted)]">Đơn vị chuẩn: {selected.baseUnit}. Bảo quản: {selected.storage}.</p><DataTable><table className="w-full text-sm"><thead><tr>{["Lô/mẻ", "Ngày SX", "Hạn dùng", "SL", "Vị trí", "Chất lượng"].map((label) => <th key={label} className="px-2 py-2 text-left">{label}</th>)}</tr></thead><tbody>{lotsOf(selected.id).map((lot) => <tr key={lot.id} className="border-t border-[var(--border)]"><td className="px-2 py-2">{lot.lotCode}</td><td className="px-2 py-2">{lot.manufactureDate ?? "—"}</td><td className="px-2 py-2">{lot.expiryDate ?? "Không áp dụng"}</td><td className="px-2 py-2">{lot.quantity.toLocaleString("vi-VN")} {selected.baseUnit}</td><td className="px-2 py-2">{lot.location === "central" ? "Kho tổng" : lot.location === "kitchen" ? "Khu chế biến" : `Quầy ${lot.locationId}`}</td><td className="px-2 py-2">{lot.quality === "pass" ? "Đạt" : lot.quality === "quarantine" ? "Cách ly" : "Hết hạn"}</td></tr>)}</tbody></table></DataTable></div>}
+            </Modal>
+
+            <Modal isOpen={modalOpen} title="Thêm nguyên liệu" onClose={() => setModalOpen(false)}>
+                <form className="space-y-3" onSubmit={addIngredient}><div><label className="form-label" htmlFor="ingredient-code">Mã nguyên liệu *</label><input id="ingredient-code" className="form-input" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} required /></div><div><label className="form-label" htmlFor="ingredient-name">Tên nguyên liệu *</label><input id="ingredient-name" className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></div><div className="grid grid-cols-2 gap-3"><div><label className="form-label" htmlFor="ingredient-new-group">Nhóm</label><select id="ingredient-new-group" className="form-input form-select" value={form.group} onChange={(event) => setForm((current) => ({ ...current, group: event.target.value as IngredientGroup }))}>{GROUPS.map((value) => <option key={value} value={value}>{GROUP_LABEL[value]}</option>)}</select></div><div><label className="form-label" htmlFor="ingredient-new-dimension">Loại đại lượng</label><select id="ingredient-new-dimension" className="form-input form-select" value={form.dimension} onChange={(event) => { const dimension = event.target.value as IngredientDimension; setForm((current) => ({ ...current, dimension, baseUnit: dimension === "mass" ? "g" : dimension === "volume" ? "ml" : "cái" })); }}><option value="mass">Khối lượng</option><option value="volume">Thể tích</option><option value="count">Đếm</option></select></div></div><div className="grid grid-cols-2 gap-3"><div><label className="form-label" htmlFor="ingredient-base">Đơn vị chuẩn</label><input id="ingredient-base" className="form-input" value={form.baseUnit} onChange={(event) => setForm((current) => ({ ...current, baseUnit: event.target.value }))} required /></div><div><label className="form-label" htmlFor="ingredient-min">Tồn an toàn</label><input id="ingredient-min" type="number" min="0" step="0.001" className="form-input" value={form.minimum} onChange={(event) => setForm((current) => ({ ...current, minimum: event.target.value }))} required /></div></div><div><label className="form-label" htmlFor="ingredient-storage">Bảo quản</label><input id="ingredient-storage" className="form-input" value={form.storage} onChange={(event) => setForm((current) => ({ ...current, storage: event.target.value }))} /></div><div><label className="form-label" htmlFor="ingredient-shelf-life">Hạn dùng tham chiếu (ngày; bỏ trống nếu không áp dụng)</label><input id="ingredient-shelf-life" type="number" min="1" className="form-input" value={form.shelfLifeDays} onChange={(event) => setForm((current) => ({ ...current, shelfLifeDays: event.target.value }))} /></div><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Hủy</button><button type="submit" className="btn btn-primary">Lưu nguyên liệu</button></div></form>
+            </Modal>
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-      </div>
-
-      <section className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Mã nguyên liệu" value="42" subLabel="Nguyên liệu và vật tư" tone="primary" icon={<KpiIcon kind="box"/>}/>
-          <StatCard label="Dưới tồn an toàn" value="5" subLabel="Cần kiểm tra cấp phát" tone="warning" icon={<KpiIcon kind="warning"/>}/>
-          <StatCard label="Lô cận hạn 7 ngày" value="3" subLabel="Ưu tiên FEFO" tone="warning" icon={<KpiIcon kind="clock"/>}/>
-          <StatCard label="Đang cách ly" value="1" subLabel="Không tính tồn khả dụng" tone="danger" icon={<KpiIcon kind="warning"/>}/>
-        </div>
-      </section>
-
-      <section className="card mb-6 border-l-4 border-[var(--warning)]">
-        <h2 className="text-sm font-bold mb-1">Nguyên tắc tồn khả dụng</h2>
-        <p className="text-sm text-[var(--muted)]">Tồn khả dụng = tồn thực tế − tồn giữ cho đơn − tồn khóa kiểm kê. Lô hết hạn, không đạt chất lượng hoặc đang cách ly không được xuất dùng.</p>
-      </section>
-
-      <section className="card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="form-label" htmlFor="ingredient-search">Tìm kiếm</label>
-            <input id="ingredient-search" className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm mã hoặc tên nguyên liệu..."/>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="ingredient-group">Nhóm nguyên liệu</label>
-            <select id="ingredient-group" className="form-input form-select" value={group} onChange={e=>setGroup(e.target.value)}>
-              <option value="all">Tất cả nhóm</option>
-              {Object.entries(GROUPS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="ingredient-status">Trạng thái</label>
-            <select id="ingredient-status" className="form-input form-select" value={status} onChange={e=>setStatus(e.target.value)}>
-              <option value="all">Tất cả trạng thái</option>
-              <option value="active">Đang sử dụng</option>
-              <option value="low">Dưới tồn an toàn</option>
-              <option value="expiring">Lô cận hạn</option>
-              <option value="quarantine">Cách ly</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={clear}>Xóa lọc</button>
-            <button className="btn btn-primary" onClick={apply}>Áp dụng</button>
-          </div>
-        </div>
-      </section>
-
-      <section className="card p-0 overflow-hidden">
-        <div className="p-4 md:p-5 border-b border-[var(--border)] flex justify-between gap-3">
-          <div>
-            <h2 className="font-bold">Danh mục nguyên liệu</h2>
-            <p className="text-sm text-[var(--muted)] mt-1">Theo dõi đơn vị cơ sở, tồn thực tế, tồn an toàn và điều kiện bảo quản.</p>
-          </div>
-          <button className="btn btn-secondary" onClick={()=>navigate("/inventory/products")}>Danh mục món</button>
-        </div>
-        <DataTable>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {["Mã","Tên nguyên liệu","Nhóm","Đơn vị cơ sở","Tồn thực tế","Tồn an toàn","Trạng thái","Bảo quản"].map(x=><th key={x} className="px-4 py-3 font-semibold">{x}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(i=><tr key={i.id} className="border-t border-[var(--border)] hover:bg-[var(--background)]">
-                <td className="px-4 py-3 font-semibold">{i.code}</td>
-                <td className="px-4 py-3"><button className="text-left font-medium text-[var(--primary)]" onClick={()=>setSelected(i)}>{i.name}</button><div className="text-xs text-[var(--muted)]">Lô {i.lot}</div></td>
-                <td className="px-4 py-3">{GROUPS[i.group]}</td>
-                <td className="px-4 py-3">{i.unit}</td>
-                <td className="px-4 py-3">{i.stock.toLocaleString("vi-VN")} {i.unit}</td>
-                <td className="px-4 py-3">{i.minimum.toLocaleString("vi-VN")} {i.unit}</td>
-                <td className="px-4 py-3"><Badge variant={VARIANT[i.status]}>{STATUS[i.status]}</Badge></td>
-                <td className="px-4 py-3">{i.storage}</td>
-              </tr>)}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-
-      <Modal isOpen={!!selected} title="Chi tiết nguyên liệu và lô" onClose={()=>setSelected(null)}>
-        {selected && (
-          <div className="space-y-3 text-sm">
-            <p><b>{selected.code} · {selected.name}</b></p>
-            <p>Nhóm: {GROUPS[selected.group]}</p>
-            <p>Tồn thực tế: {selected.stock} {selected.unit}</p>
-            <p>Tồn giữ: {selected.reserved} · Tồn khóa: {selected.locked} · Tồn khả dụng: {Math.max(0,selected.stock-selected.reserved-selected.locked)} {selected.unit}</p>
-            <p>Mã lô: {selected.lot}</p>
-            <p>Hạn dùng: {selected.expiry||"Không áp dụng"}</p>
-            <p>Bảo quản: {selected.storage}</p>
-            <p className="text-[var(--muted)]">Khi xuất kho cần ưu tiên lô có hạn dùng gần nhất (FEFO); lô cách ly hoặc hết hạn không được xuất dùng.</p>
-            <div className="flex justify-end">
-              <button className="btn btn-secondary" onClick={()=>setSelected(null)}>Đóng</button>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
-  );
+    );
 }

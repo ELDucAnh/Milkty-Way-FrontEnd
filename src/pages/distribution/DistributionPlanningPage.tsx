@@ -1,162 +1,61 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
-import { useToast } from "../../contexts/ToastContext";
-import { makeId } from "../shared/formatters";
+import StatCard from "../../components/common/StatCard";
+import KpiIcon from "../shared/KpiIcon";
+import { formatDate, getTodayISO, makeId } from "../shared/formatters";
+import { getIngredient, getStore, usableLotQuantity } from "../shared/business-demo";
+import type { DistributionPlan, PlanLine, PlanStatus, Shift } from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
 
-type PlanStatus="draft"|"pending"|"approved";
-type Shift="Ca sáng"|"Ca chiều"|"Ca tối";
-interface DistributionPlan {id:string;code:string;branch:string;shift:Shift;expected:string;available:string;proposed:string;batch:string;status:PlanStatus;date:string;}
-const BRANCHES=["CN01 · Bến Nghé","CN02 · Bàn Cờ","CN03 · Chợ Lớn","CN04 · Tân Hưng","CN05 · Hàng Xanh","CN06 · Làng Đại Học","CN07 · Bảy Hiền","CN08 · Cityland","CN09 · Phan Xích Long","CN10 · Bắc Hải","CN11 · Lãnh Binh Thăng","CN12 · Kênh Nước Đen"];
-const INITIAL:DistributionPlan[]=[
-{id:"1",code:"KH-2810-01",branch:BRANCHES[0],shift:"Ca sáng",expected:"120 ly",available:"18 lít nền trà",proposed:"8 lít nền trà",batch:"ME-2810-01",status:"approved",date:"2026-10-28"},
-{id:"2",code:"KH-2810-02",branch:BRANCHES[4],shift:"Ca chiều",expected:"160 ly",available:"2 kg trân châu",proposed:"4 kg trân châu",batch:"ME-2810-03",status:"pending",date:"2026-10-28"},
-{id:"3",code:"KH-2810-03",branch:BRANCHES[5],shift:"Ca tối",expected:"90 ly",available:"7 lít sữa",proposed:"6 lít sữa",batch:"ME-2810-04",status:"draft",date:"2026-10-29"},
-{id:"4",code:"KH-2810-04",branch:BRANCHES[8],shift:"Ca sáng",expected:"110 ly",available:"Tồn đủ",proposed:"Không cấp thêm",batch:"—",status:"approved",date:"2026-10-30"},
-];
-const STATUS_LABEL:Record<PlanStatus,string>={draft:"Bản nháp",pending:"Chờ duyệt",approved:"Đã duyệt"};
-export default function DistributionPlanningPage(){
- const navigate=useNavigate();const {showToast}=useToast();const [plans,setPlans]=useState(INITIAL);const [date,setDate]=useState("all");const [status,setStatus]=useState("all");const [applied,setApplied]=useState({date:"all",status:"all"});const [modalOpen,setModalOpen]=useState(false);const [form,setForm]=useState({date:"2026-10-31",branch:BRANCHES[0],shift:"Ca sáng" as Shift,cups:"",batch:"ME-2810-01",quantity:"",note:""});
- const rows=useMemo(()=>plans.filter(p=>(applied.date==="all"||p.date===applied.date)&&(applied.status==="all"||p.status===applied.status)),[plans,applied]);
- function submit(e:FormEvent){e.preventDefault();const cups=Number(form.cups);const quantity=Number(form.quantity);if(!form.date||!form.branch||cups<=0||quantity<0){showToast({type:"error",title:"Kế hoạch chưa hợp lệ",message:"Ngày, cửa hàng và số ly dự kiến là bắt buộc; lượng đề xuất không được âm."});return;}const item:DistributionPlan={id:makeId("plan"),code:`KH-${form.date.slice(8,10)}${form.date.slice(5,7)}-${String(plans.length+1).padStart(2,"0")}`,branch:form.branch,shift:form.shift,expected:`${cups} ly`,available:"Chưa nhập dữ liệu tồn",proposed:`${quantity} đơn vị`,batch:form.batch||"—",status:"draft",date:form.date};setPlans(prev=>[item,...prev]);setModalOpen(false);showToast({type:"success",title:"Đã lưu kế hoạch bản nháp",message:"Kế hoạch chưa được gửi duyệt và không tự động trừ tồn kho."});}
- function submitForApproval(plan:DistributionPlan){setPlans(prev=>prev.map(p=>p.id===plan.id?{...p,status:"pending"}:p));showToast({type:"success",title:"Đã gửi duyệt",message:`${plan.code} đang chờ quản lý duyệt.`});}
-  return (
-    <div>
-      <div className="page-header">
+interface DraftPlanLine { id: string; ingredientId: string; quantity: string; }
+const STATUS_LABEL: Record<PlanStatus, string> = { draft: "Bản nháp", pending: "Chờ duyệt", approved: "Đã duyệt" };
+const statusVariant = { draft: "info", pending: "warning", approved: "success" } as const;
+
+export default function DistributionPlanningPage() {
+    const [data, setData] = useDemoState();
+    const [date, setDate] = useState("all");
+    const [status, setStatus] = useState("all");
+    const [applied, setApplied] = useState({ date: "all", status: "all" });
+    const [createOpen, setCreateOpen] = useState(false);
+    const [selected, setSelected] = useState<DistributionPlan | null>(null);
+    const [error, setError] = useState("");
+    const [form, setForm] = useState({ date: getTodayISO(), storeId: data.stores[0]?.id ?? "", shift: "Ca sáng" as Shift, expectedCups: "", note: "" });
+    const [batchIds, setBatchIds] = useState<string[]>([]);
+    const [lines, setLines] = useState<DraftPlanLine[]>([{ id: makeId("plan-line"), ingredientId: "ing-tea-base", quantity: "" }]);
+    const rows = useMemo(() => data.plans.filter((plan) => (applied.date === "all" || plan.date === applied.date) && (applied.status === "all" || plan.status === applied.status)), [data.plans, applied]);
+    const preparedLots = data.lots.filter((lot) => lot.location === "kitchen" && usableLotQuantity(lot) > 0 && data.batches.some((batch) => batch.id === lot.batchId && batch.status === "completed" && batch.quality === "pass"));
+    const readyBatches = data.batches.filter((batch) => batch.status === "completed" && batch.quality === "pass" && batch.expiryDate >= getTodayISO());
+    const todayPlans = data.plans.filter((plan) => plan.date === getTodayISO()).length;
+    const needsSupply = data.plans.filter((plan) => plan.status !== "approved").length;
+
+    function addLine() { setLines((current) => [...current, { id: makeId("plan-line"), ingredientId: data.ingredients[0]?.id ?? "", quantity: "" }]); }
+    function savePlan(event: FormEvent) {
+        event.preventDefault();
+        const expectedCups = Number(form.expectedCups);
+        if (!form.date || !form.storeId || expectedCups <= 0 || lines.length === 0 || lines.some((line) => !line.ingredientId || !Number.isFinite(Number(line.quantity)) || Number(line.quantity) <= 0)) {
+            setError("Cần có ngày, cửa hàng, nhu cầu dự kiến và ít nhất một nguyên liệu với lượng đề xuất hợp lệ."); return;
+        }
+        const plan: DistributionPlan = { id: makeId("plan"), code: `KH-${form.date.replace(/-/g, "")}-${String(data.plans.length + 1).padStart(2, "0")}`, storeId: form.storeId, date: form.date, shift: form.shift, expectedCups, lines: lines.map((line) => { const ingredient = getIngredient(data, line.ingredientId)!; return { id: line.id, ingredientId: line.ingredientId, quantity: Number(line.quantity), approvedQuantity: null, unit: ingredient.baseUnit } satisfies PlanLine; }), batchIds, status: "draft", note: form.note.trim() };
+        setData((current) => ({ ...current, plans: [plan, ...current.plans] }));
+        setCreateOpen(false); setError("");
+    }
+    function sendForApproval(plan: DistributionPlan) { setData((current) => ({ ...current, plans: current.plans.map((item) => item.id === plan.id ? { ...item, status: "pending" } : item) })); }
+    function approve(plan: DistributionPlan) { setData((current) => ({ ...current, plans: current.plans.map((item) => item.id === plan.id ? { ...item, status: "approved", lines: item.lines.map((line) => ({ ...line, approvedQuantity: line.quantity })) } : item) })); }
+    function clearFilters() { setDate("all"); setStatus("all"); setApplied({ date: "all", status: "all" }); }
+
+    return (
         <div>
-          <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
-            <span className="sep">/</span>
-            <span className="current">Kế hoạch phân phối</span>
-          </nav>
-          <h1 className="page-title">Kế hoạch phân phối</h1>
-          <p className="page-subtitle mt-1">Lập kế hoạch cấp phát nguyên liệu đến cửa hàng theo ngày và ca sáng, chiều, tối.</p>
+            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/production/batches">Sản xuất tập trung</Link><span className="sep">/</span><span className="current">Kế hoạch cấp phát</span></nav><h1 className="page-title">Kế hoạch cấp phát theo ca</h1><p className="page-subtitle">Lập kế hoạch thủ công theo cửa hàng, ngày, ca, nhu cầu và nhiều nguyên liệu; không tự dự báo.</p></div><span className="text-xs text-[var(--muted)]">12 cửa hàng · 1 khu chế biến</span></div>
+            <section className="mb-6"><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><StatCard label="Kế hoạch hôm nay" value={String(todayPlans)} subLabel="Theo các ca vận hành" tone="info" icon={<KpiIcon kind="clipboard" />} /><StatCard label="Chờ xử lý" value={String(needsSupply)} subLabel="Nháp / chờ duyệt" tone="warning" icon={<KpiIcon kind="warning" />} /><StatCard label="Mẻ đạt, còn hạn" value={String(readyBatches.length)} subLabel="Có thể xem xét cấp" tone="info" icon={<KpiIcon kind="factory" />} /><StatCard label="Đã duyệt" value={String(data.plans.filter((plan) => plan.status === "approved").length)} subLabel="Lượng cấp được xác nhận" tone="success" icon={<KpiIcon kind="document-check" />} /></div></section>
+            <section className="card mb-6 border-l-4 border-[var(--info)]"><h2 className="text-sm font-bold mb-1">Căn cứ lập kế hoạch</h2><p className="text-sm text-[var(--muted)]">Tham khảo nhu cầu theo món/size/topping, tồn quầy còn hạn, đơn lớn đã xác nhận và mẻ đạt. Lượng đang giao chỉ dùng cho lập kế hoạch; chưa là tồn quầy.</p></section>
+            <section className="card mb-6"><div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><div><label className="form-label" htmlFor="plan-date-filter">Ngày</label><select id="plan-date-filter" className="form-input form-select" value={date} onChange={(event) => setDate(event.target.value)}><option value="all">Tất cả ngày</option>{[...new Set(data.plans.map((plan) => plan.date))].sort().map((day) => <option key={day} value={day}>{formatDate(day)}</option>)}</select></div><div><label className="form-label" htmlFor="plan-status-filter">Trạng thái</label><select id="plan-status-filter" className="form-input form-select" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tất cả</option>{Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><div className="flex gap-2"><button type="button" className="btn btn-secondary" onClick={clearFilters}>Xóa lọc</button><button type="button" className="btn btn-primary" onClick={() => setApplied({ date, status })}>Áp dụng</button></div></div></section>
+            <section className="card p-0 overflow-hidden"><div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3"><div><h2 className="font-bold">Kế hoạch cấp phát</h2><p className="text-sm text-[var(--muted)] mt-1">Một kế hoạch có thể chứa nhiều nguyên liệu và lượng duyệt riêng.</p></div><button className="btn btn-primary" onClick={() => { setForm({ date: getTodayISO(), storeId: data.stores[0]?.id ?? "", shift: "Ca sáng", expectedCups: "", note: "" }); setBatchIds([]); setLines([{ id: makeId("plan-line"), ingredientId: data.ingredients[0]?.id ?? "", quantity: "" }]); setError(""); setCreateOpen(true); }}>+ Tạo kế hoạch</button></div><DataTable><table className="w-full min-w-[1200px] text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã", "Cửa hàng / ngày", "Ca", "Nhu cầu", "Nguyên liệu / đề xuất", "Lượng duyệt", "Mẻ đạt", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="px-3 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{rows.map((plan) => <tr key={plan.id} className="border-t border-[var(--border)]"><td className="px-3 py-3 font-semibold">{plan.code}</td><td className="px-3 py-3">{getStore(data, plan.storeId)?.code} · {getStore(data, plan.storeId)?.name}<div>{formatDate(plan.date)}</div></td><td className="px-3 py-3">{plan.shift}</td><td className="px-3 py-3">{plan.expectedCups} ly</td><td className="px-3 py-3">{plan.lines.map((line) => <div key={line.id}>{getIngredient(data, line.ingredientId)?.name}: {line.quantity} {line.unit}</div>)}</td><td className="px-3 py-3">{plan.lines.map((line) => <div key={line.id}>{line.approvedQuantity == null ? "—" : `${line.approvedQuantity} ${line.unit}`}</div>)}</td><td className="px-3 py-3">{plan.batchIds.map((id) => data.batches.find((batch) => batch.id === id)?.code ?? id).join(", ") || "—"}</td><td className="px-3 py-3"><Badge variant={statusVariant[plan.status]}>{STATUS_LABEL[plan.status]}</Badge></td><td className="px-3 py-3"><div className="flex flex-wrap gap-2"><button className="btn btn-secondary" onClick={() => setSelected(plan)}>Chi tiết</button>{plan.status === "draft" && <button className="btn btn-secondary" onClick={() => sendForApproval(plan)}>Gửi duyệt</button>}{plan.status === "pending" && <button className="btn btn-primary" onClick={() => approve(plan)}>Duyệt lượng đề xuất</button>}</div></td></tr>)}</tbody></table></DataTable></section>
+
+            <Modal isOpen={createOpen} title="Tạo kế hoạch cấp phát" onClose={() => setCreateOpen(false)}><form className="space-y-3" onSubmit={savePlan}><div className="grid grid-cols-2 gap-3"><div><label className="form-label" htmlFor="plan-date">Ngày *</label><input id="plan-date" type="date" className="form-input" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} required /></div><div><label className="form-label" htmlFor="plan-shift">Ca *</label><select id="plan-shift" className="form-input form-select" value={form.shift} onChange={(event) => setForm((current) => ({ ...current, shift: event.target.value as Shift }))}><option>Ca sáng</option><option>Ca chiều</option><option>Ca tối</option></select></div></div><div><label className="form-label" htmlFor="plan-store">Cửa hàng *</label><select id="plan-store" className="form-input form-select" value={form.storeId} onChange={(event) => setForm((current) => ({ ...current, storeId: event.target.value }))}>{data.stores.filter((store) => store.status === "active").map((store) => <option key={store.id} value={store.id}>{store.code} · {store.name}</option>)}</select></div><div><label className="form-label" htmlFor="plan-cups">Nhu cầu dự kiến (ly) *</label><input id="plan-cups" type="number" min="1" step="1" className="form-input" value={form.expectedCups} onChange={(event) => setForm((current) => ({ ...current, expectedCups: event.target.value }))} required /></div><section className="card p-0 overflow-hidden"><div className="p-3 flex justify-between"><div><h3 className="font-semibold">Nguyên liệu cần cấp</h3><p className="text-xs text-[var(--muted)]">Nhập thủ công; chỉ mẻ đạt và còn hạn được liên kết.</p></div><button type="button" className="btn btn-secondary" onClick={addLine}>+ Thêm nguyên liệu</button></div><DataTable><table className="w-full min-w-[650px] text-sm"><thead><tr>{["Nguyên liệu", "Khả dụng khu chế biến", "Lượng đề xuất", ""].map((label) => <th key={label} className="px-2 py-2 text-left">{label}</th>)}</tr></thead><tbody>{lines.map((line) => { const ingredient = getIngredient(data, line.ingredientId); const available = preparedLots.filter((lot) => lot.ingredientId === line.ingredientId).reduce((sum, lot) => sum + usableLotQuantity(lot), 0); return <tr key={line.id} className="border-t border-[var(--border)]"><td className="px-2 py-2"><select aria-label="Nguyên liệu kế hoạch" className="form-input form-select min-w-[170px]" value={line.ingredientId} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, ingredientId: event.target.value } : item))}>{data.ingredients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></td><td className="px-2 py-2">{available.toLocaleString("vi-VN")} {ingredient?.baseUnit}</td><td className="px-2 py-2"><input aria-label="Lượng đề xuất cấp" type="number" min="0.001" step="0.001" className="form-input w-32" value={line.quantity} onChange={(event) => setLines((current) => current.map((item) => item.id === line.id ? { ...item, quantity: event.target.value } : item))} required /></td><td className="px-2 py-2"><button type="button" className="btn btn-secondary" disabled={lines.length <= 1} onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))}>Bớt</button></td></tr>; })}</tbody></table></DataTable></section><div><label className="form-label" htmlFor="plan-batches">Mẻ đạt liên quan</label><select id="plan-batches" multiple className="form-input min-h-24" value={batchIds} onChange={(event) => setBatchIds(Array.from(event.target.selectedOptions, (option) => option.value))}>{readyBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.code} · {getIngredient(data, data.recipes.find((recipe) => recipe.id === batch.recipeId)?.outputIngredientId ?? "")?.name} · HSD {formatDate(batch.expiryDate)}</option>)}</select><p className="text-xs text-[var(--muted)]">Có thể chọn nhiều mẻ; giữ Ctrl/Cmd khi chọn nhiều mục.</p></div><div><label className="form-label" htmlFor="plan-note">Ghi chú</label><textarea id="plan-note" rows={2} className="form-input form-textarea" value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></div>{error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}<div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setCreateOpen(false)}>Hủy</button><button type="submit" className="btn btn-primary">Lưu bản nháp</button></div></form></Modal>
+            <Modal isOpen={!!selected} title="Chi tiết kế hoạch cấp phát" onClose={() => setSelected(null)}>{selected && <div className="space-y-3"><p className="font-semibold">{selected.code} · {getStore(data, selected.storeId)?.name} · {selected.shift}</p><p>Nhu cầu dự kiến: {selected.expectedCups} ly · {formatDate(selected.date)}</p><div>{selected.lines.map((line) => <p key={line.id}>{getIngredient(data, line.ingredientId)?.name}: đề xuất {line.quantity} {line.unit}; duyệt {line.approvedQuantity ?? "chưa duyệt"} {line.unit}</p>)}</div><p>Mẻ: {selected.batchIds.map((id) => data.batches.find((batch) => batch.id === id)?.code ?? id).join(", ") || "Chưa liên kết"}</p><p className="text-sm text-[var(--muted)]">{selected.note || "Không có ghi chú."} Kế hoạch chưa thay đổi tồn kho.</p></div>}</Modal>
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-      </div>
-
-      <section className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Kế hoạch ngày" value="12" subLabel="Một kế hoạch mỗi cửa hàng" tone="info" icon={<KpiIcon kind="clipboard"/>}/>
-          <StatCard label="Cửa hàng cần bổ sung" value="4" subLabel="Theo tồn an toàn" tone="warning" icon={<KpiIcon kind="warning"/>}/>
-          <StatCard label="Mẻ cần chuẩn bị" value="9" subLabel="Sáng / chiều / tối" tone="info" icon={<KpiIcon kind="factory"/>}/>
-          <StatCard label="Chưa xác nhận" value="2" subLabel="Chờ quản lý duyệt" tone="warning" icon={<KpiIcon kind="clock"/>}/>
-        </div>
-      </section>
-
-      <section className="card mb-6 border-l-4 border-[var(--info)]">
-        <h2 className="text-sm font-bold mb-1">Căn cứ lập kế hoạch</h2>
-        <p className="text-sm text-[var(--muted)]">Kế hoạch cấp phát dựa trên nhu cầu từng cửa hàng, ca vận hành, tồn khả dụng, tồn an toàn và mẻ đã chuẩn bị. Đây là giao diện nhập/xem kế hoạch, không tự động dự báo nhu cầu.</p>
-      </section>
-
-      <section className="card mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div>
-            <label className="form-label" htmlFor="plan-date-filter">Ngày cấp phát</label>
-            <select id="plan-date-filter" className="form-input form-select" value={date} onChange={e=>setDate(e.target.value)}>
-              <option value="all">Tất cả ngày</option>
-              <option value="2026-10-28">28/10/2026</option>
-              <option value="2026-10-29">29/10/2026</option>
-              <option value="2026-10-30">30/10/2026</option>
-            </select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-status-filter">Trạng thái</label>
-            <select id="plan-status-filter" className="form-input form-select" value={status} onChange={e=>setStatus(e.target.value)}>
-              <option value="all">Tất cả</option>
-              <option value="draft">Bản nháp</option>
-              <option value="pending">Chờ duyệt</option>
-              <option value="approved">Đã duyệt</option>
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary" onClick={()=>{setDate("all");setStatus("all");setApplied({date:"all",status:"all"});}}>Xóa lọc</button>
-            <button className="btn btn-primary" onClick={()=>setApplied({date,status})}>Áp dụng</button>
-          </div>
-        </div>
-      </section>
-
-      <section className="card p-0 overflow-hidden">
-        <div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3">
-          <div>
-            <h2 className="font-bold">Kế hoạch cấp phát theo cửa hàng và ca</h2>
-            <p className="text-sm text-[var(--muted)] mt-1">Số liệu minh họa; điều chỉnh và phê duyệt theo phân quyền.</p>
-          </div>
-          <button className="btn btn-primary" onClick={()=>setModalOpen(true)}>+ Tạo kế hoạch</button>
-        </div>
-        <DataTable>
-          <table className="w-full min-w-[950px] text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {["Mã kế hoạch","Cửa hàng","Ca","Nhu cầu dự kiến","Tồn khả dụng","Đề xuất cấp","Mẻ liên quan","Trạng thái","Thao tác"].map(x=><th key={x} className="px-3 py-3 font-semibold">{x}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(p=><tr key={p.id} className="border-t border-[var(--border)]">
-                <td className="px-3 py-3 font-semibold">{p.code}</td>
-                <td className="px-3 py-3">{p.branch}</td>
-                <td className="px-3 py-3">{p.shift}</td>
-                <td className="px-3 py-3">{p.expected}</td>
-                <td className="px-3 py-3">{p.available}</td>
-                <td className="px-3 py-3">{p.proposed}</td>
-                <td className="px-3 py-3">{p.batch}</td>
-                <td className="px-3 py-3"><Badge variant={p.status==="approved"?"success":p.status==="pending"?"warning":"info"}>{STATUS_LABEL[p.status]}</Badge></td>
-                <td className="px-3 py-3">{p.status==="draft"&&<button className="btn btn-secondary" onClick={()=>submitForApproval(p)}>Gửi duyệt</button>}</td>
-              </tr>)}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-
-      <Modal isOpen={modalOpen} title="Tạo kế hoạch cấp phát (mẫu)" onClose={()=>setModalOpen(false)}>
-        <form className="space-y-3" onSubmit={submit}>
-          <div>
-            <label className="form-label" htmlFor="plan-date">Ngày cấp phát *</label>
-            <input id="plan-date" type="date" className="form-input" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} required/>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-branch">Cửa hàng *</label>
-            <select id="plan-branch" className="form-input form-select" value={form.branch} onChange={e=>setForm(p=>({...p,branch:e.target.value}))}>{BRANCHES.map(b=><option key={b}>{b}</option>)}</select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-shift">Ca *</label>
-            <select id="plan-shift" className="form-input form-select" value={form.shift} onChange={e=>setForm(p=>({...p,shift:e.target.value as Shift}))}>
-              <option>Ca sáng</option>
-              <option>Ca chiều</option>
-              <option>Ca tối</option>
-            </select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-cups">Số ly dự kiến *</label>
-            <input id="plan-cups" type="number" min="1" className="form-input" value={form.cups} onChange={e=>setForm(p=>({...p,cups:e.target.value}))} required/>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-batch">Món / mẻ liên quan</label>
-            <select id="plan-batch" className="form-input form-select" value={form.batch} onChange={e=>setForm(p=>({...p,batch:e.target.value}))}>
-              <option>ME-2810-01 · Cốt hồng trà</option>
-              <option>ME-2810-03 · Trân châu</option>
-              <option value="">Chưa xác định</option>
-            </select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-quantity">Lượng đề xuất cấp *</label>
-            <input id="plan-quantity" type="number" min="0" step="0.01" className="form-input" value={form.quantity} onChange={e=>setForm(p=>({...p,quantity:e.target.value}))} required/>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-note">Ghi chú</label>
-            <textarea id="plan-note" className="form-input form-textarea" rows={2} value={form.note} onChange={e=>setForm(p=>({...p,note:e.target.value}))}/>
-          </div>
-          <p className="text-xs text-[var(--muted)]">Kế hoạch lưu dạng bản nháp. Không tự động dự báo nhu cầu hoặc trừ tồn tại kho.</p>
-          <div className="flex justify-end gap-2">
-            <button type="button" className="btn btn-secondary" onClick={()=>setModalOpen(false)}>Hủy</button>
-            <button type="submit" className="btn btn-primary">Lưu bản nháp</button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  );
+    );
 }

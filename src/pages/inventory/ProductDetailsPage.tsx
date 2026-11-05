@@ -1,151 +1,43 @@
-import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
-import Modal from "../../components/common/Modal";
-import { formatCurrency } from "../shared/formatters";
-interface RecipeIngredient { name:string; unit:string; sizeM:number; sizeL:number; note:string; }
-interface RecipeVersion { version:string; date:string; change:string; approver:string; status:string; }
-const INGREDIENTS:RecipeIngredient[]=[
- {name:"Cốt hồng trà đặc",unit:"ml",sizeM:100,sizeL:140,note:"Nền trà"},
- {name:"Bột kem béo sữa",unit:"gram",sizeM:30,sizeL:40,note:"Thành phần sữa"},
- {name:"Nước đường mía nấu",unit:"ml",sizeM:25,sizeL:35,note:"Có thể thay đổi theo tùy chọn đường"},
- {name:"Ly nhựa",unit:"cái",sizeM:1,sizeL:1,note:"Chọn đúng loại ly theo size"},
- {name:"Màng ép miệng ly",unit:"miếng",sizeM:1,sizeL:1,note:"Bao bì"},
- {name:"Ống hút trân châu",unit:"cái",sizeM:1,sizeL:1,note:"Bao bì"},
-];
-const VERSIONS:RecipeVersion[]=[
- {version:"1.1",date:"01/10/2026",change:"Giảm nước đường từ 30 ml xuống 25 ml",approver:"Quản lý sản phẩm",status:"Đang hiệu lực"},
- {version:"1.0",date:"01/08/2026",change:"Công thức khởi tạo",approver:"Quản lý sản phẩm",status:"Đã thay thế"},
-];
-export default function ProductDetailsPage(){
- const navigate=useNavigate(); const {id}=useParams<{id:string}>(); const [showVersions,setShowVersions]=useState(false);
- const currentId=(id??"hd-001").toLowerCase(); const product=currentId==="hd-003"?{code:"HD-003",name:"Matcha kem sữa",category:"Macchiato",m:42000,l:49000,cogs:23800,status:"Chi nhánh tạm khóa"}:currentId==="hd-002"?{code:"HD-002",name:"Trà đào cam sả",category:"Trà trái cây",m:39000,l:46000,cogs:20100,status:"Đang bán"}:{code:"HD-001",name:"Hồng trà sữa trân châu",category:"Trà sữa",m:35000,l:42000,cogs:18400,status:"Đang bán"};
-  return (
-    <div>
-      <div className="page-header">
+import { formatCurrency, formatDate } from "../shared/formatters";
+import { getIngredient } from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
+
+const STATUS_LABEL = { active: "Đang bán", "branch-locked": "Khóa tại cửa hàng", inactive: "Ngừng bán", "pending-recipe": "Chờ duyệt công thức" } as const;
+const STATUS_VARIANT = { active: "success", "branch-locked": "warning", inactive: "danger", "pending-recipe": "warning" } as const;
+
+export default function ProductDetailsPage() {
+    const navigate = useNavigate();
+    const { id } = useParams<{ id: string }>();
+    const [data] = useDemoState();
+    const product = data.products.find((item) => item.id === id || item.code.toLocaleLowerCase("vi-VN") === id?.toLocaleLowerCase("vi-VN"));
+
+    return (
         <div>
-          <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
-            <span className="sep">/</span>
-            <Link to="/inventory">Kho hàng</Link>
-            <span className="sep">/</span>
-            <Link to="/inventory/products">Sản phẩm</Link>
-            <span className="sep">/</span>
-            <span className="current">Chi tiết sản phẩm</span>
-          </nav>
-          <h1 className="page-title">Chi tiết món &amp; công thức</h1>
-          <p className="page-subtitle mt-1">Xem giá chuẩn, giá vốn định mức theo size và lịch sử phiên bản công thức.</p>
+            <div className="page-header"><div>
+                <nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/inventory/products">Menu đồ uống</Link><span className="sep">/</span><span className="current">Chi tiết món</span></nav>
+                <h1 className="page-title">{product ? "Chi tiết món & công thức" : "Không tìm thấy sản phẩm"}</h1>
+                <p className="page-subtitle">{product ? "Giá chuẩn, giá vốn định mức, topping và lịch sử phiên bản công thức." : "Mã sản phẩm trên đường dẫn không tồn tại trong dữ liệu demo."}</p>
+            </div><span className="text-xs text-[var(--muted)]">Dữ liệu demo</span></div>
+
+            {!product ? <section className="card"><h2 className="font-bold mb-2">Sản phẩm không tồn tại</h2><p className="text-sm text-[var(--muted)] mb-4">Không có sản phẩm khớp với mã “{id ?? ""}”. Không thay thế bằng một sản phẩm mặc định.</p><button className="btn btn-primary" onClick={() => navigate("/inventory/products")}>Quay lại danh mục</button></section> : <>
+                <section className="card mb-6 border-l-4 border-[var(--info)]"><h2 className="text-sm font-bold mb-1">Lịch sử bất biến</h2><p className="text-sm text-[var(--muted)]">Đơn hàng đã chốt giữ giá và phiên bản công thức tại thời điểm bán. Sửa công thức tạo phiên bản mới, không ghi đè phiên bản cũ.</p></section>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+                    <section className="card xl:col-span-2"><div className="flex flex-wrap justify-between gap-4"><div><p className="text-xs text-[var(--muted)]">MÃ MÓN · {product.code}</p><h2 className="text-xl font-bold mt-1">{product.name}</h2><p className="text-sm text-[var(--muted)] mt-2">Nhóm {data.categories.find((item) => item.key === product.category)?.name ?? product.category} · Menu lõi toàn chuỗi</p></div><Badge variant={STATUS_VARIANT[product.status]}>{STATUS_LABEL[product.status]}</Badge></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">{product.variants.map((variant) => <div key={variant.size} className="rounded-xl border border-[var(--border)] p-4"><p className="text-sm text-[var(--muted)]">Giá size {variant.size}</p><p className="text-lg font-bold mt-1">{formatCurrency(variant.price)}</p><p className="text-xs text-[var(--muted)]">COGS: {product.cogsBySize[variant.size] == null ? "Chưa xác định" : formatCurrency(product.cogsBySize[variant.size]!)}</p></div>)}</div>
+                        <div className="flex justify-end mt-5"><button className="btn btn-secondary" onClick={() => navigate("/inventory/products/new")}>Khai báo món mới</button></div>
+                    </section>
+
+                    <aside className="card"><h2 className="font-bold mb-3">Thông tin quản lý</h2><dl className="space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Size hỗ trợ</dt><dd>{product.variants.map((variant) => variant.size).join(", ")}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Trạng thái</dt><dd>{STATUS_LABEL[product.status]}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Cửa hàng khóa món</dt><dd>{product.lockedStoreIds.length ? product.lockedStoreIds.join(", ") : "Không có"}</dd></div></dl><h3 className="font-semibold mt-5 mb-2">Topping</h3>{product.toppings.length ? product.toppings.map((topping) => <p key={topping.ingredientId} className="text-sm">{getIngredient(data, topping.ingredientId)?.name ?? topping.ingredientId} · {topping.default ? "Mặc định" : "Tùy chọn"} · {formatCurrency(topping.price)}</p>) : <p className="text-sm text-[var(--muted)]">Chưa khai báo topping.</p>}<button className="btn btn-secondary w-full mt-5" onClick={() => navigate("/inventory/products/new")}>Mở biểu mẫu công thức</button></aside>
+                </div>
+
+                <section className="card p-0 overflow-hidden mb-6"><div className="p-4 md:p-5 border-b border-[var(--border)]"><h2 className="font-bold">Định mức công thức theo size</h2><p className="text-sm text-[var(--muted)] mt-1">Các dòng được lấy từ công thức và phiên bản đã lưu.</p></div><DataTable><table className="w-full text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Công thức", "Size", "Phiên bản", "Nguyên liệu", "Định lượng", "Loại sử dụng", "Ghi chú"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{data.recipes.filter((recipe) => recipe.productId === product.id).flatMap((recipe) => recipe.ingredients.map((line) => <tr key={`${recipe.id}-${line.id}`} className="border-t border-[var(--border)]"><td className="px-4 py-3">{recipe.code}</td><td className="px-4 py-3">{recipe.size}</td><td className="px-4 py-3">{recipe.version}</td><td className="px-4 py-3">{getIngredient(data, line.ingredientId)?.name ?? "Nguyên liệu không còn trong danh mục"}</td><td className="px-4 py-3">{line.quantity} {line.unit}</td><td className="px-4 py-3">{line.useType === "required" ? "Bắt buộc" : line.useType === "default-topping" ? "Topping mặc định" : "Topping tùy chọn"}</td><td className="px-4 py-3">{line.optionRule || line.note || "—"}</td></tr>))}</tbody></table></DataTable></section>
+
+                <section className="card p-0 overflow-hidden"><div className="p-4 md:p-5 border-b border-[var(--border)]"><h2 className="font-bold">Lịch sử phiên bản công thức</h2><p className="text-sm text-[var(--muted)] mt-1">Không xóa phiên bản đã được sử dụng trong đơn hàng.</p></div><DataTable><table className="w-full text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã công thức", "Size", "Phiên bản", "Ngày hiệu lực", "Thay đổi", "Người duyệt", "Trạng thái"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{data.recipes.filter((recipe) => recipe.productId === product.id).map((recipe) => <tr key={recipe.id} className="border-t border-[var(--border)]"><td className="px-4 py-3">{recipe.code}</td><td className="px-4 py-3">{recipe.size}</td><td className="px-4 py-3">{recipe.version}</td><td className="px-4 py-3">{formatDate(recipe.effectiveDate)}</td><td className="px-4 py-3">{recipe.changeReason || "—"}</td><td className="px-4 py-3">{recipe.approver || "Chưa phân công"}</td><td className="px-4 py-3"><Badge variant={recipe.status === "approved" ? "success" : recipe.status === "pending" ? "warning" : "info"}>{recipe.status === "approved" ? "Đã duyệt" : recipe.status === "pending" ? "Chờ duyệt" : "Bản nháp"}</Badge></td></tr>)}</tbody></table></DataTable></section>
+            </>}
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-      </div>
-
-      <section className="card mb-6 border-l-4 border-[var(--info)]">
-        <h2 className="text-sm font-bold mb-1">Lịch sử bất biến</h2>
-        <p className="text-sm text-[var(--muted)]">Đơn hàng cũ phải giữ giá bán và phiên bản công thức đã áp dụng tại thời điểm giao dịch. Khi công thức mới có hiệu lực, không ghi đè phiên bản cũ.</p>
-      </section>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-        <section className="card xl:col-span-2">
-          <div className="flex flex-wrap justify-between gap-4">
-            <div>
-              <p className="text-xs text-[var(--muted)]">MÃ MÓN · {product.code}</p>
-              <h2 className="text-xl font-bold mt-1">{product.name}</h2>
-              <p className="text-sm text-[var(--muted)] mt-2">Nhóm {product.category} · Menu lõi toàn chuỗi</p>
-            </div>
-            <Badge variant={product.status==="Đang bán"?"success":"warning"}>{product.status}</Badge>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-            {[{label:"Size M",value:formatCurrency(product.m)},{label:"Size L",value:formatCurrency(product.l)},{label:"COGS / ly M",value:formatCurrency(product.cogs)}].map(x=><div key={x.label} className="rounded-xl border border-[var(--border)] p-4">
-              <p className="text-sm text-[var(--muted)]">{x.label}</p>
-              <p className="text-lg font-bold mt-1">{x.value}</p>
-            </div>)}
-          </div>
-        </section>
-
-        <aside className="card">
-          <h2 className="font-bold mb-3">Thông tin quản lý</h2>
-          <dl className="space-y-3 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-[var(--muted)]">Phiên bản đang hiệu lực</dt>
-              <dd className="font-semibold">1.1</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-[var(--muted)]">Ngày hiệu lực</dt>
-              <dd>01/10/2026</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-[var(--muted)]">Người duyệt</dt>
-              <dd>Quản lý sản phẩm</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-[var(--muted)]">Topping cho phép</dt>
-              <dd>4 loại</dd>
-            </div>
-          </dl>
-          <button className="btn btn-secondary w-full mt-5" onClick={()=>navigate("/inventory/products/new")}>Mở biểu mẫu công thức</button>
-        </aside>
-      </div>
-
-      <section className="card p-0 overflow-hidden mb-6">
-        <div className="p-4 md:p-5 border-b border-[var(--border)]">
-          <h2 className="font-bold">Định mức nguyên liệu theo size</h2>
-          <p className="text-sm text-[var(--muted)] mt-1">Định lượng minh họa cho một đơn vị thành phẩm.</p>
-        </div>
-        <DataTable>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {["Nguyên liệu","Đơn vị","Size M","Size L","Ghi chú"].map(x=><th key={x} className="px-4 py-3 font-semibold">{x}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {INGREDIENTS.map(row=><tr key={row.name} className="border-t border-[var(--border)]">
-                <td className="px-4 py-3">{row.name}</td>
-                <td className="px-4 py-3">{row.unit}</td>
-                <td className="px-4 py-3">{row.sizeM}</td>
-                <td className="px-4 py-3">{row.sizeL}</td>
-                <td className="px-4 py-3">{row.note}</td>
-              </tr>)}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-
-      <section className="card p-0 overflow-hidden">
-        <div className="p-4 md:p-5 border-b border-[var(--border)] flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-bold">Lịch sử phiên bản công thức</h2>
-            <p className="text-sm text-[var(--muted)] mt-1">Không xóa phiên bản đã được sử dụng trong đơn hàng.</p>
-          </div>
-          <button className="btn btn-secondary" onClick={()=>setShowVersions(true)}>Xem nguyên tắc phiên bản</button>
-        </div>
-        <DataTable>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {["Phiên bản","Ngày hiệu lực","Thay đổi chính","Người duyệt","Trạng thái"].map(x=><th key={x} className="px-4 py-3 font-semibold">{x}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {VERSIONS.map(v=><tr key={v.version} className="border-t border-[var(--border)]">
-                <td className="px-4 py-3 font-semibold">{v.version}</td>
-                <td className="px-4 py-3">{v.date}</td>
-                <td className="px-4 py-3">{v.change}</td>
-                <td className="px-4 py-3">{v.approver}</td>
-                <td className="px-4 py-3"><Badge variant={v.status==="Đang hiệu lực"?"success":"info"}>{v.status}</Badge></td>
-              </tr>)}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-
-      <Modal isOpen={showVersions} title="Nguyên tắc quản lý phiên bản" onClose={()=>setShowVersions(false)}>
-        <p className="text-sm text-[var(--muted)]">Phiên bản công thức mới chỉ có hiệu lực từ ngày đã khai báo và sau khi được người có thẩm quyền phê duyệt. Không sửa đè phiên bản cũ vì đơn hàng lịch sử cần giữ đúng công thức tại thời điểm bán.</p>
-        <div className="flex justify-end mt-4">
-          <button className="btn btn-primary" onClick={()=>setShowVersions(false)}>Đã hiểu</button>
-        </div>
-      </Modal>
-    </div>
-  );
+    );
 }
