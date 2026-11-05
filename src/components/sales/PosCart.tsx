@@ -33,6 +33,7 @@ function validPercentage(value: string): number | null {
 export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
     const toast = useToast();
     const [clearOpen, setClearOpen] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState("cash");
     const [phone, setPhone] = useState("");
     const [voucher, setVoucher] = useState("");
     const [discountInput, setDiscountInput] = useState("");
@@ -63,7 +64,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
             return;
         }
 
-        if (!paidValid || paid < total) {
+        if (paymentMethod === "cash" && (!paidValid || paid < total)) {
             toast.warning("Tiền khách đưa chưa đủ hoặc không hợp lệ.");
             return;
         }
@@ -76,17 +77,6 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
     return (
         <div className="lg:col-span-5 flex flex-col gap-4 sticky top-20">
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
-                <div className="px-5 pt-5 pb-4 border-b border-[var(--border)]">
-                    <label className="form-label" htmlFor="pos-customer">Khách hàng</label>
-                    <select
-                        id="pos-customer"
-                        className="form-input form-select"
-                        defaultValue="walk-in"
-                    >
-                        <option value="walk-in">Khách vãng lai</option>
-                    </select>
-                </div>
-
                 <div className="px-5 py-4 border-b border-[var(--border)]">
                     <label className="form-label" htmlFor="member-phone">
                         Số điện thoại hội viên
@@ -252,13 +242,14 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
             </div>
 
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+                <label className="form-label" htmlFor="payment-method">Phương thức thanh toán</label><select id="payment-method" className="form-input form-select mb-4" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option value="cash">Tiền mặt</option><option value="transfer">Chuyển khoản</option><option value="card">Thẻ</option></select>
                 <div className="flex flex-wrap gap-2 mb-4">
                     {[50000, 100000, 200000, 500000].map((amount) => (
                         <button
                             key={amount}
                             type="button"
                             className="quick-amount-btn px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[12px] font-semibold text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--primary-light)]"
-                            onClick={() => setPaidInput(String(amount))}
+                            disabled={paymentMethod !== "cash"} onClick={() => setPaidInput(String(amount))}
                         >
                             {formatCurrency(amount)}
                         </button>
@@ -271,7 +262,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                             Tiền khách đưa (đ)
                         </label>
                         <input
-                            id="pos-paid-amount"
+                            disabled={paymentMethod !== "cash"} id="pos-paid-amount"
                             type="number"
                             min="0"
                             step="1"
@@ -286,7 +277,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                             id="pos-change"
                             className="h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center px-3.5 font-bold text-sm text-emerald-700"
                         >
-                            {formatCurrency(change)}
+                            {paymentMethod === "cash" ? formatCurrency(change) : "Không áp dụng"}
                         </output>
                     </div>
                 </div>

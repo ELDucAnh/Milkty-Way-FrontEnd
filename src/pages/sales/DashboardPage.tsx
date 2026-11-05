@@ -1,3 +1,4 @@
+import { dashboardDemo, demoBranches } from "../../data/sales/dashboard-demo";
 import TemplateChart from "../../components/sales/TemplateChart";
 import { salesData, customerData } from "../../data/sales/charts";
 import { useState } from "react";
@@ -388,7 +389,7 @@ export default function DashboardPage() {
         </div>
 
         
-        <div className="dash-stat-card animate-slideInUp stagger-3">
+        <div role="button" tabIndex={0} onClick={() => document.getElementById("dashboard-ingredients")?.scrollIntoView({behavior:"smooth", block:"start"})} onKeyDown={event => {if (event.key === "Enter" || event.key === " ") {event.preventDefault(); document.getElementById("dashboard-ingredients")?.scrollIntoView({behavior:"smooth", block:"start"});}}} className="dash-stat-card animate-slideInUp stagger-3">
           <div className="dash-stat-top">
             <div className="dash-stat-icon icon-bg-danger">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
@@ -403,7 +404,7 @@ export default function DashboardPage() {
 
         
         
-        <div className="dash-stat-card animate-slideInUp stagger-4">
+        <div role="button" tabIndex={0} onClick={() => document.getElementById("dashboard-branches")?.scrollIntoView({behavior:"smooth", block:"start"})} onKeyDown={event => {if (event.key === "Enter" || event.key === " ") {event.preventDefault(); document.getElementById("dashboard-branches")?.scrollIntoView({behavior:"smooth", block:"start"});}}} className="dash-stat-card animate-slideInUp stagger-4">
           <div className="dash-stat-top">
             <div className="dash-stat-icon icon-bg-warning">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -456,159 +457,38 @@ export default function DashboardPage() {
               <div className="stat-card-icon icon-bg-success w-8 h-8 rounded-lg">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               </div>
-              <h2 className="card-title">Doanh thu theo kênh</h2>
+              <h2 className="card-title">Doanh thu và chi phí</h2>
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <div className="dash-revenue-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-revenue-dot" style={{"background": "var(--primary)"}}></div>
-                <div>
-                  <div className="dash-revenue-label">Tổng đơn hàng</div>
-                  <div className="dash-revenue-desc">786 giao dịch</div>
+            {[
+              {label: "Chi phí vận hành", description: "Chi phí cố định và biến đổi", value: dashboardDemo.cost, color: "var(--danger)"},
+              {label: "Doanh thu online", description: "Bán qua kênh trực tuyến", value: dashboardDemo.onlineRevenue, color: "var(--info)"},
+              {label: "Doanh thu tại quầy", description: "Bán trực tiếp tại cửa hàng", value: dashboardDemo.counterRevenue, color: "var(--primary)"},
+              {label: "Lợi nhuận", description: "Doanh thu trừ chi phí vận hành", value: dashboardDemo.revenue - dashboardDemo.cost, color: "var(--warning)"},
+            ].map(item => (
+              <div key={item.label} className="dash-revenue-item">
+                <div className="flex items-center gap-3">
+                  <span className="dash-revenue-dot" style={{background: item.color}} />
+                  <div>
+                    <div className="dash-revenue-label">{item.label}</div>
+                    <div className="dash-revenue-desc">{item.description}</div>
+                  </div>
                 </div>
+                <span className="dash-revenue-amount">{formatCurrency(item.value)}</span>
               </div>
-              <div className="dash-revenue-amount">17.584 VND</div>
-            </div>
-            <div className="dash-revenue-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-revenue-dot" style={{"background": "var(--info)"}}></div>
-                <div>
-                  <div className="dash-revenue-label">Doanh thu</div>
-                  <div className="dash-revenue-desc">Thu nhập ròng</div>
-                </div>
-              </div>
-              <div className="dash-revenue-amount">17.584 VND</div>
-            </div>
-            <div className="dash-revenue-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-revenue-dot" style={{"background": "var(--danger)"}}></div>
-                <div>
-                  <div className="dash-revenue-label">Chi phí</div>
-                  <div className="dash-revenue-desc">Chi phí vận hành</div>
-                </div>
-              </div>
-              <div className="dash-revenue-amount">12.487 VND</div>
-            </div>
-            <div className="dash-revenue-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-revenue-dot" style={{"background": "var(--warning)"}}></div>
-                <div>
-                  <div className="dash-revenue-label">Lợi nhuận</div>
-                  <div className="dash-revenue-desc">Biên lợi nhuận ròng</div>
-                </div>
-              </div>
-              <div className="dash-revenue-amount dash-stat-profit">5.097 VND</div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
       
-      <div className="page-section grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-
-        
-        <div className="card animate-slideInUp stagger-2">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-              </div>
-              <h2 className="card-title">Nguyên liệu cận hạn</h2>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="dash-metric-card flex-1">
-              <div className="dash-metric-icon icon-bg-primary">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-              </div>
-              <div className="dash-metric-value">214</div>
-              <div className="dash-metric-label">Số lượng hiện có</div>
-            </div>
-            <div className="dash-metric-card flex-1">
-              <div className="dash-metric-icon icon-bg-warning">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>
-              <div className="dash-metric-value">64</div>
-              <div className="dash-metric-label">Sắp nhận</div>
-            </div>
-          </div>
+      <section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div><h2 className="card-title">Kho tổng</h2></div></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="dash-metric-card"><div className="dash-metric-icon icon-bg-primary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div><div className="dash-metric-value">{dashboardDemo.ingredientTypes}</div><div className="dash-metric-label">Loại nguyên liệu đang có trong kho</div></div>
+          <div className="dash-metric-card"><div className="dash-metric-icon icon-bg-warning"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div className="dash-metric-value">{dashboardDemo.incomingPurchaseOrders}</div><div className="dash-metric-label">Đơn nguyên liệu đã đặt, chờ nhận</div></div>
         </div>
-
-        
-        <div className="card animate-slideInUp stagger-3">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-icon icon-bg-info w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </div>
-              <h2 className="card-title">Khách và số ly</h2>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="dash-metric-card flex-1">
-              <div className="dash-metric-icon icon-bg-info">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-              </div>
-              <div className="dash-metric-value">1.8K</div>
-              <div className="dash-metric-label">Tổng khách hàng</div>
-            </div>
-            <div className="dash-metric-card flex-1">
-              <div className="dash-metric-icon icon-bg-purple">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-              </div>
-              <div className="dash-metric-value">27</div>
-              <div className="dash-metric-label">Tổng nhà cung cấp</div>
-            </div>
-          </div>
-        </div>
-
-        
-        <div className="card animate-slideInUp stagger-4">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-icon icon-bg-danger w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              </div>
-              <h2 className="card-title">Cảnh báo chi nhánh</h2>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="dash-stock-item">
-              <div className="flex items-center justify-between mb-2">
-                <div className="dash-stock-info">
-                  <div className="dash-stock-dot" style={{"background": "var(--danger)"}}></div>
-                  <span className="text-[13px] font-medium">Mặt hàng tồn thấp</span>
-                </div>
-                <span className="text-[18px] font-bold text-[var(--danger)]">02</span>
-              </div>
-              <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "20%", "background": "var(--danger)"}}></div></div>
-            </div>
-            <div className="dash-stock-item">
-              <div className="flex items-center justify-between mb-2">
-                <div className="dash-stock-info">
-                  <div className="dash-stock-dot" style={{"background": "var(--info)"}}></div>
-                  <span className="text-[13px] font-medium">Nhóm mặt hàng</span>
-                </div>
-                <span className="text-[18px] font-bold">14</span>
-              </div>
-              <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "55%", "background": "var(--info)"}}></div></div>
-            </div>
-            <div className="dash-stock-item">
-              <div className="flex items-center justify-between mb-2">
-                <div className="dash-stock-info">
-                  <div className="dash-stock-dot" style={{"background": "var(--primary)"}}></div>
-                  <span className="text-[13px] font-medium">Số mặt hàng</span>
-                </div>
-                <span className="text-[18px] font-bold">104</span>
-              </div>
-              <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "85%", "background": "var(--primary)"}}></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      
+      </section>
       <div className="page-section grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
 
         
@@ -644,7 +524,7 @@ export default function DashboardPage() {
               <div className="stat-icon icon-bg-warning w-8 h-8 rounded-lg">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
               </div>
-              <h2 className="card-title">Món bán chạy</h2>
+              <h2 className="card-title">Khách hàng và đơn hàng</h2>
             </div>
           </div>
           <div className="flex flex-col gap-3">
@@ -655,8 +535,8 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium">Số đơn mua</span>
-                    <span className="text-[15px] font-bold">45</span>
+                    <span className="text-[13px] font-medium">Số lượng khách hàng</span>
+                    <span className="text-[15px] font-bold">{dashboardDemo.customers}</span>
                   </div>
                   <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "65%", "background": "#8B5CF6"}}></div></div>
                 </div>
@@ -669,8 +549,8 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium">Chi phí mua hàng</span>
-                    <span className="text-[15px] font-bold">786 VND</span>
+                    <span className="text-[13px] font-medium">Đơn mua</span>
+                    <span className="text-[15px] font-bold">{dashboardDemo.orders}</span>
                   </div>
                   <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "40%", "background": "var(--warning)"}}></div></div>
                 </div>
@@ -708,5 +588,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-<section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><h2 className="card-title">Đơn hàng gần đây</h2><p className="card-subtitle">Giao dịch gần đây</p></div></div><Link to="/sales" className="btn btn-secondary btn-sm">Xem tất cả đơn hàng</Link></div><DataTable columns={orderColumns} data={visibleOrders} rowKey={o => o.id} caption="Danh sách đơn hàng gần đây" pagination={false} /></section><section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-danger w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div><h2 className="card-title">Nguyên liệu dưới ngưỡng</h2><p className="card-subtitle">Mặt hàng cần nhập thêm</p></div><Badge variant="danger">3 nguyên liệu</Badge></div><Link to="/inventory/ingredients" className="btn btn-secondary btn-sm">Xem nguyên liệu</Link></div><DataTable columns={stockColumns} data={ingredients} rowKey={o => o.id} caption="Nguyên liệu dưới ngưỡng tại kho tổng" pagination={false} /></section></div>);
+<section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><h2 className="card-title">Đơn hàng gần đây</h2><p className="card-subtitle">Giao dịch gần đây</p></div></div><Link to="/sales" className="btn btn-secondary btn-sm">Xem tất cả đơn hàng</Link></div><DataTable columns={orderColumns} data={visibleOrders} rowKey={o => o.id} caption="Danh sách đơn hàng gần đây" pagination={false} /></section><section id="dashboard-ingredients" className="page-section card scroll-mt-24"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-danger w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div><h2 className="card-title">Nguyên liệu dưới ngưỡng</h2><p className="card-subtitle">Mặt hàng cần nhập thêm</p></div><Badge variant="danger">3 nguyên liệu</Badge></div><Link to="/inventory/ingredients" className="btn btn-secondary btn-sm">Xem nguyên liệu</Link></div><DataTable columns={stockColumns} data={ingredients} rowKey={o => o.id} caption="Nguyên liệu dưới ngưỡng tại kho tổng" pagination={false} /></section><section id="dashboard-branches" className="page-section card scroll-mt-24"><h2 className="card-title mb-4">Chi nhánh cần xem xét hòa vốn</h2><p className="card-subtitle mb-4">Dữ liệu demo ngày 28/10/2026 · Chi phí biến đổi 40% doanh thu, chi phí cố định 1.500.000 VND/chi nhánh.</p>
+<DataTable data={demoBranches} pagination={false} rowKey={branch => branch.id} columns={[
+    {id: "id", header: "Mã chi nhánh", render: branch => branch.id},
+    {id: "name", header: "Chi nhánh", render: branch => branch.name},
+    {id: "revenue", header: "Doanh thu", render: branch => formatCurrency(branch.revenue)},
+    {id: "cost", header: "Chi phí vận hành", render: branch => formatCurrency(branch.cost)},
+    {id: "breakEven", header: "Doanh thu hòa vốn", render: branch => formatCurrency(branch.breakEvenRevenue)},
+    {id: "profit", header: "Lợi nhuận", render: branch => formatCurrency(branch.profit)},
+    {id: "status", header: "Đánh giá", render: branch => <Badge variant={branch.revenue < branch.breakEvenRevenue ? "warning" : "success"}>{branch.revenue < branch.breakEvenRevenue ? "Dưới hòa vốn" : "Trên hòa vốn"}</Badge>},
+]} caption="Đánh giá hòa vốn theo chi nhánh" /></section></div>);
 }

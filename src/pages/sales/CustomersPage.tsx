@@ -33,6 +33,11 @@ interface Customer {
 }
 
 interface CustomerForm {
+    consent: boolean;
+    id: string;
+    email: string;
+    address: string;
+    registeredAt: string;
     name: string;
     phone: string;
 }
@@ -59,10 +64,11 @@ export default function CustomersPage() {
     const [customers, setCustomers] = useState<Customer[]>(() => [...initialCustomers]);
     const [search, setSearch] = useState("");
     const [tier, setTier] = useState("");
+    const [historyOpen, setHistoryOpen] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer>(initialCustomers[0]);
     const [applied, setApplied] = useState({search: "", tier: ""});
-    const [form, setForm] = useState<CustomerForm>({ name: "", phone: "" });
+    const [form, setForm] = useState<CustomerForm>({ id: `HV-${String(customers.length + 1).padStart(4, "0")}`, consent: false, name: "", phone: "", email: "", address: "", registeredAt: new Date().toISOString() });
 
     const query = applied.search.trim().toLocaleLowerCase("vi-VN");
     const visibleCustomers = customers.filter(
@@ -77,6 +83,10 @@ export default function CustomersPage() {
     function addCustomer(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
+        if (!form.consent) {
+            toast.warning("Cần đồng ý xử lý dữ liệu cá nhân để đăng ký thành viên.");
+            return;
+        }
         const name = form.name.trim();
         const phone = form.phone.replace(/\s/g, "");
 
@@ -95,7 +105,7 @@ export default function CustomersPage() {
         }
 
         const customer: Customer = {
-            id: `KH-${crypto.randomUUID()}`,
+            ...form,
             name,
             phone: normalizedPhone,
             tier: "member",
@@ -105,7 +115,7 @@ export default function CustomersPage() {
         };
 
         setCustomers((current) => [customer, ...current]);
-        setForm({ name: "", phone: "" });
+        setForm({ id: `HV-${String(customers.length + 1).padStart(4, "0")}`, consent: false, name: "", phone: "", email: "", address: "", registeredAt: new Date().toISOString() });
         setAddOpen(false);
         toast.success("Đã thêm khách hàng.");
     }
@@ -151,7 +161,7 @@ export default function CustomersPage() {
                 <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => { setSelectedCustomer(customer); document.getElementById("customer-history")?.scrollIntoView({block: "start"}); }}
+                    onClick={() => { setSelectedCustomer(customer); setHistoryOpen(true); }}
                 >
                     Lịch sử
                 </button>
@@ -172,7 +182,7 @@ export default function CustomersPage() {
                     <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => setAddOpen(true)}
+                        onClick={() => { setForm({id: `HV-${String(customers.length + 1).padStart(4, "0")}`, consent: false, name: "", phone: "", email: "", address: "", registeredAt: new Date().toISOString()}); setAddOpen(true); }}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Thêm khách hàng
                     </button></>
@@ -289,49 +299,21 @@ export default function CustomersPage() {
                     </>
                 }
             >
-                <form id="customer-form" className="space-y-4" onSubmit={addCustomer}><div className="flex flex-col gap-3.5">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="form-label">Họ và tên <span className="required">*</span></label>
-                <input type="text" id="cust-name" value={form.name} onChange={e => setForm(current => ({...current, name:e.target.value}))} className="form-input" placeholder="Ví dụ: Jessica Alba" required />
-              </div>
-              <div>
-                <label className="form-label">Tên công ty</label>
-                <input type="text" className="form-input" placeholder="Ví dụ: Honest Tech LLC" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="form-label">Địa chỉ email <span className="required">*</span></label>
-                <input type="email" className="form-input" placeholder="Ví dụ: jessica@honest.com" required />
-              </div>
-              <div>
-                <label className="form-label">Số điện thoại</label>
-                <input type="tel" value={form.phone} onChange={e => setForm(current => ({...current, phone:e.target.value}))} className="form-input" placeholder="Ví dụ: 0900 000 001" />
-              </div>
-            </div>
-            <div>
-              <label className="form-label">Địa chỉ thanh toán</label>
-              <input type="text" className="form-input" placeholder="Số nhà, tên đường, phòng / tầng" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="form-label">Tỉnh, thành phố</label>
-                <input type="text" className="form-input" placeholder="Ví dụ: San Francisco, CA" />
-              </div>
-              <div>
-                <label className="form-label">Trạng thái khách hàng</label>
-                <select className="form-input form-select">
-                  <option value="Active">Đang hoạt động</option>
-                  <option value="Inactive">Ngừng hoạt động</option>
-                </select>
-              </div>
-            </div>
-          </div></form>
+                <form id="customer-form" className="grid grid-cols-1 sm:grid-cols-2 gap-3" onSubmit={addCustomer}>
+                    <label className="form-label">Mã khách hàng<input className="form-input" value={form.id} readOnly /></label>
+                    <label className="form-label">Ngày đăng ký<input className="form-input" value={new Date(form.registeredAt).toLocaleDateString("vi-VN")} readOnly /></label>
+                    <label className="form-label">Họ tên<input className="form-input" required value={form.name} onChange={e => setForm({...form,name:e.target.value})} /></label>
+                    <label className="form-label">Email<input className="form-input" type="email" value={form.email} onChange={e => setForm({...form,email:e.target.value})} /></label>
+                    <label className="form-label">Số điện thoại<input className="form-input" type="tel" required value={form.phone} onChange={e => setForm({...form,phone:e.target.value})} /></label>
+                    <label className="form-label">Địa chỉ<input className="form-input" value={form.address} onChange={e => setForm({...form,address:e.target.value})} /></label>
+                    <label className="flex items-start gap-2 sm:col-span-2 text-sm">
+                        <input type="checkbox" className="mt-1 accent-[var(--info)]" required checked={form.consent} onChange={event => setForm({...form, consent: event.target.checked})} />
+                        Tôi đồng ý xử lý dữ liệu cá nhân để quản lý tài khoản thành viên, giao dịch và điểm thưởng.
+                    </label>
+                </form>
             </Modal>
 
-<section id="customer-history" className="card mt-4">
-        <h2 className="card-title mb-4">Lịch sử giao dịch · {selectedCustomer.id}</h2>
+<Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title={`Lịch sử giao dịch · ${selectedCustomer.id}`} size="xl">
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -380,7 +362,7 @@ export default function CustomersPage() {
             </> : <tr><td colSpan={6}>Chưa có giao dịch điểm.</td></tr>}</tbody>
           </table>
         </div>
-      </section>
+      </Modal>
         </>
     );
 }
