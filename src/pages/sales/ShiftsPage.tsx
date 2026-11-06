@@ -77,6 +77,8 @@ function parseCash(value: string): number | null {
 
 export default function ShiftsPage() {
     const toast = useToast();
+    const [pageSize, setPageSize] = useState(10);
+    const [handoverId, setHandoverId] = useState<string | null>(null);
 
     const [shifts, setShifts] = useState<CashShift[]>(() => [...initialShifts]);
     const [selectedId, setSelectedId] = useState("CA-001");
@@ -143,7 +145,7 @@ export default function ShiftsPage() {
         setSelectedId(shift.id);
         setOpeningForm((current) => ({ ...current, openingCash: "" }));
         setClosingForm({ countedCash: "", recipientId: "", note: "" });
-        toast.success("Đã mở ca trong phiên mô phỏng.");
+        toast.success("Đã mở ca.");
     }
 
     function requestClose(event: FormEvent<HTMLFormElement>) {
@@ -199,8 +201,40 @@ export default function ShiftsPage() {
 
         setPendingRequest(null);
         toast.success(
-            "Đã ghi nhận yêu cầu đóng ca mô phỏng; chưa đối soát hoặc đóng ca thực tế.",
+            "Đã ghi nhận yêu cầu đóng ca.",
         );
+    }
+
+    function selectShift(id: string) {
+        const shift = shifts.find(item => item.id === id);
+        if (!shift) return;
+        setSelectedId(id);
+        setPendingRequest(null);
+        setHandoverId(null);
+        setClosingForm({
+            countedCash: shift.countedCash === null ? "" : String(shift.countedCash),
+            recipientId: shift.recipientId ?? "",
+            note: shift.handoverNote,
+        });
+    }
+
+    function confirmHandover() {
+        const shift = shifts.find(item => item.id === handoverId);
+        if (!shift || shift.status !== "closing-requested") {
+            setHandoverId(null);
+            return;
+        }
+        setShifts(current => current.map(item => item.id === shift.id && item.status === "closing-requested"
+            ? {...item, status: "closed", closedAt: new Date().toISOString()} : item));
+        setHandoverId(null);
+        toast.success("Đã đóng ca và ghi nhận bàn giao trong phiên làm việc.");
+    }
+
+    function withdrawCloseRequest() {
+        if (!selectedShift || selectedShift.status !== "closing-requested") return;
+        setShifts(current => current.map(item => item.id === selectedShift.id && item.status === "closing-requested"
+            ? {...item, status: "open"} : item));
+        toast.info("Đã rút yêu cầu. Bạn có thể sửa thông tin bàn giao.");
     }
 
     const columns: readonly DataTableColumn<CashShift>[] = [
@@ -212,16 +246,8 @@ export default function ShiftsPage() {
                     type="button"
                     className="text-[var(--primary)] font-semibold"
                     aria-label={`Chọn ca ${shift.id}`}
-                    onClick={() => {
-                        setSelectedId(shift.id);
-                        setClosingForm({
-                            countedCash: shift.countedCash === null
-                                ? ""
-                                : String(shift.countedCash),
-                            recipientId: shift.recipientId ?? "",
-                            note: shift.handoverNote,
-                        });
-                    }}
+                    aria-pressed={selectedId === shift.id}
+                    onClick={() => selectShift(shift.id)}
                 >
                     {shift.id}
                 </button>
@@ -362,16 +388,23 @@ export default function ShiftsPage() {
                             Mở ca
                         </button>
                     </div>
-                    <p className="mt-3 text-xs text-[var(--muted)]">
-                        Giữ nguyên chi nhánh, quầy và nhân viên từ HTML gốc.
-                        CN01 / Quầy 01 hiện đã có ca CA-001 nên không thể mở trùng.
-                    </p>
+                    
                 </form>
             </section>
 
             <section className="card mb-6">
-                <h2 className="card-title mb-4">Danh sách ca</h2>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                    <h2 className="card-title">Danh sách ca</h2>
+                    <label className="flex items-center gap-2 text-sm">Số dòng mỗi trang
+                        <select className="form-input form-select !w-auto" value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
+                            {[1, 5, 10, 20].map(size => <option key={size} value={size}>{size}</option>)}
+                        </select>
+                    </label>
+                </div>
                 <DataTable<CashShift>
+                    key={`${pageSize}-${shifts.length}`}
+                    pagination
+                    pageSize={pageSize}
                     columns={columns}
                     data={shifts}
                     rowKey={(shift) => shift.id}
@@ -380,6 +413,10 @@ export default function ShiftsPage() {
             </section>
 
             <section className="card">
+                <label className="form-label" htmlFor="selected-shift">Chọn ca để xem và bàn giao</label>
+                <select id="selected-shift" className="form-input form-select mb-4" value={selectedId} onChange={e => selectShift(e.target.value)}>
+                    {shifts.map(shift => <option key={shift.id} value={shift.id}>{shift.id} · {shift.counterName} · {shift.status === "open" ? "Đang mở" : shift.status === "closing-requested" ? "Chờ xử lý đóng ca" : "Đã đóng"}</option>)}
+                </select>
                 <h2 className="card-title mb-4">
                     Đóng ca {selectedShift?.id ?? ""} và bàn giao
                 </h2>
@@ -469,12 +506,9 @@ export default function ShiftsPage() {
 
                     <p className="text-sm text-[var(--muted)] mt-4">
                         Đơn chưa xong: {selectedShift?.pendingOrders.join("; ") || "Không có trong dữ liệu mẫu"}.
-                        {" "}Chi tiết nguyên liệu chờ liên kết với module kho.
+                        
                     </p>
-                    <p className="text-xs text-[var(--muted)] mt-3">
-                        Chỉ ghi nhận yêu cầu trong phiên mô phỏng. Chưa có dữ liệu
-                        đối soát tiền và nguyên liệu để xác nhận đóng ca.
-                    </p>
+                    
 
                     <button
                         type="submit"
@@ -484,15 +518,30 @@ export default function ShiftsPage() {
                         Gửi yêu cầu đóng ca
                     </button>
                 </form>
+                {selectedShift?.status === "closing-requested" && <div className="flex flex-wrap gap-2 mt-4">
+                    <button type="button" className="btn btn-primary" onClick={() => setHandoverId(selectedShift.id)}>Xác nhận bàn giao và đóng ca</button>
+                    <button type="button" className="btn btn-secondary" onClick={withdrawCloseRequest}>Rút yêu cầu để chỉnh sửa</button>
+                </div>}
+                {selectedShift?.status === "closed" && <p className="mt-4" role="status">Đã đóng lúc {formatDateTime(selectedShift.closedAt!)} · Người nhận: Trần Bình.</p>}
             </section>
 
+            <ConfirmDialog
+                open={handoverId !== null}
+                title="Xác nhận bàn giao và đóng ca?"
+                message={<>Ca {handoverId} · Người nhận: Trần Bình. Xác nhận đã bàn giao tiền và các đơn chưa xong. Thao tác này ghi nhận đóng ca trong phiên hiện tại, chưa xác nhận đối soát tiền với máy chủ.</>}
+                confirmText="Xác nhận đóng ca"
+                variant="warning"
+                onCancel={() => setHandoverId(null)}
+                onConfirm={confirmHandover}
+            />
             <ConfirmDialog
                 open={pendingRequest !== null}
                 title="Gửi yêu cầu đóng ca?"
                 message={
                     <>
-                        Tiền thực đếm: {formatCurrency(pendingRequest?.countedCash ?? 0)}.
-                        {" "}Yêu cầu chỉ được lưu mô phỏng, chưa đóng ca thực tế.
+                        Ca {pendingRequest?.shiftId} · Tiền thực đếm: {formatCurrency(pendingRequest?.countedCash ?? 0)} · Người nhận: Trần Bình.
+                        {pendingRequest?.note && <p>Nội dung bàn giao: {pendingRequest.note}</p>}
+                        
                     </>
                 }
                 confirmText="Gửi yêu cầu"

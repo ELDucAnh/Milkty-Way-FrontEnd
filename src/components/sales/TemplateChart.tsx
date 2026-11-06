@@ -41,10 +41,13 @@ export default function TemplateChart({ values, labels, bars = false }: { values
      pointHoverRadius: 6, pointHoverBackgroundColor: "#22B573", pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2
     }]},
     options: { responsive: true, maintainAspectRatio: false, interaction: {mode: "index", intersect: false},
-     plugins: { legend: {display:false}, tooltip: {backgroundColor: dark ? "#1E293B" : "#17212B", padding:12, cornerRadius:10,
-      callbacks: {label: (c: {parsed: {y: number}}) => ` ${c.parsed.y.toLocaleString("vi-VN")} ${bars ? "khách hàng" : "VND"}`}}},
+     plugins: { legend: {display:false}, tooltip: {backgroundColor: dark ? "rgba(30,41,59,0.97)" : "rgba(23,33,43,0.95)", padding:12, cornerRadius:10,
+      ...(!bars ? {titleFont: {size:12, weight:"600"}, bodyFont: {size:13}} : {}),
+      callbacks: {label: (c: {parsed: {y: number}}) => bars ? ` ${c.parsed.y} khách hàng` : ` ${c.parsed.y.toLocaleString("vi-VN")} VND`}}},
      scales: { x: {grid: {display:false}, border: {display:false}, ticks: {color:tick,font:{size:11,weight:"500"}}},
-      y: {grid: {color:dark ? "rgba(255,255,255,0.06)" : "#E8EDF1"}, border: {display:false,dash:[4,4]}, ticks: {color:tick,font:{size:11}, callback:(v:number) => bars ? v : `${v.toLocaleString("vi-VN")} VND`}}}
+      y: {grid: {color:dark ? "rgba(51,65,85,0.8)" : "rgba(232,237,241,0.8)", ...(!bars ? {drawBorder:false} : {})},
+       border: {display:false, ...(!bars ? {dash:[4,4]} : {})},
+       ticks: {color:tick,font:{size:11}, callback:(v:number) => bars ? (v >= 1000 ? (v / 1000).toFixed(1) + "k" : v) : `${v.toLocaleString("vi-VN")} VND`}}}
     }
    });
   }

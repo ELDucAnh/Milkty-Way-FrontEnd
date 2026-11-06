@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import Badge from "../../components/common/Badge";
@@ -8,7 +9,6 @@ import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 import {
     formatCurrency,
-    formatDateTime,
     SalesPageHeader,
 } from "./sales-support";
 
@@ -33,6 +33,11 @@ interface Customer {
 }
 
 interface CustomerForm {
+    consent: boolean;
+    id: string;
+    email: string;
+    address: string;
+    registeredAt: string;
     name: string;
     phone: string;
 }
@@ -59,23 +64,29 @@ export default function CustomersPage() {
     const [customers, setCustomers] = useState<Customer[]>(() => [...initialCustomers]);
     const [search, setSearch] = useState("");
     const [tier, setTier] = useState("");
+    const [historyOpen, setHistoryOpen] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-    const [form, setForm] = useState<CustomerForm>({ name: "", phone: "" });
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer>(initialCustomers[0]);
+    const [applied, setApplied] = useState({search: "", tier: ""});
+    const [form, setForm] = useState<CustomerForm>({ id: `HV-${String(customers.length + 1).padStart(4, "0")}`, consent: false, name: "", phone: "", email: "", address: "", registeredAt: new Date().toISOString() });
 
-    const query = search.trim().toLocaleLowerCase("vi-VN");
+    const query = applied.search.trim().toLocaleLowerCase("vi-VN");
     const visibleCustomers = customers.filter(
         (customer) =>
-            (!tier || customer.tier === tier) &&
+            (!applied.tier || customer.tier === applied.tier) &&
             (
                 `${customer.id} ${customer.name}`.toLocaleLowerCase("vi-VN").includes(query) ||
-                customer.phone.includes(query.replace(/\s/g, ""))
+                customer.phone.replace(/\s/g, "").includes(query.replace(/\s/g, ""))
             ),
     );
 
     function addCustomer(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
+        if (!form.consent) {
+            toast.warning("Cần đồng ý xử lý dữ liệu cá nhân để đăng ký thành viên.");
+            return;
+        }
         const name = form.name.trim();
         const phone = form.phone.replace(/\s/g, "");
 
@@ -88,13 +99,13 @@ export default function CustomersPage() {
             ? `0${phone.slice(3)}`
             : phone;
 
-        if (customers.some((customer) => customer.phone === normalizedPhone)) {
+        if (customers.some((customer) => customer.phone.replace(/\s/g, "") === normalizedPhone)) {
             toast.warning("Số điện thoại này đã có trong danh sách.");
             return;
         }
 
         const customer: Customer = {
-            id: `KH-${crypto.randomUUID()}`,
+            ...form,
             name,
             phone: normalizedPhone,
             tier: "member",
@@ -104,16 +115,16 @@ export default function CustomersPage() {
         };
 
         setCustomers((current) => [customer, ...current]);
-        setForm({ name: "", phone: "" });
+        setForm({ id: `HV-${String(customers.length + 1).padStart(4, "0")}`, consent: false, name: "", phone: "", email: "", address: "", registeredAt: new Date().toISOString() });
         setAddOpen(false);
-        toast.success("Đã thêm khách hàng trong phiên mô phỏng.");
+        toast.success("Đã thêm khách hàng.");
     }
 
     const columns: readonly DataTableColumn<Customer>[] = [
         { id: "id", header: "Mã hội viên", render: (customer) => customer.id },
         {
             id: "name",
-            header: "Khách hàng",
+            header: "Họ tên",
             render: (customer) => (
                 <div className="name-ellipsis" title={customer.name}>
                     {customer.name}
@@ -138,7 +149,7 @@ export default function CustomersPage() {
         {
             id: "points",
             header: "Điểm khả dụng",
-            render: (customer) => customer.points.toLocaleString("vi-VN"),
+            render: (customer) => `${customer.points.toLocaleString("vi-VN")} điểm`,
         },
         {
             id: "lastPurchase", header: "Lần mua gần nhất", render: (customer) => customer.id === "HV-0001" ? "28/10/2026" : "—",
@@ -150,7 +161,7 @@ export default function CustomersPage() {
                 <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => setSelectedCustomer(customer)}
+                    onClick={() => { setSelectedCustomer(customer); setHistoryOpen(true); }}
                 >
                     Lịch sử
                 </button>
@@ -158,20 +169,6 @@ export default function CustomersPage() {
         },
     ];
 
-    const historyColumns: readonly DataTableColumn<PointTransaction>[] = [
-        {
-            id: "time",
-            header: "Thời gian",
-            render: (item) => formatDateTime(item.createdAt),
-        },
-        { id: "invoice", header: "Hóa đơn", render: (item) => item.invoiceId },
-        {
-            id: "points",
-            header: "Điểm",
-            render: (item) => `${item.points > 0 ? "+" : ""}${item.points}`,
-        },
-        { id: "description", header: "Nội dung", render: (item) => item.description },
-    ];
 
     return (
         <>
@@ -180,32 +177,74 @@ export default function CustomersPage() {
                 breadcrumb="Khách hàng"
                 parent={{ label: "", to: "" }}
                 description="Tra cứu hội viên, hạng thẻ, chi tiêu và lịch sử điểm toàn chuỗi."
-                actions={
+                actions={<>
+                    <button className="btn btn-secondary" onClick={() => toast.info("Chưa tích hợp xuất dữ liệu khách hàng.")}> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Xuất dữ liệu</button>
                     <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => setAddOpen(true)}
+                        onClick={() => { setForm({id: `HV-${String(customers.length + 1).padStart(4, "0")}`, consent: false, name: "", phone: "", email: "", address: "", registeredAt: new Date().toISOString()}); setAddOpen(true); }}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Thêm khách hàng
-                    </button>
+                    </button></>
                 }
             />
 
-            <section className="card mb-6">
-                <p className="mb-4 text-sm text-[var(--muted)]">
-                    Dữ liệu hội viên từ HTML gốc. Các khách hàng được thêm ở đây chỉ lưu
-                    trong phiên mô phỏng của trang.
-                </p>
+            <section className="page-section" aria-label="Thống kê khách hàng">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <div className="stat-card">
+            <div className="stat-card-icon icon-bg-info">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            </div>
+            <div className="stat-card-body">
+              <div className="stat-label">Tổng khách hàng</div>
+              <div className="stat-value">1,842</div>
+              <div className="trend-up stat-sub-label">↑ +48 tháng này</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-icon icon-bg-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+            </div>
+            <div className="stat-card-body">
+              <div className="stat-label">Đang hoạt động</div>
+              <div className="stat-value text-[var(--primary)]">1,680</div>
+              <div className="stat-sub-label">91.2% tỷ lệ hoạt động</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-icon icon-bg-warning">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+            </div>
+            <div className="stat-card-body">
+              <div className="stat-label">Khoản phải thu</div>
+              <div className="stat-value text-[var(--warning)]">6.487 VND</div>
+              <div className="stat-sub-label">18 hóa đơn chờ thanh toán</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-icon icon-bg-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div>
+            <div className="stat-card-body">
+              <div className="stat-label">Giá trị vòng đời trung bình</div>
+              <div className="stat-value">439 VND</div>
+              <div className="trend-up stat-sub-label">↑ +5.4% so với cùng kỳ năm trước</div>
+            </div>
+          </div>
+        </div>
+      </section>
+<section className="card mb-6"><h2 className="card-title mb-4">Bộ lọc hội viên</h2>
+                
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div className="min-w-0 md:col-span-2">
                         <label className="form-label" htmlFor="customer-search">
                             Tìm hội viên
                         </label>
                         <input
                             id="customer-search"
                             type="search"
-                            className="form-input"
+                            className="form-input w-full h-11"
                             placeholder="Mã, tên hoặc số điện thoại"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
@@ -217,7 +256,7 @@ export default function CustomersPage() {
                         </label>
                         <select
                             id="customer-tier"
-                            className="form-input form-select"
+                            className="form-input form-select w-full h-11"
                             value={tier}
                             onChange={(event) => setTier(event.target.value)}
                         >
@@ -227,18 +266,19 @@ export default function CustomersPage() {
                             ))}
                         </select>
                     </div>
+<div className="flex flex-wrap items-center gap-2 mt-4"><button className="btn btn-primary h-11" onClick={() => setApplied({search, tier})}>Áp dụng</button><button className="btn btn-secondary h-11" onClick={() => {setSearch("");setTier("");setApplied({search:"",tier:""});}}>Xóa bộ lọc</button></div>
                 </div>
             </section>
 
             <section className="card p-0 overflow-hidden">
-                <DataTable<Customer>
-                    key={`${search}-${tier}`}
+                <DataTable<Customer> pagination pageSize={10}
+                    key={JSON.stringify([applied.search, applied.tier])}
                     columns={columns}
                     data={visibleCustomers}
                     rowKey={(customer) => customer.id}
                     caption="Danh sách khách hàng và hội viên"
                 />
-            </section>
+</section>
 
             <Modal
                 open={addOpen}
@@ -259,56 +299,70 @@ export default function CustomersPage() {
                     </>
                 }
             >
-                <form id="customer-form" className="space-y-4" onSubmit={addCustomer}>
-                    <div>
-                        <label className="form-label" htmlFor="customer-name">
-                            Họ và tên
-                        </label>
-                        <input
-                            id="customer-name"
-                            className="form-input"
-                            maxLength={120}
-                            value={form.name}
-                            onChange={(event) =>
-                                setForm((current) => ({ ...current, name: event.target.value }))
-                            }
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="form-label" htmlFor="customer-phone">
-                            Số điện thoại
-                        </label>
-                        <input
-                            id="customer-phone"
-                            className="form-input"
-                            type="tel"
-                            inputMode="tel"
-                            value={form.phone}
-                            onChange={(event) =>
-                                setForm((current) => ({ ...current, phone: event.target.value }))
-                            }
-                            required
-                        />
-                    </div>
+                <form id="customer-form" className="grid grid-cols-1 sm:grid-cols-2 gap-3" onSubmit={addCustomer}>
+                    <label className="form-label">Mã khách hàng<input className="form-input" value={form.id} readOnly /></label>
+                    <label className="form-label">Ngày đăng ký<input className="form-input" value={new Date(form.registeredAt).toLocaleDateString("vi-VN")} readOnly /></label>
+                    <label className="form-label">Họ tên<input className="form-input" required value={form.name} onChange={e => setForm({...form,name:e.target.value})} /></label>
+                    <label className="form-label">Email<input className="form-input" type="email" value={form.email} onChange={e => setForm({...form,email:e.target.value})} /></label>
+                    <label className="form-label">Số điện thoại<input className="form-input" type="tel" required value={form.phone} onChange={e => setForm({...form,phone:e.target.value})} /></label>
+                    <label className="form-label">Địa chỉ<input className="form-input" value={form.address} onChange={e => setForm({...form,address:e.target.value})} /></label>
+                    <label className="flex items-start gap-2 sm:col-span-2 text-sm">
+                        <input type="checkbox" className="mt-1 accent-[var(--info)]" required checked={form.consent} onChange={event => setForm({...form, consent: event.target.checked})} />
+                        Tôi đồng ý xử lý dữ liệu cá nhân để quản lý tài khoản thành viên, giao dịch và điểm thưởng.
+                    </label>
                 </form>
             </Modal>
 
-            <Modal
-                open={selectedCustomer !== null}
-                title={`Lịch sử điểm — ${selectedCustomer?.name ?? ""}`}
-                size="lg"
-                onClose={() => setSelectedCustomer(null)}
-            >
-                <DataTable<PointTransaction>
-                    key={selectedCustomer?.id ?? "none"}
-                    columns={historyColumns}
-                    data={selectedCustomer?.history ?? []}
-                    rowKey={(item) => item.id}
-                    caption="Lịch sử giao dịch điểm"
-                    emptyMessage="Chưa có giao dịch điểm."
-                />
-            </Modal>
+<Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title={`Lịch sử giao dịch · ${selectedCustomer.id}`} size="xl">
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+            <tr>
+              <th>Thời gian</th><th>Hóa đơn tham chiếu</th><th>Giao dịch</th>
+              <th>Số tiền</th><th>Thay đổi điểm</th><th>Số dư sau giao dịch</th>
+            </tr>
+            </thead>
+            <tbody>{selectedCustomer.id === "HV-0001" ? <>
+            <tr>
+              <td>
+                <time dateTime="2026-10-28T09:15:00+07:00"
+                      className="whitespace-nowrap tabular-nums">
+                  28/10/2026 09:15
+                </time>
+              </td>
+              <td>
+                <Link to="/invoices/HD-00125"
+                   className="text-[var(--primary)] underline">
+                  HD-00125
+                </Link>
+              </td>
+              <td>Tích điểm mua hàng</td>
+              <td className="whitespace-nowrap">450.000 VND</td>
+              <td>+450</td>
+              <td>1.250</td>
+            </tr>
+            <tr>
+              <td>
+                <time dateTime="2026-10-27T15:20:00+07:00"
+                      className="whitespace-nowrap tabular-nums">
+                  27/10/2026 15:20
+                </time>
+              </td>
+              <td>
+                <Link to="/invoices/HD-00120"
+                   className="text-[var(--primary)] underline">
+                  HD-00120
+                </Link>
+              </td>
+              <td>Điều chỉnh do hoàn tiền</td>
+              <td className="whitespace-nowrap">45.000 VND</td>
+              <td>-45</td>
+              <td>800</td>
+            </tr>
+            </> : <tr><td colSpan={6}>Chưa có giao dịch điểm.</td></tr>}</tbody>
+          </table>
+        </div>
+      </Modal>
         </>
     );
 }
