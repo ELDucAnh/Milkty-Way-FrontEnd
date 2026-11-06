@@ -1,122 +1,55 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
-import { useToast } from "../../contexts/ToastContext";
+import StatCard from "../../components/common/StatCard";
+import KpiIcon from "../shared/KpiIcon";
 import { makeId } from "../shared/formatters";
-interface Category { id: string; code: string; name: string; count: number; description: string; active: boolean; }
-const INITIAL: Category[] = [
-    { id: "c1", code: "CAT-01", name: "Trà sữa", count: 8, description: "Trà nền sữa, có thể thêm topping", active: true },
-    { id: "c2", code: "CAT-02", name: "Trà trái cây", count: 4, description: "Trà kết hợp trái cây và syrup", active: true },
-    { id: "c3", code: "CAT-03", name: "Macchiato", count: 2, description: "Đồ uống có lớp kem mặn", active: true },
-    { id: "c4", code: "CAT-04", name: "Đá xay", count: 1, description: "Đồ uống xay lạnh", active: true },
-    { id: "c5", code: "CAT-05", name: "Món theo mùa", count: 1, description: "Món giới hạn theo thời gian", active: true },
-    { id: "c6", code: "CAT-06", name: "Topping", count: 12, description: "Tùy chọn thêm và nguyên liệu kèm", active: true },
-];
+import type { DemoCategory } from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
+
 export default function CategoriesPage() {
-    const navigate = useNavigate(); const { showToast } = useToast(); const [categories, setCategories] = useState(INITIAL); const [search, setSearch] = useState(""); const [status, setStatus] = useState("all"); const [applied, setApplied] = useState({ search: "", status: "all" }); const [modalOpen, setModalOpen] = useState(false); const [editing, setEditing] = useState<Category | null>(null); const [form, setForm] = useState({ name: "", description: "", active: true });
-    const rows = useMemo(() => categories.filter(c => (!applied.search || c.code.toLowerCase().includes(applied.search.toLowerCase()) || c.name.toLowerCase().includes(applied.search.toLowerCase())) && (applied.status === "all" || (applied.status === "active" ? c.active : !c.active))), [categories, applied]);
-    function openNew() { setEditing(null); setForm({ name: "", description: "", active: true }); setModalOpen(true); }
-    function openEdit(item: Category) { setEditing(item); setForm({ name: item.name, description: item.description, active: item.active }); setModalOpen(true); }
-    function submit(e: FormEvent) { e.preventDefault(); if (!form.name.trim()) { showToast({ type: "error", title: "Thiếu tên nhóm", message: "Tên nhóm món không được để trống." }); return; } if (editing) { setCategories(prev => prev.map(c => c.id === editing.id ? { ...c, ...form } : c)); showToast({ type: "success", title: "Đã cập nhật nhóm món", message: form.name }); } else { setCategories(prev => [...prev, { id: makeId("cat"), code: `CAT-${String(prev.length + 1).padStart(2, "0")}`, name: form.name.trim(), count: 0, description: form.description, active: form.active }]); showToast({ type: "success", title: "Đã thêm nhóm món", message: form.name }); } setModalOpen(false); }
+    const [data, setData] = useDemoState();
+    const [search, setSearch] = useState("");
+    const [status, setStatus] = useState("all");
+    const [applied, setApplied] = useState({ search: "", status: "all" });
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editing, setEditing] = useState<DemoCategory | null>(null);
+    const [form, setForm] = useState({ code: "", name: "", description: "", active: true });
+
+    const rows = useMemo(() => data.categories.filter((category) =>
+        (!applied.search || `${category.code} ${category.name}`.toLocaleLowerCase("vi-VN").includes(applied.search.trim().toLocaleLowerCase("vi-VN")))
+        && (applied.status === "all" || (applied.status === "active" ? category.active : !category.active))), [data.categories, applied]);
+    const productsIn = (category: DemoCategory) => data.products.filter((product) => product.category === category.key).length;
+    const activeCount = data.categories.filter((category) => category.active).length;
+    const toppingCount = data.categories.filter((category) => category.key === "topping" && category.active).length;
+    const openNew = () => { setEditing(null); setForm({ code: `CAT-${String(data.categories.length + 1).padStart(2, "0")}`, name: "", description: "", active: true }); setModalOpen(true); };
+    const openEdit = (category: DemoCategory) => { setEditing(category); setForm({ code: category.code, name: category.name, description: category.description, active: category.active }); setModalOpen(true); };
+
+    function submit(event: FormEvent) {
+        event.preventDefault();
+        const name = form.name.trim();
+        if (!name || !form.code.trim()) return;
+        const duplicate = data.categories.some((category) => category.id !== editing?.id && (category.code.toLowerCase() === form.code.trim().toLowerCase() || category.name.toLocaleLowerCase("vi-VN") === name.toLocaleLowerCase("vi-VN")));
+        if (duplicate) return;
+        const updated: DemoCategory = editing
+            ? { ...editing, code: form.code.trim().toUpperCase(), name, description: form.description.trim(), active: form.active }
+            : { id: makeId("category"), code: form.code.trim().toUpperCase(), key: `custom-${makeId("key")}`, name, description: form.description.trim(), active: form.active };
+        setData((current) => ({ ...current, categories: editing ? current.categories.map((category) => category.id === editing.id ? updated : category) : [...current.categories, updated] }));
+        setModalOpen(false);
+    }
+
     return (
         <div>
-            <div className="page-header">
-                <div>
-                    <nav className="breadcrumb" aria-label="Đường dẫn trang">
-                        <Link to="/dashboard">Trang chủ</Link>
-                        <span className="sep">/</span>
-                        <Link to="/inventory">Kho hàng</Link>
-                        <span className="sep">/</span>
-                        <span className="current">Danh mục</span>
-                    </nav>
-                    <h1 className="page-title">Nhóm món đồ uống</h1>
-                    <p className="page-subtitle mt-1">Quản lý nhóm trà sữa, trà trái cây, macchiato, đá xay, món theo mùa và topping.</p>
-                </div>
-                <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-            </div>
+            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/inventory/products">Menu &amp; nguyên liệu</Link><span className="sep">/</span><span className="current">Nhóm món</span></nav><h1 className="page-title">Nhóm món đồ uống</h1><p className="page-subtitle">Nhóm dùng để phân loại menu; số món được tính trực tiếp từ danh mục sản phẩm.</p></div><span className="text-xs text-[var(--muted)]">Dữ liệu demo</span></div>
+            <section className="mb-6"><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><StatCard label="Nhóm món" value={String(data.categories.length)} subLabel="Danh mục toàn chuỗi" tone="info" icon={<KpiIcon kind="grid" />} /><StatCard label="Đang sử dụng" value={String(activeCount)} subLabel="Có thể phân loại sản phẩm" tone="success" icon={<KpiIcon kind="document-check" />} /><StatCard label="Nhóm topping" value={String(toppingCount)} subLabel="Topping được quản lý riêng" tone="primary" icon={<KpiIcon kind="box" />} /><StatCard label="Món đang phân loại" value={String(data.products.length)} subLabel="Đếm từ danh mục món" tone="warning" icon={<KpiIcon kind="clock" />} /></div></section>
 
-            <section className="mb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <StatCard label="Nhóm món" value={String(categories.length)} subLabel="Danh mục chuẩn toàn chuỗi" tone="info" icon={<KpiIcon kind="grid" />} />
-                    <StatCard label="Đang sử dụng" value={String(categories.filter(c => c.active).length)} subLabel="Có món đang bán" tone="success" icon={<KpiIcon kind="document-check" />} />
-                    <StatCard label="Nhóm topping" value="1" subLabel="Quản lý riêng theo nhóm" tone="primary" icon={<KpiIcon kind="box" />} />
-                    <StatCard label="Đang chờ rà soát" value="0" subLabel="Không có nhóm chờ duyệt" tone="warning" icon={<KpiIcon kind="clock" />} />
-                </div>
-            </section>
+            <section className="card mb-6"><div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><div><label className="form-label" htmlFor="category-search">Tìm kiếm</label><input id="category-search" className="form-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Mã hoặc tên nhóm..." /></div><div><label className="form-label" htmlFor="category-status">Trạng thái</label><select id="category-status" className="form-input form-select" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tất cả trạng thái</option><option value="active">Đang dùng</option><option value="inactive">Ngừng dùng</option></select></div><div className="flex gap-2"><button type="button" className="btn btn-secondary" onClick={() => { setSearch(""); setStatus("all"); setApplied({ search: "", status: "all" }); }}>Xóa lọc</button><button type="button" className="btn btn-primary" onClick={() => setApplied({ search, status })}>Áp dụng</button></div></div></section>
 
-            <section className="card mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div>
-                        <label className="form-label" htmlFor="category-search">Tìm kiếm</label>
-                        <input id="category-search" className="form-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="Mã hoặc tên nhóm..." />
-                    </div>
-                    <div>
-                        <label className="form-label" htmlFor="category-status">Trạng thái</label>
-                        <select id="category-status" className="form-input form-select" value={status} onChange={e => setStatus(e.target.value)}>
-                            <option value="all">Tất cả trạng thái</option>
-                            <option value="active">Đang dùng</option>
-                            <option value="inactive">Ngừng dùng</option>
-                        </select>
-                    </div>
-                    <div className="flex gap-2">
-                        <button className="btn btn-secondary" onClick={() => { setSearch(""); setStatus("all"); setApplied({ search: "", status: "all" }); }}>Xóa lọc</button>
-                        <button className="btn btn-primary" onClick={() => setApplied({ search, status })}>Áp dụng</button>
-                    </div>
-                </div>
-            </section>
+            <section className="card p-0 overflow-hidden"><div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3"><div><h2 className="font-bold">Danh mục nhóm món</h2><p className="text-sm text-[var(--muted)] mt-1">Số món lấy từ menu hiện hành, không lưu số đếm tĩnh.</p></div><button className="btn btn-primary" onClick={openNew}>+ Thêm nhóm món</button></div><DataTable><table className="w-full text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Mã nhóm", "Tên nhóm", "Số món", "Mô tả", "Trạng thái", "Thao tác"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{rows.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">Không có nhóm phù hợp.</td></tr> : rows.map((category) => <tr key={category.id} className="border-t border-[var(--border)]"><td className="px-4 py-3 font-semibold">{category.code}</td><td className="px-4 py-3">{category.name}</td><td className="px-4 py-3">{productsIn(category)}</td><td className="px-4 py-3">{category.description || "—"}</td><td className="px-4 py-3"><Badge variant={category.active ? "success" : "danger"}>{category.active ? "Đang dùng" : "Ngừng dùng"}</Badge></td><td className="px-4 py-3"><button className="btn btn-secondary" onClick={() => openEdit(category)}>Chỉnh sửa</button></td></tr>)}</tbody></table></DataTable></section>
 
-            <section className="card p-0 overflow-hidden">
-                <div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3">
-                    <div>
-                        <h2 className="font-bold">Danh mục nhóm món</h2>
-                        <p className="text-sm text-[var(--muted)] mt-1">Danh mục dùng để phân loại menu; không dùng nhóm món để thay thế nguyên liệu.</p>
-                    </div>
-                    <button className="btn btn-primary" onClick={openNew}>+ Thêm nhóm món</button>
-                </div>
-                <DataTable>
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-[var(--background)] text-[var(--muted)]">
-                            <tr>
-                                {["Mã nhóm", "Tên nhóm", "Số món", "Mô tả", "Trạng thái", "Thao tác"].map(x => <th key={x} className="px-4 py-3 font-semibold">{x}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map(c => <tr key={c.id} className="border-t border-[var(--border)]">
-                                <td className="px-4 py-3 font-semibold">{c.code}</td>
-                                <td className="px-4 py-3">{c.name}</td>
-                                <td className="px-4 py-3">{c.count}</td>
-                                <td className="px-4 py-3">{c.description}</td>
-                                <td className="px-4 py-3"><Badge variant={c.active ? "success" : "danger"}>{c.active ? "Đang dùng" : "Ngừng dùng"}</Badge></td>
-                                <td className="px-4 py-3"><button className="btn btn-secondary" onClick={() => openEdit(c)}>Chỉnh sửa</button></td>
-                            </tr>)}
-                        </tbody>
-                    </table>
-                </DataTable>
-            </section>
-
-            <Modal isOpen={modalOpen} title={editing ? "Cập nhật nhóm món" : "Thêm nhóm món"} onClose={() => setModalOpen(false)}>
-                <form onSubmit={submit} className="space-y-4">
-                    <div>
-                        <label className="form-label" htmlFor="cat-name">Tên nhóm *</label>
-                        <input id="cat-name" className="form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
-                    </div>
-                    <div>
-                        <label className="form-label" htmlFor="cat-desc">Mô tả</label>
-                        <textarea id="cat-desc" className="form-input form-textarea" rows={3} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
-                    </div>
-                    <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={form.active} onChange={e => setForm(p => ({ ...p, active: e.target.checked }))} /> Đang sử dụng
-                    </label>
-                    <div className="flex justify-end gap-2">
-                        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Hủy</button>
-                        <button type="submit" className="btn btn-primary">Lưu nhóm</button>
-                    </div>
-                </form>
-            </Modal>
+            <Modal isOpen={modalOpen} title={editing ? "Cập nhật nhóm món" : "Thêm nhóm món"} onClose={() => setModalOpen(false)}><form onSubmit={submit} className="space-y-4"><div><label className="form-label" htmlFor="cat-code">Mã nhóm *</label><input id="cat-code" className="form-input" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} required /></div><div><label className="form-label" htmlFor="cat-name">Tên nhóm *</label><input id="cat-name" className="form-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></div><div><label className="form-label" htmlFor="cat-desc">Mô tả</label><textarea id="cat-desc" className="form-input form-textarea" rows={3} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} /> Đang sử dụng</label><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)}>Hủy</button><button type="submit" className="btn btn-primary">Lưu nhóm</button></div></form></Modal>
         </div>
     );
 }

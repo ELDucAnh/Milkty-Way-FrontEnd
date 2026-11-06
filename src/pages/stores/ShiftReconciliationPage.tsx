@@ -1,32 +1,328 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
-import { useToast } from "../../contexts/ToastContext";
-import { formatCurrency, makeId } from "../shared/formatters";
+import Modal from "../../components/common/Modal";
+import StatCard from "../../components/common/StatCard";
+import KpiIcon from "../shared/KpiIcon";
+import {
+  formatCurrency,
+  formatDate,
+  getTodayISO,
+  makeId,
+} from "../shared/formatters";
+import {
+  getIngredient,
+  getStore,
+  theoreticalBalance,
+} from "../shared/business-demo";
+import type {
+  DemoState,
+  ReconciliationLine,
+  ReconciliationStatus,
+  Shift,
+  ShiftReconciliation,
+} from "../shared/business-demo";
+import { useDemoState } from "../shared/useDemoState";
 
-type Shift="Ca sáng"|"Ca chiều"|"Ca tối";
-type ReconciliationStatus="draft"|"pending"|"reconciled";
-type Reason="natural"|"brew-error"|"damage"|"expired"|"count-error"|"other";
-interface ReconcileLine {id:string;ingredient:string;unit:string;opening:number;received:number;standardUse:number;waste:number;counted:number;unitCost:number;}
-interface ReconcileRecord {id:string;date:string;branch:string;shift:Shift;status:ReconciliationStatus;varianceValue:number;}
-const BRANCHES=["CN01 · Bến Nghé","CN02 · Bàn Cờ","CN03 · Chợ Lớn","CN04 · Tân Hưng","CN05 · Hàng Xanh","CN06 · Làng Đại Học","CN07 · Bảy Hiền","CN08 · Cityland","CN09 · Phan Xích Long","CN10 · Bắc Hải","CN11 · Lãnh Binh Thăng","CN12 · Kênh Nước Đen"];
-const REASONS:Record<Reason,string>={natural:"Hao hụt tự nhiên", "brew-error":"Pha chế lỗi",damage:"Rơi vỡ / hư hỏng",expired:"Hủy do hết hạn", "count-error":"Sai lệch kiểm đếm",other:"Khác"};
-const INITIAL_LINES:ReconcileLine[]=[
-{id:"1",ingredient:"Cốt hồng trà đặc",unit:"lít",opening:15,received:8,standardUse:9.5,waste:0.3,counted:13.2,unitCost:45000},
-{id:"2",ingredient:"Bột kem béo sữa",unit:"kg",opening:5,received:2,standardUse:2.4,waste:0.1,counted:4.4,unitCost:120000},
-{id:"3",ingredient:"Trân châu đen",unit:"kg",opening:3,received:4,standardUse:5.2,waste:0.8,counted:1.1,unitCost:180000},
-{id:"4",ingredient:"Ly nhựa 500 ml",unit:"cái",opening:400,received:300,standardUse:280,waste:2,counted:417,unitCost:250},
+const REASONS = [
+  "Hết hạn",
+  "Nấu/chế biến hỏng",
+  "Pha sai",
+  "Đổ vỡ",
+  "Sai lệch kiểm đếm",
+  "Hủy sau pha",
+  "Khác",
 ];
-const INITIAL_RECORDS:ReconcileRecord[]=[{id:"1",date:"31/10/2026",branch:"CN01 · Bến Nghé",shift:"Ca sáng",status:"pending",varianceValue:285000},{id:"2",date:"30/10/2026",branch:"CN05 · Hàng Xanh",shift:"Ca tối",status:"draft",varianceValue:48000}];
-function calcVariance(line:ReconcileLine):number{return Number((line.counted-(line.opening+line.received-line.standardUse-line.waste)).toFixed(3));}
-export default function ShiftReconciliationPage(){
- const navigate=useNavigate();const {showToast}=useToast();const [branch,setBranch]=useState(BRANCHES[0]);const [date,setDate]=useState("2026-10-31");const [shift,setShift]=useState<Shift>("Ca sáng");const [operator,setOperator]=useState("Nhân viên kho");const [opener,setOpener]=useState("Thu ngân ca sáng");const [reason,setReason]=useState<Reason>("natural");const [amount,setAmount]=useState("0");const [note,setNote]=useState("");const [lines,setLines]=useState(INITIAL_LINES);const [records,setRecords]=useState(INITIAL_RECORDS);
- const totalWaste=useMemo(()=>lines.reduce((sum,l)=>sum+l.waste,0),[lines]);const totalVariance=useMemo(()=>lines.reduce((sum,l)=>sum+Math.abs(calcVariance(l))*l.unitCost,0),[lines]);const changedLines=lines.filter(l=>Math.abs(calcVariance(l))>0.0001);
- function updateCount(id:string,value:number){setLines(prev=>prev.map(l=>l.id===id?{...l,counted:value}:l));}
- function submit(e:FormEvent){e.preventDefault();if(!date||!branch||!operator.trim()){showToast({type:"error",title:"Thiếu thông tin ca",message:"Ngày, chi nhánh và người đối soát là bắt buộc."});return;}const enteredValue=Number(amount);if(!Number.isFinite(enteredValue)||enteredValue<0){showToast({type:"error",title:"Giá trị không hợp lệ",message:"Giá trị chênh lệch cần là số không âm."});return;}const status:ReconciliationStatus=changedLines.length>0||enteredValue>0?"pending":"reconciled";const record:ReconcileRecord={id:makeId("reconcile"),date:new Date(`${date}T00:00:00`).toLocaleDateString("vi-VN"),branch,shift,status,varianceValue:Math.max(enteredValue,totalVariance)};setRecords(prev=>[record,...prev]);showToast({type:"success",title:status==="pending"?"Đã gửi đối soát chờ duyệt":"Đã ghi nhận đối soát",message:"Bảng đối soát không tự sửa tồn kho; chênh lệch cần chứng từ và phê duyệt riêng."});}
+const STATUS_LABEL: Record<ReconciliationStatus, string> = {
+  draft: "Bản nháp",
+  pending: "Chờ duyệt",
+  approved: "Đã duyệt",
+};
+interface EditableLine extends ReconciliationLine {
+  countedText: string;
+  actualUseText: string;
+  wasteText: string;
+}
+
+function buildSessionLines(
+  data: DemoState,
+  storeId: string,
+  date: string,
+  shift: Shift,
+): EditableLine[] {
+  return data.lots
+    .filter((lot) => lot.location === "counter" && lot.locationId === storeId)
+    .map((lot) => {
+      const snapshot = data.countSnapshots.find(
+        (item) =>
+          item.lotId === lot.id &&
+          (!item.date || item.date === date) &&
+          (item.shift == null || item.shift === shift),
+      );
+      const received =
+        snapshot?.received ??
+        data.allocations
+          .filter(
+            (ticket) =>
+              ticket.storeId === storeId &&
+              ticket.date === date &&
+              ticket.shift === shift &&
+              (ticket.status === "received" || ticket.status === "discrepancy"),
+          )
+          .flatMap((ticket) => ticket.lines)
+          .filter(
+            (line) =>
+              line.ingredientId === lot.ingredientId &&
+              line.batchId === lot.batchId,
+          )
+          .reduce((sum, line) => sum + (line.receivedQuantity ?? 0), 0);
+      const opening = snapshot?.opening ?? Math.max(0, lot.quantity - received);
+      const actualUse = snapshot?.actualUse ?? 0;
+      const waste = snapshot?.waste ?? 0;
+      return {
+        id: makeId("reconcile-line"),
+        ingredientId: lot.ingredientId,
+        lotId: lot.id,
+        opening,
+        received,
+        actualUse,
+        waste,
+        counted: lot.quantity,
+        countedText: String(lot.quantity),
+        actualUseText: String(actualUse),
+        wasteText: String(waste),
+        unitCost: lot.unitCost,
+        reason: "Sai lệch kiểm đếm",
+      };
+    });
+}
+
+export default function ShiftReconciliationPage() {
+  const [data, setData] = useDemoState();
+  const [storeId, setStoreId] = useState("CN01");
+  const [date, setDate] = useState(getTodayISO());
+  const [shift, setShift] = useState<Shift>("Ca sáng");
+  const [opener, setOpener] = useState("Thu ngân ca sáng");
+  const [counter, setCounter] = useState("Nhân viên kiểm đếm");
+  const [approver, setApprover] = useState("Quản lý cửa hàng");
+  const [note, setNote] = useState("");
+  const [lines, setLines] = useState<EditableLine[]>(() =>
+    buildSessionLines(data, "CN01", getTodayISO(), "Ca sáng"),
+  );
+  const [selectedRecord, setSelectedRecord] =
+    useState<ShiftReconciliation | null>(null);
+  const [error, setError] = useState("");
+
+  const theoretical = (line: EditableLine) =>
+    theoreticalBalance(
+      line.opening,
+      line.received,
+      Number(line.actualUseText || 0),
+      Number(line.wasteText || 0),
+    );
+  const variance = (line: EditableLine) =>
+    Number((theoretical(line) - Number(line.countedText || 0)).toFixed(3));
+  const totalWaste = lines.reduce(
+    (sum, line) => sum + (Number(line.wasteText) || 0),
+    0,
+  );
+  const totalVarianceValue = lines.reduce(
+    (sum, line) => sum + Math.abs(variance(line)) * line.unitCost,
+    0,
+  );
+  const changedLines = lines.filter(
+    (line) => Math.abs(variance(line)) > 0.0001 || Number(line.wasteText) > 0,
+  );
+  const pendingRecords = data.reconciliations.filter(
+    (record) => record.status === "pending",
+  );
+  const latestReceived = lines.reduce((sum, line) => sum + line.received, 0);
+  const historyValue = (record: ShiftReconciliation) =>
+    record.lines.reduce(
+      (sum, line) =>
+        sum +
+        Math.abs(
+          theoreticalBalance(
+            line.opening,
+            line.received,
+            line.actualUse,
+            line.waste,
+          ) - line.counted,
+        ) *
+          line.unitCost,
+      0,
+    );
+
+  function updateLine(id: string, patch: Partial<EditableLine>) {
+    setLines((current) =>
+      current.map((line) => (line.id === id ? { ...line, ...patch } : line)),
+    );
+  }
+  function changeStore(nextStoreId: string) {
+    setStoreId(nextStoreId);
+    setLines(buildSessionLines(data, nextStoreId, date, shift));
+  }
+  function changeDate(nextDate: string) {
+    setDate(nextDate);
+    setLines(buildSessionLines(data, storeId, nextDate, shift));
+  }
+  function changeShift(nextShift: Shift) {
+    setShift(nextShift);
+    setLines(buildSessionLines(data, storeId, date, nextShift));
+  }
+
+  function saveRecord(status: "draft" | "pending") {
+    if (
+      !date ||
+      !storeId ||
+      !opener.trim() ||
+      !counter.trim() ||
+      lines.length === 0
+    ) {
+      setError(
+        "Cần cửa hàng, ca, người mở ca và ít nhất một dòng nguyên liệu.",
+      );
+      return;
+    }
+    if (
+      lines.some((line) =>
+        [line.actualUseText, line.wasteText, line.countedText].some(
+          (value) => !Number.isFinite(Number(value)) || Number(value) < 0,
+        ),
+      )
+    ) {
+      setError("Tiêu hao thực tế, hủy và số đếm phải không âm.");
+      return;
+    }
+    if (
+      status === "pending" &&
+      changedLines.some((line) => !line.reason.trim())
+    ) {
+      setError("Dòng có chênh lệch/hủy phải có nguyên nhân.");
+      return;
+    }
+    const existingRecord = data.reconciliations.find(
+      (record) =>
+        record.date === date &&
+        record.storeId === storeId &&
+        record.shift === shift,
+    );
+
+    if (existingRecord) {
+      setError(
+        `Ca này đã có biên bản ${
+          existingRecord.status === "approved"
+            ? "đã duyệt"
+            : existingRecord.status === "pending"
+              ? "đang chờ duyệt"
+              : "bản nháp"
+        }. Vui lòng kiểm tra lịch sử trước khi tạo thêm.`,
+      );
+      return;
+    }
+    const record: ShiftReconciliation = {
+      id: makeId("reconcile"),
+      date,
+      storeId,
+      shift,
+      opener: opener.trim(),
+      counter: counter.trim(),
+      approver: approver.trim(),
+      status,
+      note: note.trim(),
+      lines: lines.map((line) => ({
+        id: line.id,
+        ingredientId: line.ingredientId,
+        lotId: line.lotId,
+        opening: line.opening,
+        received: line.received,
+        actualUse: Number(line.actualUseText),
+        waste: Number(line.wasteText),
+        counted: Number(line.countedText),
+        unitCost: line.unitCost,
+        reason: line.reason,
+      })),
+    };
+    setData((current) => ({
+      ...current,
+      reconciliations: [record, ...current.reconciliations],
+    }));
+    setError("");
+  }
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    saveRecord("pending");
+  }
+  function approve(record: ShiftReconciliation) {
+    setData((current) => {
+      const currentRecord = current.reconciliations.find(
+        (item) => item.id === record.id,
+      );
+
+      // Không duyệt lại hoặc áp dụng điều chỉnh tồn hai lần.
+      if (!currentRecord || currentRecord.status !== "pending") {
+        return current;
+      }
+
+      const nextSnapshots = [...current.countSnapshots];
+
+      for (const line of record.lines) {
+        const index = nextSnapshots.findIndex(
+          (snapshot) =>
+            snapshot.position === "counter" &&
+            snapshot.locationId === record.storeId &&
+            snapshot.lotId === line.lotId &&
+            snapshot.date === record.date &&
+            snapshot.shift === record.shift,
+        );
+
+        const snapshot = {
+          id: index >= 0 ? nextSnapshots[index].id : makeId("snapshot"),
+          position: "counter" as const,
+          locationId: record.storeId,
+          ingredientId: line.ingredientId,
+          lotId: line.lotId,
+          opening: line.opening,
+          received: line.received,
+          actualUse: line.actualUse,
+          waste: line.waste,
+          unitCost: line.unitCost,
+          date: record.date,
+          shift: record.shift,
+        };
+
+        if (index >= 0) {
+          nextSnapshots[index] = snapshot;
+        } else {
+          nextSnapshots.push(snapshot);
+        }
+      }
+
+      return {
+        ...current,
+
+        reconciliations: current.reconciliations.map((item) =>
+          item.id === record.id
+            ? {
+                ...item,
+                status: "approved",
+                approver: approver.trim() || "Quản lý cửa hàng",
+              }
+            : item,
+        ),
+
+        lots: current.lots.map((lot) => {
+          const line = record.lines.find((item) => item.lotId === lot.id);
+
+          return line ? { ...lot, quantity: line.counted } : lot;
+        }),
+
+        countSnapshots: nextSnapshots,
+      };
+    });
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -34,118 +330,315 @@ export default function ShiftReconciliationPage(){
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
             <Link to="/dashboard">Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/stores">Cửa hàng chi nhánh</Link>
+            <Link to="/stores/ingredients">Vận hành tại quầy</Link>
             <span className="sep">/</span>
-            <span className="current">Đối soát ca trực</span>
+            <span className="current">Đối soát cuối ca</span>
           </nav>
           <h1 className="page-title">Đối soát nguyên liệu cuối ca</h1>
-          <p className="page-subtitle mt-1">Đối chiếu tồn đầu ca, thực nhận, tiêu hao, hao hụt và số kiểm đếm cuối ca.</p>
+          <p className="page-subtitle">
+            Đối chiếu tồn đầu, thực nhận, tiêu hao theo đơn đã pha, lượng hủy và
+            số đếm thực tế.
+          </p>
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
+        <span className="text-xs text-[var(--muted)]">
+          Cửa hàng · ca vận hành
+        </span>
       </div>
-
       <section className="mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard label="Ca chờ đối soát" value={String(records.filter(r=>r.status!=="reconciled").length)} subLabel="Chưa hoàn tất xác nhận" tone="warning" icon={<KpiIcon kind="clock"/>}/>
-          <StatCard label="Tổng cấp phát ca" value="42,5 kg/lít" subLabel="Số liệu tổng hợp minh họa" tone="info" icon={<KpiIcon kind="box"/>}/>
-          <StatCard label="Hao hụt ghi nhận" value={`${totalWaste.toLocaleString("vi-VN")} kg/lít`} subLabel="Cần ghi rõ nguyên nhân" tone="warning" icon={<KpiIcon kind="warning"/>}/>
-          <StatCard label="Chênh lệch cần duyệt" value={String(records.filter(r=>r.status==="pending").length)} subLabel="Chờ quản lý chi nhánh" tone="warning" icon={<KpiIcon kind="balance"/>}/>
+          <StatCard
+            label="Ca chờ duyệt"
+            value={String(pendingRecords.length)}
+            subLabel="Chênh lệch cần xác nhận"
+            tone="warning"
+            icon={<KpiIcon kind="clock" />}
+          />
+          <StatCard
+            label="Thực nhận trong ca"
+            value={latestReceived.toLocaleString("vi-VN")}
+            subLabel="Theo phiếu đã nhận"
+            tone="info"
+            icon={<KpiIcon kind="box" />}
+          />
+          <StatCard
+            label="Hủy chưa tính tiêu hao"
+            value={totalWaste.toLocaleString("vi-VN")}
+            subLabel="Ghi riêng, không trừ trùng"
+            tone="warning"
+            icon={<KpiIcon kind="warning" />}
+          />
+          <StatCard
+            label="Chênh lệch cần duyệt"
+            value={formatCurrency(totalVarianceValue)}
+            subLabel="Theo giá vốn từng lô"
+            tone={totalVarianceValue > 0 ? "danger" : "success"}
+            icon={<KpiIcon kind="balance" />}
+          />
         </div>
       </section>
-
       <section className="card mb-6 border-l-4 border-[var(--warning)]">
-        <h2 className="text-sm font-bold mb-1">Đối soát cuối ca</h2>
-        <p className="text-sm text-[var(--muted)]">So sánh đầu ca, thực nhận, tiêu hao theo định mức, hao hụt có lý do và số kiểm đếm cuối ca. Không được sửa trực tiếp tồn kho; điều chỉnh phải có chứng từ và phê duyệt theo ngưỡng.</p>
+        <h2 className="text-sm font-bold mb-1">Công thức đối soát</h2>
+        <p className="text-sm text-[var(--muted)]">
+          Tồn lý thuyết = tồn đầu + thực nhận − tiêu hao thực tế − hủy chưa tính
+          vào tiêu hao. Chênh lệch = tồn lý thuyết − tồn thực đếm; số âm là
+          thừa. Không dùng định mức công thức thay cho actualUse.
+        </p>
       </section>
 
-      <form onSubmit={submit} className="space-y-6">
+      <form className="space-y-6" onSubmit={submit}>
         <section className="card">
-          <h2 className="font-bold mb-4">Thông tin ca đối soát (mẫu)</h2>
+          <h2 className="font-bold mb-4">Thông tin ca</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <div>
-              <label className="form-label" htmlFor="reconcile-date">Ngày làm việc *</label>
-              <input id="reconcile-date" type="date" className="form-input" value={date} onChange={e=>setDate(e.target.value)} required/>
+              <label className="form-label" htmlFor="reconcile-date">
+                Ngày *
+              </label>
+              <input
+                id="reconcile-date"
+                type="date"
+                className="form-input"
+                value={date}
+                onChange={(event) => changeDate(event.target.value)}
+                required
+              />
             </div>
             <div>
-              <label className="form-label" htmlFor="reconcile-branch">Chi nhánh *</label>
-              <select id="reconcile-branch" className="form-input form-select" value={branch} onChange={e=>setBranch(e.target.value)}>{BRANCHES.map(b=><option key={b}>{b}</option>)}</select>
+              <label className="form-label" htmlFor="reconcile-store">
+                Cửa hàng *
+              </label>
+              <select
+                id="reconcile-store"
+                className="form-input form-select"
+                value={storeId}
+                onChange={(event) => changeStore(event.target.value)}
+              >
+                {data.stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.code} · {store.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="form-label" htmlFor="reconcile-shift">Ca làm việc *</label>
-              <select id="reconcile-shift" className="form-input form-select" value={shift} onChange={e=>setShift(e.target.value as Shift)}>
+              <label className="form-label" htmlFor="reconcile-shift">
+                Ca *
+              </label>
+              <select
+                id="reconcile-shift"
+                className="form-input form-select"
+                value={shift}
+                onChange={(event) => changeShift(event.target.value as Shift)}
+              >
                 <option>Ca sáng</option>
                 <option>Ca chiều</option>
                 <option>Ca tối</option>
               </select>
             </div>
             <div>
-              <label className="form-label" htmlFor="reconcile-opener">Người mở ca</label>
-              <input id="reconcile-opener" className="form-input" value={opener} onChange={e=>setOpener(e.target.value)}/>
+              <label className="form-label" htmlFor="reconcile-opener">
+                Người mở ca *
+              </label>
+              <input
+                id="reconcile-opener"
+                className="form-input"
+                value={opener}
+                onChange={(event) => setOpener(event.target.value)}
+                required
+              />
             </div>
             <div>
-              <label className="form-label" htmlFor="reconcile-operator">Người đối soát *</label>
-              <input id="reconcile-operator" className="form-input" value={operator} onChange={e=>setOperator(e.target.value)} required/>
+              <label className="form-label" htmlFor="reconcile-counter">
+                Người đối soát *
+              </label>
+              <input
+                id="reconcile-counter"
+                className="form-input"
+                value={counter}
+                onChange={(event) => setCounter(event.target.value)}
+                required
+              />
             </div>
             <div>
-              <label className="form-label" htmlFor="reconcile-state">Trạng thái</label>
-              <input id="reconcile-state" className="form-input" value="Bản nháp / chờ xác nhận" readOnly/>
+              <label className="form-label" htmlFor="reconcile-approver">
+                Người duyệt
+              </label>
+              <input
+                id="reconcile-approver"
+                className="form-input"
+                value={approver}
+                onChange={(event) => setApprover(event.target.value)}
+              />
             </div>
           </div>
         </section>
 
         <section className="card p-0 overflow-hidden">
           <div className="p-4 md:p-5 border-b border-[var(--border)]">
-            <h2 className="font-bold">Bảng đối soát nguyên liệu cuối ca</h2>
-            <p className="text-sm text-[var(--muted)] mt-1">Lượng tiêu hao theo định mức cần so sánh với lượng dùng thực tế; chênh lệch bất thường cần giải trình.</p>
+            <h2 className="font-bold">Bảng đối soát theo lô</h2>
+            <p className="text-sm text-[var(--muted)] mt-1">
+              Tiêu hao thực tế nhập theo giao dịch đã pha; không tự lấy định mức
+              làm số thực dùng.
+            </p>
           </div>
           <DataTable>
-            <table className="w-full min-w-[1050px] text-sm text-left">
+            <table className="w-full min-w-[1450px] text-sm text-left">
               <thead className="bg-[var(--background)] text-[var(--muted)]">
                 <tr>
-                  {["Nguyên liệu","Đơn vị","Tồn đầu ca","Thực nhận","Tiêu hao định mức","Hao hụt ghi nhận","Tồn kiểm đếm","Chênh lệch"].map(x=><th key={x} className="px-3 py-3 font-semibold">{x}</th>)}
+                  {[
+                    "Nguyên liệu / lô",
+                    "Đơn vị",
+                    "Tồn đầu",
+                    "Thực nhận",
+                    "Tiêu hao thực tế",
+                    "Hủy",
+                    "Lý thuyết",
+                    "Thực đếm",
+                    "Chênh lệch",
+                    "Giá trị",
+                    "Nguyên nhân",
+                  ].map((label) => (
+                    <th
+                      key={label}
+                      className="px-3 py-3 font-semibold whitespace-nowrap"
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {lines.map(l=><tr key={l.id} className="border-t border-[var(--border)]">
-                  <td className="px-3 py-3">{l.ingredient}</td>
-                  <td className="px-3 py-3">{l.unit}</td>
-                  <td className="px-3 py-3">{l.opening}</td>
-                  <td className="px-3 py-3">{l.received}</td>
-                  <td className="px-3 py-3">{l.standardUse}</td>
-                  <td className="px-3 py-3">{l.waste}</td>
-                  <td className="px-3 py-2"><input aria-label={`Tồn kiểm đếm ${l.ingredient}`} type="number" min="0" step="0.001" className="form-input w-28" value={l.counted} onChange={e=>updateCount(l.id,Number(e.target.value))}/></td>
-                  <td className="px-3 py-3"><span className={calcVariance(l)===0?"text-[var(--success)]":"text-[var(--warning)] font-semibold"}>{calcVariance(l)>0?"+":""}{calcVariance(l)}</span></td>
-                </tr>)}
+                {lines.map((line) => {
+                  const ingredient = getIngredient(data, line.ingredientId);
+                  const difference = variance(line);
+                  return (
+                    <tr
+                      key={line.id}
+                      className="border-t border-[var(--border)]"
+                    >
+                      <td className="px-3 py-3">
+                        {ingredient?.name}
+                        <div className="text-xs text-[var(--muted)]">
+                          {
+                            data.lots.find((lot) => lot.id === line.lotId)
+                              ?.lotCode
+                          }
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">{ingredient?.baseUnit}</td>
+                      <td className="px-3 py-3">{line.opening}</td>
+                      <td className="px-3 py-3">{line.received}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          aria-label={`Tiêu hao thực tế ${ingredient?.name}`}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          className="form-input w-28"
+                          value={line.actualUseText}
+                          onChange={(event) =>
+                            updateLine(line.id, {
+                              actualUseText: event.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          aria-label={`Lượng hủy ${ingredient?.name}`}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          className="form-input w-24"
+                          value={line.wasteText}
+                          onChange={(event) =>
+                            updateLine(line.id, {
+                              wasteText: event.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-3 py-3">{theoretical(line)}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          aria-label={`Tồn thực đếm ${ingredient?.name}`}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          className="form-input w-28"
+                          value={line.countedText}
+                          onChange={(event) =>
+                            updateLine(line.id, {
+                              countedText: event.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td
+                        className={`px-3 py-3 font-semibold ${difference > 0 ? "text-[var(--danger)]" : difference < 0 ? "text-[var(--info)]" : "text-[var(--success)]"}`}
+                      >
+                        {difference > 0
+                          ? `Thiếu ${difference}`
+                          : difference < 0
+                            ? `Thừa ${Math.abs(difference)}`
+                            : "Khớp"}
+                      </td>
+                      <td className="px-3 py-3">
+                        {formatCurrency(Math.abs(difference) * line.unitCost)}
+                      </td>
+                      <td className="px-2 py-2">
+                        <select
+                          aria-label={`Nguyên nhân ${ingredient?.name}`}
+                          className="form-input form-select min-w-[170px]"
+                          value={line.reason}
+                          onChange={(event) =>
+                            updateLine(line.id, { reason: event.target.value })
+                          }
+                        >
+                          {REASONS.map((item) => (
+                            <option key={item}>{item}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </DataTable>
-          <div className="p-4 border-t border-[var(--border)] text-sm flex flex-wrap justify-between gap-2">
-            <span>{changedLines.length} dòng có chênh lệch</span>
-            <b>Giá trị chênh lệch ước tính: {formatCurrency(totalVariance)}</b>
+          <div className="p-4 border-t border-[var(--border)] flex flex-wrap justify-between gap-2 text-sm">
+            <span>{changedLines.length} dòng có chênh lệch/hủy</span>
+            <b>Giá trị chênh lệch: {formatCurrency(totalVarianceValue)}</b>
           </div>
         </section>
 
         <section className="card">
-          <h2 className="font-bold mb-4">Giải trình chênh lệch</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="form-label" htmlFor="reconcile-reason">Nguyên nhân *</label>
-              <select id="reconcile-reason" className="form-input form-select" value={reason} onChange={e=>setReason(e.target.value as Reason)}>
-                {Object.entries(REASONS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="form-label" htmlFor="reconcile-value">Giá trị chênh lệch khai báo (đ)</label>
-              <input id="reconcile-value" type="number" min="0" className="form-input" value={amount} onChange={e=>setAmount(e.target.value)}/>
-            </div>
-            <div className="md:col-span-2">
-              <label className="form-label" htmlFor="reconcile-note">Biên bản / ghi chú</label>
-              <textarea id="reconcile-note" rows={3} className="form-input form-textarea" value={note} onChange={e=>setNote(e.target.value)} placeholder="Nêu rõ nguyên nhân, mặt hàng, nhân viên hoặc chứng từ liên quan..."/>
-            </div>
-          </div>
+          <label className="form-label" htmlFor="reconcile-note">
+            Biên bản / ghi chú chung
+          </label>
+          <textarea
+            id="reconcile-note"
+            rows={3}
+            className="form-input form-textarea"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Mô tả nguyên nhân, chứng từ hoặc thông tin liên quan..."
+          />
+          {error && (
+            <p role="alert" className="text-sm text-[var(--danger)] mt-2">
+              {error}
+            </p>
+          )}
           <div className="flex flex-wrap justify-end gap-2 mt-4">
-            <button type="button" className="btn btn-secondary" onClick={()=>showToast({type:"info",title:"Bản nháp",message:"Dữ liệu biểu mẫu vẫn giữ trong phiên hiện tại."})}>Lưu bản nháp</button>
-            <button type="submit" className="btn btn-primary">Gửi đối soát</button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => saveRecord("draft")}
+            >
+              Lưu bản nháp
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Gửi đối soát
+            </button>
           </div>
         </section>
       </form>
@@ -155,24 +648,114 @@ export default function ShiftReconciliationPage(){
           <h2 className="font-bold">Lịch sử đối soát</h2>
         </div>
         <DataTable>
-          <table className="w-full text-sm text-left">
+          <table className="w-full min-w-[1000px] text-sm text-left">
             <thead className="bg-[var(--background)] text-[var(--muted)]">
               <tr>
-                {["Ngày","Chi nhánh","Ca","Giá trị chênh lệch","Trạng thái"].map(x=><th key={x} className="px-4 py-3 font-semibold">{x}</th>)}
+                {[
+                  "Ngày",
+                  "Cửa hàng",
+                  "Ca",
+                  "Số dòng",
+                  "Giá trị chênh lệch",
+                  "Người đếm",
+                  "Người duyệt",
+                  "Trạng thái",
+                  "Thao tác",
+                ].map((label) => (
+                  <th
+                    key={label}
+                    className="px-3 py-3 font-semibold whitespace-nowrap"
+                  >
+                    {label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {records.map(r=><tr key={r.id} className="border-t border-[var(--border)]">
-                <td className="px-4 py-3">{r.date}</td>
-                <td className="px-4 py-3">{r.branch}</td>
-                <td className="px-4 py-3">{r.shift}</td>
-                <td className="px-4 py-3">{formatCurrency(r.varianceValue)}</td>
-                <td className="px-4 py-3"><Badge variant={r.status==="reconciled"?"success":r.status==="pending"?"warning":"info"}>{r.status==="reconciled"?"Đã đối soát":r.status==="pending"?"Chờ xác nhận":"Bản nháp"}</Badge></td>
-              </tr>)}
+              {data.reconciliations.map((record) => (
+                <tr key={record.id} className="border-t border-[var(--border)]">
+                  <td className="px-3 py-3">{formatDate(record.date)}</td>
+                  <td className="px-3 py-3">
+                    {getStore(data, record.storeId)?.code} ·{" "}
+                    {getStore(data, record.storeId)?.name}
+                  </td>
+                  <td className="px-3 py-3">{record.shift}</td>
+                  <td className="px-3 py-3">{record.lines.length}</td>
+                  <td className="px-3 py-3">
+                    {formatCurrency(historyValue(record))}
+                  </td>
+                  <td className="px-3 py-3">{record.counter}</td>
+                  <td className="px-3 py-3">
+                    {record.approver || "Chưa duyệt"}
+                  </td>
+                  <td className="px-3 py-3">
+                    <Badge
+                      variant={
+                        record.status === "approved"
+                          ? "success"
+                          : record.status === "pending"
+                            ? "warning"
+                            : "info"
+                      }
+                    >
+                      {STATUS_LABEL[record.status]}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => setSelectedRecord(record)}
+                      >
+                        Chi tiết
+                      </button>
+                      {record.status === "pending" && (
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => approve(record)}
+                        >
+                          Duyệt điều chỉnh
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </DataTable>
       </section>
+      <Modal
+        isOpen={!!selectedRecord}
+        title="Chi tiết đối soát"
+        onClose={() => setSelectedRecord(null)}
+      >
+        {selectedRecord && (
+          <div className="space-y-2">
+            <p>
+              {getStore(data, selectedRecord.storeId)?.name} ·{" "}
+              {selectedRecord.shift} · {formatDate(selectedRecord.date)}
+            </p>
+            {selectedRecord.lines.map((line) => (
+              <p key={line.id} className="text-sm">
+                {getIngredient(data, line.ingredientId)?.name}: đầu{" "}
+                {line.opening} + nhận {line.received} − dùng thực{" "}
+                {line.actualUse} − hủy {line.waste} = lý thuyết{" "}
+                {theoreticalBalance(
+                  line.opening,
+                  line.received,
+                  line.actualUse,
+                  line.waste,
+                )}
+                ; đếm {line.counted}.
+              </p>
+            ))}
+            <p className="text-sm text-[var(--muted)]">
+              {selectedRecord.note || "Không có ghi chú."}
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

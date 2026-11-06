@@ -1,249 +1,163 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
+import Modal from "../../components/common/Modal";
 import { useToast } from "../../contexts/ToastContext";
-import { formatCurrency, makeId } from "../shared/formatters";
+import { getTodayISO, makeId } from "../shared/formatters";
+import { useDemoState } from "../shared/useDemoState";
+import { usableLotQuantity } from "../shared/business-demo";
+import type { ProductCategory, ProductVariant, RecipeIngredient } from "../shared/business-demo";
 
-type ProductCategory = "milk-tea" | "fruit-tea" | "macchiato" | "topping" | "seasonal";
-type ProductStatus = "active" | "branch-locked" | "inactive";
-type RecipeSize = "M" | "L";
-interface RecipeLine { id: string; ingredient: string; quantity: number; unit: string; note: string; }
-interface ProductForm { name: string; sku: string; barcode: string; category: ProductCategory | ""; supplier: string; unit: string; status: ProductStatus; openingStock: number; minStock: number; maxStock: number; purchasePrice: number; sellingPrice: number; tax: number; discount: number; description: string; recipeSize: RecipeSize; recipeVersion: string; effectiveDate: string; approver: string; changeReason: string; }
-const INITIAL_FORM: ProductForm = { name: "", sku: "", barcode: "", category: "", supplier: "", unit: "cup", status: "active", openingStock: 0, minStock: 0, maxStock: 0, purchasePrice: 0, sellingPrice: 35000, tax: 0, discount: 0, description: "", recipeSize: "M", recipeVersion: "1.0", effectiveDate: "2026-10-31", approver: "", changeReason: "" };
-const INITIAL_LINES: RecipeLine[] = [
- {id:"r1",ingredient:"Cốt hồng trà đặc",quantity:100,unit:"ml",note:"Nền trà"},
- {id:"r2",ingredient:"Bột kem béo sữa",quantity:30,unit:"gram",note:"Thành phần sữa"},
- {id:"r3",ingredient:"Nước đường mía nấu",quantity:25,unit:"ml",note:"Điều chỉnh theo tùy chọn đường"},
- {id:"r4",ingredient:"Ly nhựa 500 ml",quantity:1,unit:"cái",note:"Bao bì"},
- {id:"r5",ingredient:"Màng ép miệng ly",quantity:1,unit:"miếng",note:"Bao bì"},
- {id:"r6",ingredient:"Ống hút trân châu",quantity:1,unit:"cái",note:"Bao bì"},
- {id:"r7",ingredient:"Túi mang đi",quantity:1,unit:"cái",note:"Khi đơn cần túi"},
-];
+type DrinkSize = "M" | "L";
+interface DraftLine { id: string; ingredientId: string; quantity: string; note: string; useType: RecipeIngredient["useType"]; optionRule: string; }
+const makeRecipeLine = (ingredientId = "ing-tea-base", quantity = "100", note = "", useType: DraftLine["useType"] = "required"): DraftLine => ({ id: makeId("line"), ingredientId, quantity, note, useType, optionRule: "" });
+const INITIAL_LINES: Record<DrinkSize, DraftLine[]> = {
+    M: [makeRecipeLine("ing-tea-base", "100", "Nền trà"), makeRecipeLine("ing-milk", "30"), makeRecipeLine("ing-syrup", "25", "Điều chỉnh theo mức đường"), makeRecipeLine("ing-cup", "1", "Bao bì")],
+    L: [makeRecipeLine("ing-tea-base", "140", "Nền trà"), makeRecipeLine("ing-milk", "40"), makeRecipeLine("ing-syrup", "35", "Điều chỉnh theo mức đường"), makeRecipeLine("ing-cup", "1", "Bao bì")],
+};
+
 export default function AddProductPage() {
- const navigate=useNavigate(); const {showToast}=useToast();
- const [form,setForm]=useState<ProductForm>(INITIAL_FORM);
- const [lines,setLines]=useState<RecipeLine[]>(INITIAL_LINES);
- const [imageName,setImageName]=useState("");
- const [saved,setSaved]=useState(false);
- const update=<K extends keyof ProductForm>(key:K,value:ProductForm[K])=>setForm(prev=>({...prev,[key]:value}));
- function updateLine(id:string,key:keyof RecipeLine,value:string|number){setLines(prev=>prev.map(line=>line.id===id?{...line,[key]:value}:line));}
- function addLine(){setLines(prev=>[...prev,{id:makeId("recipe"),ingredient:"",quantity:0,unit:"ml",note:""}]);}
- function removeLine(id:string){setLines(prev=>prev.filter(line=>line.id!==id));}
- function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();if(!form.name.trim()||!form.sku.trim()||!form.category||form.sellingPrice<=0){showToast({type:"error",title:"Thiếu thông tin",message:"Vui lòng nhập tên, mã, nhóm món và giá bán hợp lệ."});return;}if(lines.some(line=>!line.ingredient.trim()||line.quantity<=0)){showToast({type:"error",title:"Công thức chưa hợp lệ",message:"Mỗi dòng nguyên liệu cần tên nguyên liệu và định lượng lớn hơn 0."});return;}if(!form.recipeVersion.trim()||!form.effectiveDate){showToast({type:"error",title:"Thiếu thông tin công thức",message:"Cần khai báo phiên bản và ngày hiệu lực."});return;}setSaved(true);showToast({type:"success",title:"Đã lưu bản nháp giao diện",message:`Món ${form.name} đã được thêm vào trạng thái mô phỏng.`});}
-  return (
-    <div>
-      <div className="page-header">
+    const navigate = useNavigate();
+    const { showToast } = useToast();
+    const [data, setData] = useDemoState();
+    const [name, setName] = useState("");
+    const [code, setCode] = useState("");
+    const [category, setCategory] = useState<ProductCategory | "">("");
+    const [priceM, setPriceM] = useState("35000");
+    const [priceL, setPriceL] = useState("42000");
+    const [supportsM, setSupportsM] = useState(true);
+    const [supportsL, setSupportsL] = useState(true);
+    const [selectedSize, setSelectedSize] = useState<DrinkSize>("M");
+    const [lines, setLines] = useState<Record<DrinkSize, DraftLine[]>>(INITIAL_LINES);
+    const [approver, setApprover] = useState("");
+    const [effectiveDate, setEffectiveDate] = useState(getTodayISO());
+    const [changeReason, setChangeReason] = useState("Tạo công thức ban đầu");
+    const [description, setDescription] = useState("");
+    const [imageName, setImageName] = useState("");
+    const [toppingId, setToppingId] = useState("ing-pearl");
+    const [toppingPrice, setToppingPrice] = useState("8000");
+    const [toppingQuantity, setToppingQuantity] = useState("30");
+    const [toppingMode, setToppingMode] = useState<"optional" | "default-removable" | "default-required">("optional");
+    const [showSaved, setShowSaved] = useState(false);
+
+    const usableSizes = useMemo(() => ([supportsM ? "M" : null, supportsL ? "L" : null].filter(Boolean) as DrinkSize[]), [supportsM, supportsL]);
+    const updateLine = (size: DrinkSize, id: string, patch: Partial<DraftLine>) => setLines((current) => ({ ...current, [size]: current[size].map((line) => line.id === id ? { ...line, ...patch } : line) }));
+    const addLine = (size: DrinkSize) => setLines((current) => ({ ...current, [size]: [...current[size], makeRecipeLine()] }));
+    const removeLine = (size: DrinkSize, id: string) => setLines((current) => ({ ...current, [size]: current[size].filter((line) => line.id !== id) }));
+
+    function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const variants: ProductVariant[] = [
+            ...(supportsM ? [{ size: "M" as const, price: Number(priceM) }] : []),
+            ...(supportsL ? [{ size: "L" as const, price: Number(priceL) }] : []),
+        ];
+        if (!name.trim() || !code.trim() || !category || variants.length === 0 || variants.some((variant) => !Number.isFinite(variant.price) || variant.price <= 0)) {
+            showToast({ type: "error", title: "Thông tin món chưa hợp lệ", message: "Cần có mã, tên, nhóm món, ít nhất một size và giá bán lớn hơn 0." });
+            return;
+        }
+        if (data.products.some((product) => product.code.toLocaleLowerCase("vi-VN") === code.trim().toLocaleLowerCase("vi-VN"))) {
+            showToast({ type: "error", title: "Mã món đã tồn tại", message: "Hãy dùng một mã món khác trong menu toàn chuỗi." });
+            return;
+        }
+        if (usableSizes.some((size) => lines[size].length === 0 || lines[size].some((line) => !line.ingredientId || !Number.isFinite(Number(line.quantity)) || Number(line.quantity) <= 0))) {
+            showToast({ type: "error", title: "Công thức chưa hợp lệ", message: "Mỗi size cần ít nhất một dòng nguyên liệu có định lượng lớn hơn 0." });
+            return;
+        }
+        const productId = makeId("product");
+        const normalizedCode = code.trim().toUpperCase();
+        const toppingIsDefault = toppingMode !== "optional";
+        const toppingIsOptional = toppingMode !== "default-required";
+        const toppingUseType: DraftLine["useType"] = toppingMode === "optional" ? "optional-topping" : "default-topping";
+        const toppingRule = toppingMode === "default-required" ? "Mặc định, không được bỏ" : toppingMode === "default-removable" ? "Mặc định; bỏ thì không giữ/trừ" : "Tùy chọn; chỉ giữ/trừ khi thêm";
+        const recipeIngredientsForSize = (size: DrinkSize): RecipeIngredient[] => {
+            const recipeLines = lines[size].map((line) => ({
+                id: line.id,
+                ingredientId: line.ingredientId,
+                quantity: Number(line.quantity),
+                unit: data.ingredients.find((item) => item.id === line.ingredientId)?.baseUnit ?? "",
+                useType: line.ingredientId === toppingId ? toppingUseType : line.useType,
+                note: line.note.trim(),
+                optionRule: line.ingredientId === toppingId ? toppingRule : line.optionRule.trim(),
+            }));
+            if (toppingId && !recipeLines.some((line) => line.ingredientId === toppingId)) recipeLines.push({
+                id: makeId("topping"), ingredientId: toppingId, quantity: Number(toppingQuantity),
+                unit: data.ingredients.find((item) => item.id === toppingId)?.baseUnit ?? "",
+                useType: toppingUseType, note: "Topping theo lựa chọn món", optionRule: toppingRule,
+            });
+            return recipeLines;
+        };
+        const product = {
+            id: productId, code: normalizedCode, name: name.trim(), category, variants,
+            cogsBySize: Object.fromEntries(usableSizes.map((size) => {
+                const cost = recipeIngredientsForSize(size).filter((line) => line.useType !== "optional-topping").reduce((sum, line) => {
+                    const lots = data.lots.filter((lot) => lot.ingredientId === line.ingredientId && usableLotQuantity(lot) > 0);
+                    const quantity = lots.reduce((total, lot) => total + usableLotQuantity(lot), 0);
+                    const costPerUnit = quantity > 0 ? lots.reduce((total, lot) => total + usableLotQuantity(lot) * lot.unitCost, 0) / quantity : 0;
+                    return sum + line.quantity * costPerUnit;
+                }, 0);
+                return [size, cost > 0 ? Math.round(cost) : null];
+            })),
+            toppings: toppingId ? [{ ingredientId: toppingId, price: Math.max(0, Number(toppingPrice) || 0), default: toppingIsDefault, optional: toppingIsOptional, quantity: Number(toppingQuantity), unit: data.ingredients.find((item) => item.id === toppingId)?.baseUnit ?? "" }] : [],
+            lockedStoreIds: [], status: "pending-recipe" as const, note: description.trim(), imageName,
+        };
+        const recipes = usableSizes.map((size) => ({
+            id: makeId("recipe"), code: `RC-${normalizedCode}-${size}`, kind: "drink" as const,
+            productId, outputIngredientId: null, size, yieldQuantity: 1, yieldUnit: "ly", version: "1.0",
+            effectiveDate, approver: approver.trim(), changeReason: changeReason.trim(), status: "draft" as const,
+            ingredients: recipeIngredientsForSize(size),
+        }));
+        setData((current) => ({ ...current, products: [product, ...current.products], recipes: [...recipes, ...current.recipes] }));
+        setShowSaved(true);
+        showToast({ type: "success", title: "Đã lưu món và công thức nháp", message: `${product.code} đã có ${recipes.length} phiên bản nháp; chưa được mở bán khi chưa duyệt.` });
+        navigate(`/inventory/products/${product.id}`);
+    }
+
+    return (
         <div>
-          <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
-            <span className="sep">/</span>
-            <Link to="/inventory">Kho hàng</Link>
-            <span className="sep">/</span>
-            <span className="current">Thêm sản phẩm</span>
-          </nav>
-          <h1 className="page-title">Khai báo món &amp; công thức</h1>
-          <p className="page-subtitle mt-1">Tạo món đồ uống, quản lý size và khai báo định mức nguyên liệu theo phiên bản.</p>
+            <div className="page-header"><div>
+                <nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/inventory/products">Menu đồ uống</Link><span className="sep">/</span><span className="current">Khai báo món</span></nav>
+                <h1 className="page-title">Khai báo món &amp; công thức</h1>
+                <p className="page-subtitle">Tạo món, khai báo size, giá chuẩn và định lượng nguyên liệu theo từng phiên bản công thức.</p>
+            </div><span className="text-xs text-[var(--muted)]">Lưu ở dữ liệu demo của trình duyệt</span></div>
+
+            <section className="card mb-6 border-l-4 border-[var(--info)]"><h2 className="text-sm font-bold mb-1">Trước khi lưu công thức</h2><p className="text-sm text-[var(--muted)]">Mỗi size có công thức riêng. Món mới ở trạng thái chờ duyệt; giá chuẩn chỉ được dùng sau khi công thức được duyệt.</p></section>
+
+            <form onSubmit={submit} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div className="xl:col-span-2 flex flex-col gap-6">
+                    <section className="card">
+                        <h2 className="font-bold mb-4 pb-3 border-b border-[var(--border)]">Thông tin món</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label className="form-label" htmlFor="product-name">Tên món *</label><input id="product-name" className="form-input" value={name} onChange={(event) => setName(event.target.value)} required /></div>
+                            <div><label className="form-label" htmlFor="product-code">Mã món *</label><input id="product-code" className="form-input" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} required /></div>
+                            <div><label className="form-label" htmlFor="product-category">Nhóm món *</label><select id="product-category" className="form-input form-select" value={category} onChange={(event) => setCategory(event.target.value as ProductCategory)} required><option value="">Chọn nhóm món</option>{data.categories.filter((item) => item.active).map((item) => <option key={item.id} value={item.key}>{item.name}</option>)}</select></div>
+                            <fieldset className="flex flex-wrap items-end gap-4"><legend className="form-label w-full">Size hỗ trợ *</legend><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={supportsM} onChange={(event) => setSupportsM(event.target.checked)} /> Size M</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={supportsL} onChange={(event) => setSupportsL(event.target.checked)} /> Size L</label></fieldset>
+                            {supportsM && <div><label className="form-label" htmlFor="price-m">Giá chuẩn size M (đ) *</label><input id="price-m" type="number" min="1" step="1" className="form-input" value={priceM} onChange={(event) => setPriceM(event.target.value)} required /></div>}
+                            {supportsL && <div><label className="form-label" htmlFor="price-l">Giá chuẩn size L (đ) *</label><input id="price-l" type="number" min="1" step="1" className="form-input" value={priceL} onChange={(event) => setPriceL(event.target.value)} required /></div>}
+                            <div><label className="form-label" htmlFor="product-topping">Topping tùy chọn</label><select id="product-topping" className="form-input form-select" value={toppingId} onChange={(event) => setToppingId(event.target.value)}><option value="">Không khai báo topping</option>{data.ingredients.filter((item) => item.group === "prepared" || item.group === "topping").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+                            {toppingId && <div><label className="form-label" htmlFor="topping-price">Giá topping (đ)</label><input id="topping-price" type="number" min="0" className="form-input" value={toppingPrice} onChange={(event) => setToppingPrice(event.target.value)} /></div>}
+                            {toppingId && <><div><label className="form-label" htmlFor="topping-quantity">Định lượng topping *</label><input id="topping-quantity" type="number" min="0.001" step="0.001" className="form-input" value={toppingQuantity} onChange={(event) => setToppingQuantity(event.target.value)} required /><p className="text-xs text-[var(--muted)] mt-1">Đơn vị: {data.ingredients.find((item) => item.id === toppingId)?.baseUnit}</p></div><div><label className="form-label" htmlFor="topping-rule">Quy tắc topping</label><select id="topping-rule" className="form-input form-select" value={toppingMode} onChange={(event) => setToppingMode(event.target.value as typeof toppingMode)}><option value="optional">Tùy chọn thêm</option><option value="default-removable">Mặc định, khách có thể bỏ</option><option value="default-required">Mặc định bắt buộc</option></select></div></>}
+                            <div className="md:col-span-2"><label className="form-label" htmlFor="product-description">Mô tả</label><textarea id="product-description" rows={3} className="form-input form-textarea" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Mô tả món / lưu ý pha chế..." /></div>
+                        </div>
+                    </section>
+
+                    <section className="card">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]"><div><h2 className="font-bold">Công thức pha theo size</h2><p className="text-sm text-[var(--muted)] mt-1">Định lượng theo đơn vị chuẩn; topping chỉ tiêu hao theo tùy chọn thực tế.</p></div><Badge variant="warning">Bản nháp</Badge></div>
+                        <div className="flex gap-2 mb-4">{(["M", "L"] as const).filter((size) => size === "M" ? supportsM : supportsL).map((size) => <button key={size} type="button" className={`btn ${selectedSize === size ? "btn-primary" : "btn-secondary"}`} onClick={() => setSelectedSize(size)}>Size {size}</button>)}</div>
+                        {usableSizes.length === 0 ? <p className="text-sm text-[var(--danger)]">Chọn ít nhất một size để khai báo công thức.</p> : <DataTable><table className="w-full min-w-[760px] text-sm text-left"><thead className="bg-[var(--background)] text-[var(--muted)]"><tr>{["Nguyên liệu", "Định lượng / ly", "Đơn vị chuẩn", "Loại sử dụng", "Quy tắc / ghi chú", ""].map((label) => <th key={label} className="px-2 py-3 font-semibold">{label}</th>)}</tr></thead><tbody>{lines[selectedSize].map((line) => <tr key={line.id} className="border-t border-[var(--border)]"><td className="px-2 py-2"><select aria-label="Nguyên liệu" className="form-input form-select min-w-[180px]" value={line.ingredientId} onChange={(event) => updateLine(selectedSize, line.id, { ingredientId: event.target.value })}>{data.ingredients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></td><td className="px-2 py-2"><input aria-label="Định lượng" type="number" min="0.001" step="0.001" className="form-input w-28" value={line.quantity} onChange={(event) => updateLine(selectedSize, line.id, { quantity: event.target.value })} required /></td><td className="px-2 py-2">{data.ingredients.find((item) => item.id === line.ingredientId)?.baseUnit}</td><td className="px-2 py-2"><select aria-label="Loại sử dụng" className="form-input form-select min-w-[170px]" value={line.useType} onChange={(event) => updateLine(selectedSize, line.id, { useType: event.target.value as DraftLine["useType"] })}><option value="required">Bắt buộc</option><option value="default-topping">Topping mặc định</option><option value="optional-topping">Topping tùy chọn</option></select></td><td className="px-2 py-2"><input aria-label="Quy tắc hoặc ghi chú" className="form-input min-w-[170px]" value={line.optionRule || line.note} onChange={(event) => updateLine(selectedSize, line.id, { optionRule: event.target.value, note: event.target.value })} /></td><td className="px-2 py-2"><button type="button" className="btn btn-secondary" disabled={lines[selectedSize].length <= 1} onClick={() => removeLine(selectedSize, line.id)}>Bớt</button></td></tr>)}</tbody></table></DataTable>}
+                        {usableSizes.includes(selectedSize) && <button type="button" className="btn btn-secondary mt-4" onClick={() => addLine(selectedSize)}>+ Thêm nguyên liệu</button>}
+                    </section>
+
+                    <section className="card"><h2 className="font-bold mb-4">Phiên bản &amp; phê duyệt</h2><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div><label className="form-label" htmlFor="effective-date">Ngày hiệu lực *</label><input id="effective-date" type="date" className="form-input" value={effectiveDate} onChange={(event) => setEffectiveDate(event.target.value)} required /></div><div><label className="form-label" htmlFor="recipe-approver">Người duyệt</label><input id="recipe-approver" className="form-input" value={approver} onChange={(event) => setApprover(event.target.value)} placeholder="Chưa phân công" /></div><div><label className="form-label" htmlFor="change-reason">Lý do thay đổi</label><input id="change-reason" className="form-input" value={changeReason} onChange={(event) => setChangeReason(event.target.value)} required /></div></div></section>
+
+                    <section className="card"><h2 className="font-bold mb-3">Hình ảnh món</h2><label className="form-label" htmlFor="product-image">Chọn ảnh món (PNG hoặc JPG)</label><input id="product-image" type="file" accept="image/png,image/jpeg" className="form-input" onChange={(event) => setImageName(event.target.files?.[0]?.name ?? "")} />{imageName && <p className="text-sm text-[var(--muted)] mt-2">Đã chọn: {imageName}</p>}</section>
+                </div>
+
+                <aside className="flex flex-col gap-6">
+                    <section className="card"><h2 className="font-bold mb-4">Tóm tắt giá</h2><div className="space-y-3 text-sm">{supportsM && <p className="flex justify-between gap-3"><span>Giá bán M</span><b>{Number(priceM).toLocaleString("vi-VN")} đ</b></p>}{supportsL && <p className="flex justify-between gap-3"><span>Giá bán L</span><b>{Number(priceL).toLocaleString("vi-VN")} đ</b></p>}<p className="text-xs text-[var(--muted)]">COGS được xác định từ định lượng và giá vốn lô; bản demo không tự suy ra giá vốn khi chưa có mapping đầy đủ.</p></div></section>
+                    <section className="card"><h2 className="font-bold mb-3">Hoàn tất</h2>{showSaved && <div className="mb-3"><Badge variant="success">Đã lưu demo</Badge></div>}<p className="text-sm text-[var(--muted)] mb-4">Món và các công thức theo size được lưu nháp trong trình duyệt; chưa được mở bán trước khi duyệt.</p><button type="submit" className="btn btn-primary w-full">Lưu bản nháp</button><button type="button" className="btn btn-secondary w-full mt-2" onClick={() => navigate("/inventory/products")}>Quay lại danh mục</button></section>
+                </aside>
+            </form>
         </div>
-        <span className="text-xs text-[var(--muted)]">Dữ liệu minh họa</span>
-      </div>
-
-      <section className="card mb-6 border-l-4 border-[var(--info)]">
-        <h2 className="text-sm font-bold mb-1">Trước khi lưu công thức</h2>
-        <p className="text-sm text-[var(--muted)]">Mỗi size cần có định lượng riêng. Công thức phải có phiên bản, ngày hiệu lực và người phê duyệt; thay đổi công thức không được làm thay đổi dữ liệu của đơn hàng cũ.</p>
-      </section>
-
-      <form onSubmit={submit} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 flex flex-col gap-6">
-          <section className="card">
-            <h2 className="font-bold mb-4 pb-3 border-b border-[var(--border)]">Thông tin món</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="form-label" htmlFor="product-name">Tên món <span className="required">*</span></label>
-                <input id="product-name" className="form-input" value={form.name} onChange={e=>update("name",e.target.value)} placeholder="Ví dụ: Hồng trà sữa trân châu" required/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="product-sku">Mã món <span className="required">*</span></label>
-                <input id="product-sku" className="form-input" value={form.sku} onChange={e=>update("sku",e.target.value.toUpperCase())} placeholder="Ví dụ: HD-001" required/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="product-barcode">Mã vạch / mã nội bộ</label>
-                <input id="product-barcode" className="form-input" value={form.barcode} onChange={e=>update("barcode",e.target.value)} placeholder="Không bắt buộc"/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="product-category">Nhóm món <span className="required">*</span></label>
-                <select id="product-category" className="form-input form-select" value={form.category} onChange={e=>update("category",e.target.value as ProductCategory)} required>
-                  <option value="">Chọn nhóm món</option>
-                  <option value="milk-tea">Trà sữa</option>
-                  <option value="fruit-tea">Trà trái cây</option>
-                  <option value="macchiato">Macchiato</option>
-                  <option value="topping">Topping</option>
-                  <option value="seasonal">Món theo mùa</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="product-supplier">Đơn vị / nhà cung cấp liên quan</label>
-                <select id="product-supplier" className="form-input form-select" value={form.supplier} onChange={e=>update("supplier",e.target.value)}>
-                  <option value="">Chọn thông tin</option>
-                  <option value="central-kitchen">Bếp / khu chế biến</option>
-                  <option value="supplier-01">Nhà cung cấp NL-01</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="product-unit">Đơn vị bán <span className="required">*</span></label>
-                <select id="product-unit" className="form-input form-select" value={form.unit} onChange={e=>update("unit",e.target.value)}>
-                  <option value="cup">Ly</option>
-                  <option value="portion">Phần</option>
-                  <option value="bottle">Chai</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="product-status">Trạng thái</label>
-                <select id="product-status" className="form-input form-select" value={form.status} onChange={e=>update("status",e.target.value as ProductStatus)}>
-                  <option value="active">Đang bán</option>
-                  <option value="branch-locked">Chi nhánh tạm khóa</option>
-                  <option value="inactive">Ngừng bán toàn chuỗi</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="opening-stock">Tồn khởi tạo</label>
-                <input id="opening-stock" type="number" min="0" className="form-input" value={form.openingStock} onChange={e=>update("openingStock",Number(e.target.value))}/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="min-stock">Tồn tối thiểu</label>
-                <input id="min-stock" type="number" min="0" className="form-input" value={form.minStock} onChange={e=>update("minStock",Number(e.target.value))}/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="max-stock">Tồn tối đa</label>
-                <input id="max-stock" type="number" min="0" className="form-input" value={form.maxStock} onChange={e=>update("maxStock",Number(e.target.value))}/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="purchase-price">Giá vốn tham khảo (đ)</label>
-                <input id="purchase-price" type="number" min="0" className="form-input" value={form.purchasePrice} onChange={e=>update("purchasePrice",Number(e.target.value))}/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="selling-price">Giá bán chuẩn (đ) <span className="required">*</span></label>
-                <input id="selling-price" type="number" min="1" className="form-input" value={form.sellingPrice} onChange={e=>update("sellingPrice",Number(e.target.value))} required/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="tax">Thuế (%)</label>
-                <input id="tax" type="number" min="0" max="100" className="form-input" value={form.tax} onChange={e=>update("tax",Number(e.target.value))}/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="discount">Giảm giá mặc định (%)</label>
-                <input id="discount" type="number" min="0" max="100" className="form-input" value={form.discount} onChange={e=>update("discount",Number(e.target.value))}/>
-              </div>
-              <div className="md:col-span-2">
-                <label className="form-label" htmlFor="description">Mô tả</label>
-                <textarea id="description" rows={3} className="form-input form-textarea" value={form.description} onChange={e=>update("description",e.target.value)} placeholder="Mô tả món đồ uống..."/>
-              </div>
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
-              <div>
-                <h2 className="font-bold">Định mức công thức (BOM / Recipe)</h2>
-                <p className="text-sm text-[var(--muted)] mt-1">Số lượng nguyên liệu tiêu hao cho một ly theo từng size.</p>
-              </div>
-              <Badge variant="info">Mẫu công thức {form.recipeVersion}</Badge>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="form-label" htmlFor="recipe-size">Size công thức <span className="required">*</span></label>
-                <select id="recipe-size" className="form-input form-select" value={form.recipeSize} onChange={e=>update("recipeSize",e.target.value as RecipeSize)}>
-                  <option value="M">Size M</option>
-                  <option value="L">Size L</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="recipe-version">Phiên bản <span className="required">*</span></label>
-                <input id="recipe-version" className="form-input" value={form.recipeVersion} onChange={e=>update("recipeVersion",e.target.value)} required/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="recipe-date">Ngày hiệu lực <span className="required">*</span></label>
-                <input id="recipe-date" type="date" className="form-input" value={form.effectiveDate} onChange={e=>update("effectiveDate",e.target.value)} required/>
-              </div>
-            </div>
-            <DataTable>
-              <table className="w-full text-sm text-left">
-                <thead className="bg-[var(--background)] text-[var(--muted)]">
-                  <tr>
-                    {["Nguyên liệu","Định lượng / ly","Đơn vị","Ghi chú",""].map(x=><th key={x} className="px-3 py-3 font-semibold">{x}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map(line=><tr key={line.id} className="border-t border-[var(--border)]">
-                    <td className="px-2 py-2"><input aria-label="Tên nguyên liệu" className="form-input min-w-[150px]" value={line.ingredient} onChange={e=>updateLine(line.id,"ingredient",e.target.value)} placeholder="Tên nguyên liệu"/></td>
-                    <td className="px-2 py-2"><input aria-label="Định lượng" type="number" min="0" step="0.01" className="form-input w-28" value={line.quantity} onChange={e=>updateLine(line.id,"quantity",Number(e.target.value))}/></td>
-                    <td className="px-2 py-2"><select aria-label="Đơn vị" className="form-input form-select" value={line.unit} onChange={e=>updateLine(line.id,"unit",e.target.value)}><option>ml</option><option>gram</option><option>kg</option><option>cái</option><option>miếng</option><option>chai</option></select></td>
-                    <td className="px-2 py-2"><input aria-label="Ghi chú" className="form-input min-w-[130px]" value={line.note} onChange={e=>updateLine(line.id,"note",e.target.value)}/></td>
-                    <td className="px-2 py-2"><button type="button" className="btn btn-secondary" onClick={()=>removeLine(line.id)} disabled={lines.length===1}>Bớt</button></td>
-                  </tr>)}
-                </tbody>
-              </table>
-            </DataTable>
-            <div className="flex flex-wrap justify-between gap-3 mt-4">
-              <button type="button" className="btn btn-secondary" onClick={addLine}>+ Thêm nguyên liệu</button>
-              <span className="text-xs text-[var(--muted)]">Định lượng được khai báo riêng theo size.</span>
-            </div>
-          </section>
-
-          <section className="card">
-            <h2 className="font-bold mb-4">Quản lý phiên bản &amp; phê duyệt</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="form-label" htmlFor="approver">Người phê duyệt</label>
-                <input id="approver" className="form-input" value={form.approver} onChange={e=>update("approver",e.target.value)} placeholder="Tên người phê duyệt"/>
-              </div>
-              <div>
-                <label className="form-label" htmlFor="change-reason">Lý do thay đổi</label>
-                <input id="change-reason" className="form-input" value={form.changeReason} onChange={e=>update("changeReason",e.target.value)} placeholder="Ví dụ: Điều chỉnh định lượng đường"/>
-              </div>
-            </div>
-          </section>
-
-          <section className="card">
-            <h2 className="font-bold mb-3">Hình ảnh món</h2>
-            <label className="form-label" htmlFor="product-image">Chọn ảnh món (PNG hoặc JPG)</label>
-            <input id="product-image" type="file" accept="image/png,image/jpeg" className="form-input" onChange={e=>setImageName(e.target.files?.[0]?.name??"")}/>
-            {imageName && <p className="text-sm text-[var(--muted)] mt-2">Đã chọn: {imageName}</p>}
-          </section>
-        </div>
-
-        <aside className="flex flex-col gap-6">
-          <section className="card">
-            <h2 className="font-bold mb-4">Tóm tắt giá</h2>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-[var(--muted)]">Giá vốn tham khảo</span>
-                <b>{formatCurrency(form.purchasePrice)}</b>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-[var(--muted)]">Giá bán chuẩn</span>
-                <b>{formatCurrency(form.sellingPrice)}</b>
-              </div>
-              <div className="border-t border-[var(--border)] pt-3">
-                <span className="text-[var(--muted)]">Lãi gộp tham khảo</span>
-                <p className="text-lg font-bold mt-1">{formatCurrency(Math.max(0,form.sellingPrice-form.purchasePrice))}</p>
-                <p className="text-xs text-[var(--muted)]">Chưa tính giá vốn chi tiết từ dữ liệu nguyên liệu.</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="card">
-            <h2 className="font-bold mb-3">Hoàn tất</h2>
-            {saved && (
-              <div className="mb-3">
-                <Badge variant="success">Đã lưu bản nháp mô phỏng</Badge>
-              </div>
-            )}
-            <p className="text-sm text-[var(--muted)] mb-4">Bản demo chỉ lưu trạng thái trong phiên giao diện; chưa ghi vào backend hoặc cơ sở dữ liệu.</p>
-            <button type="submit" className="btn btn-primary w-full">Lưu bản nháp</button>
-            <button type="button" className="btn btn-secondary w-full mt-2" onClick={()=>navigate("/inventory/products")}>Quay lại danh mục</button>
-          </section>
-        </aside>
-      </form>
-    </div>
-  );
+    );
 }
