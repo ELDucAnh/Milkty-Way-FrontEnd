@@ -61,6 +61,7 @@ const initialFilters: PreparationFilters = {
 
 export default function PreparationQueuePage() {
     const toast = useToast();
+    const [pageSize, setPageSize] = useState(10);
 
     const [orders, setOrders] = useState<PreparationOrder[]>(() =>
         initialPreparationOrders.map((order) => ({ ...order })),
@@ -118,8 +119,8 @@ export default function PreparationQueuePage() {
         );
 
         toast.success(
-            `Đã cập nhật mô phỏng đơn ${orderId}: ${statusDisplay[nextStatus].label}.`,
-            { title: "Pha chế — dữ liệu mô phỏng" },
+            `Đã cập nhật đơn ${orderId}: ${statusDisplay[nextStatus].label}.`,
+            { title: "Pha chế" },
         );
     }
 
@@ -387,20 +388,22 @@ export default function PreparationQueuePage() {
             </section>
 
             <section className="card">
-                {/* ... existing code ... */}
-                <p className="mb-4 text-sm text-[var(--muted)]">
-                    Dữ liệu mô phỏng từ giao diện gốc. Thời gian chờ
-                    là số liệu tại thời điểm chụp dữ liệu; thay đổi
-                    trạng thái chưa ghi nhận tiêu hao nguyên liệu.
-                </p>
-
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                    <h2 className="card-title">Hàng đợi · {visibleOrders.length} đơn</h2>
+                    <label className="flex items-center gap-2 text-sm">Số dòng mỗi trang
+                        <select className="form-input form-select !w-auto" value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
+                            {[1, 5, 10, 20].map(size => <option key={size} value={size}>{size}</option>)}
+                        </select>
+                    </label>
+                </div>
                 <DataTable<PreparationOrder>
-                    key={`${appliedFilters.branchId}-${appliedFilters.status}`}
+                    key={`${appliedFilters.branchId}-${appliedFilters.status}-${pageSize}`}
                     columns={columns}
                     data={visibleOrders}
                     rowKey={(order) => order.id}
-                    caption="Đơn đang chờ hoặc đang pha chế"
-                    pageSize={10}
+                    caption="Hàng đợi pha chế và đơn sẵn sàng"
+                    pagination
+                    pageSize={pageSize}
                     emptyMessage="Không có đơn phù hợp với bộ lọc."
                 />
             </section>

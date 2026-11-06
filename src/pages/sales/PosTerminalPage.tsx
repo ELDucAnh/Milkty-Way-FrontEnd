@@ -1,17 +1,27 @@
 import { useToast } from "../../components/common/useToast";
 import "./pos-template.css";
 import { products } from "../../data/sales/products";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import PosCart from "../../components/sales/PosCart";
 import type { PosCartItem } from "../../components/sales/PosCart";
-import { SalesPageHeader, formatCurrency } from "./sales-support";
+import { formatCurrency } from "./sales-support";
 
 const toppings = [{ id: "pearl", name: "Trân châu đen", price: 5000 }, { id: "pudding", name: "Pudding", price: 7000 }];
 // HTML chỉ cung cấp giá M/L cho một món; không tự gán giá cho menu khác.
 export default function PosTerminalPage() {
  const toast = useToast();
+ const searchRef = useRef<HTMLInputElement>(null);
+ useEffect(() => {
+  const focusSearch = (event: KeyboardEvent) => {
+   if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select')))) {
+    event.preventDefault(); searchRef.current?.focus();
+   }
+  };
+  window.addEventListener('keydown', focusSearch);
+  return () => window.removeEventListener('keydown', focusSearch);
+ }, []);
  const [product, setProduct] = useState(products[0]);
  const [category, setCategory] = useState("");
  const sizeRef = useRef<HTMLSelectElement>(null);
@@ -76,8 +86,12 @@ export default function PosTerminalPage() {
   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
    <div className="lg:col-span-7 flex flex-col gap-4">
    <section className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-3"><div className="flex flex-wrap gap-3 items-end">
-    <label className="form-label">Tìm món<input className="form-input mb-4" placeholder="Tên hoặc mã món" value={search} onChange={e => setSearch(e.target.value)} /></label>
-    <label className="form-label">Nhóm món<select className="form-input mb-4" value={category} onChange={e => setCategory(e.target.value)}><option value="">Tất cả nhóm món</option><option value="milk-tea">Trà sữa</option><option value="fruit-tea">Trà trái cây</option><option value="seasonal">Món theo mùa</option></select></label>
+    <div className="relative flex-1 min-w-0">
+     <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+     <input ref={searchRef} id="pos-search" aria-label="Tìm món" className="w-full h-11 pl-11 pr-10 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--text)] text-sm font-medium placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all" placeholder="Quét mã hoặc nhập tên / mã món..." value={search} onChange={e => setSearch(e.target.value)} />
+     <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)]">/</kbd>
+    </div>
+    <select aria-label="Nhóm món" className="form-input form-select h-11 !w-auto min-w-[160px]" value={category} onChange={e => setCategory(e.target.value)}><option value="">Tất cả nhóm món</option><option value="milk-tea">Trà sữa</option><option value="fruit-tea">Trà trái cây</option><option value="seasonal">Món theo mùa</option></select>
     </div></section>
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 mb-4">{products.filter(p => (!category || p.category === category) && `${p.name} ${p.sku}`.toLocaleLowerCase("vi-VN").includes(search.trim().toLocaleLowerCase("vi-VN"))).map(p => <button key={p.id} type="button" aria-pressed={product.id === p.id} className={`pos-product-card min-w-0 text-left ${product.id === p.id ? "in-cart" : ""}`} onClick={() => { setProduct(p); setSelected([]); setSize("M"); sizeRef.current?.focus(); }}><span className="flex items-center justify-center h-[100px] rounded-[10px] mb-2.5 bg-[var(--background)]"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M7 7h10l-1 14H8L7 7ZM6 7h12M14 7l2-6"/><circle cx="11" cy="17" r="1"/><circle cx="14" cy="14" r="1"/></svg></span><span className="block truncate text-xs font-semibold mb-1">{p.name}</span><span className="block text-[11px] text-[var(--muted)] mb-1.5">{p.sku}</span><span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><span className="text-[13px] font-bold text-[var(--primary)]">{formatCurrency(p.price)}</span><span className="text-[10px] whitespace-nowrap">Còn: {p.stock}</span></span></button>)}</div>
     <section className="card"><h2 className="card-title mb-4">Tùy chọn món</h2>
@@ -87,9 +101,9 @@ export default function PosTerminalPage() {
      <label className="form-label">Số lượng<input className="form-input" type="number" min="1" max="999" step="1" required value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
      <label className="form-label">Đường<select className="form-input" value={sugar} onChange={e => setSugar(e.target.value)}>{["0%", "30%", "50%", "70%", "100%"].map(v => <option key={v}>{v}</option>)}</select></label>
      <label className="form-label">Đá<select className="form-input" value={ice} onChange={e => setIce(e.target.value)}>{["Không đá", "Ít đá", "Vừa đá", "Bình thường"].map(v => <option key={v}>{v}</option>)}</select></label>
-     </div><fieldset><legend className="form-label">Món thêm (mỗi ly)</legend>{toppings.map(t => <label key={t.id} className="flex gap-2 mb-2"><input type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} />{t.name} · {formatCurrency(t.price)}</label>)}<label className="flex gap-2"><input type="checkbox" disabled />Kem phô mai · Tạm hết</label></fieldset>
+     </div><fieldset><legend className="form-label">Món thêm (mỗi ly)</legend>{toppings.map(t => <label key={t.id} className="flex gap-2 mb-2"><input className="accent-[var(--info)]" type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} />{t.name} · {formatCurrency(t.price)}</label>)}<label className="flex gap-2"><input className="accent-[var(--info)]" type="checkbox" disabled />Kem phô mai · Tạm hết</label></fieldset>
      <label className="form-label">Ghi chú pha chế<textarea className="form-input" value={note} onChange={e => setNote(e.target.value)} /></label>
-     <button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button>
+     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button><button type="button" className="btn btn-secondary" disabled>Khóa món trực tuyến</button><button type="button" className="btn btn-secondary" disabled>Khóa món thêm trực tuyến</button></div>
     </form>
    </section></div>
    <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} />
