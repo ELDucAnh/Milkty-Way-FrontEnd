@@ -14,6 +14,7 @@ export const navigationItems: readonly NavigationItem[] = [
     { path: "/sales/preparation", label: "Hàng đợi pha chế (KDS Barista)", group: "Bán hàng" },
     { path: "/customers", label: "Khách hàng thân thiết & Hội viên tích điểm", group: "Khách hàng" },
     { path: "/marketing/promotions", label: "Chương trình khuyến mãi & Voucher", group: "Bán hàng" },
+    { path: "/marketing/branch-promotions", label: "Áp dụng khuyến mãi theo chi nhánh", group: "Marketing" },
 
     // Kho & Nguyên Liệu
     { path: "/inventory/products", label: "Danh sách món & Bảng giá chuỗi", group: "Kho hàng" },

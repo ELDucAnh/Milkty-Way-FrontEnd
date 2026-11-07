@@ -39,6 +39,14 @@ const STATUS_VARIANT = {
   discrepancy: "danger",
 } as const;
 
+const DIRECT_COUNTER_INGREDIENT_IDS = new Set([
+  "ing-milk",
+  "ing-syrup",
+  "ing-peach",
+  "ing-cup",
+  "ing-seal",
+]);
+
 export default function StockTransfersPage() {
   const [data, setData] = useDemoState();
   const [search, setSearch] = useState("");
@@ -59,17 +67,23 @@ export default function StockTransfersPage() {
   const [receiveReason, setReceiveReason] = useState("");
   const [createError, setCreateError] = useState("");
   const [receiveError, setReceiveError] = useState("");
-  const kitchenLots = data.lots.filter(
-    (lot) =>
-      lot.location === "kitchen" &&
-      availableLotQuantity(lot) > 0 &&
-      data.batches.some(
-        (batch) =>
-          batch.id === lot.batchId &&
-          batch.status === "completed" &&
-          batch.quality === "pass",
-      ),
-  );
+  const kitchenLots = data.lots
+    .filter(
+      (lot) =>
+        availableLotQuantity(lot) > 0 &&
+        ((lot.location === "kitchen" &&
+          data.batches.some(
+            (batch) =>
+              batch.id === lot.batchId &&
+              batch.status === "completed" &&
+              batch.quality === "pass",
+          )) ||
+          (lot.location === "central" &&
+            DIRECT_COUNTER_INGREDIENT_IDS.has(lot.ingredientId))),
+    )
+    .sort((a, b) =>
+      (a.expiryDate ?? "9999").localeCompare(b.expiryDate ?? "9999"),
+    );
   const [form, setForm] = useState({
     planId: "",
     storeId: data.stores[0]?.id ?? "",
@@ -251,14 +265,14 @@ export default function StockTransfersPage() {
         allocations: current.allocations.map((item) =>
           item.id === ticket.id
             ? {
-                ...item,
-                lines: item.lines.map((line) => ({
-                  ...line,
-                  sentQuantity: line.proposedQuantity,
-                })),
-                sentAt: new Date().toISOString(),
-                status: "in-transit",
-              }
+              ...item,
+              lines: item.lines.map((line) => ({
+                ...line,
+                sentQuantity: line.proposedQuantity,
+              })),
+              sentAt: new Date().toISOString(),
+              status: "in-transit",
+            }
             : item,
         ),
       };
@@ -323,6 +337,8 @@ export default function StockTransfersPage() {
           quantity: line.receivedQuantity!,
           location: "counter" as const,
           locationId: receiveTicket.storeId,
+          reservedQuantity: 0,
+          lockedQuantity: 0,
         };
       });
     setData((current) => ({
@@ -331,12 +347,12 @@ export default function StockTransfersPage() {
       allocations: current.allocations.map((ticket) =>
         ticket.id === receiveTicket.id
           ? {
-              ...ticket,
-              lines: updatedLines,
-              receivedAt: new Date().toISOString(),
-              status: mismatch ? "discrepancy" : "received",
-              discrepancyReason: receiveReason.trim(),
-            }
+            ...ticket,
+            lines: updatedLines,
+            receivedAt: new Date().toISOString(),
+            status: mismatch ? "discrepancy" : "received",
+            discrepancyReason: receiveReason.trim(),
+          }
           : ticket,
       ),
     }));
@@ -612,6 +628,14 @@ export default function StockTransfersPage() {
                         Gửi chờ xuất
                       </button>
                     )}
+                    {ticket.status === "pending-dispatch" && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => dispatch(ticket)}
+                      >
+                        Xuất giao
+                      </button>
+                    )}
                     {ticket.status === "in-transit" && (
                       <button
                         className="btn btn-primary"
@@ -647,10 +671,7 @@ export default function StockTransfersPage() {
             >
               <option value="">Tạo thủ công</option>
               {data.plans
-                .filter(
-                  (plan) =>
-                    plan.status === "approved" || plan.status === "pending",
-                )
+                .filter((plan) => plan.status === "approved")
                 .map((plan) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.code} · {getStore(data, plan.storeId)?.name} ·{" "}

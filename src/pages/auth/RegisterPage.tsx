@@ -17,6 +17,10 @@ export default function RegisterPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 8) {
+      toast.warning("Mật khẩu khởi tạo phải có tối thiểu 8 ký tự!");
+      return;
+    }
     if (!agreeTerms) {
       toast.warning("Vui lòng đồng ý với các điều khoản bảo mật!");
       return;

@@ -28,8 +28,8 @@ const mockTopCustomers: TopCustomer[] = [
   {
     name: "Anh Trần Bảo Long",
     phone: "0912 333 444",
-    tier: "Gold Member",
-    tierTone: "warning",
+    tier: "VIP Diamond",
+    tierTone: "purple",
     totalSpent: 12800000,
     ordersCount: 68,
     points: 1280,
@@ -38,21 +38,21 @@ const mockTopCustomers: TopCustomer[] = [
   {
     name: "Chị Lê Thảo Nguyên",
     phone: "0938 555 666",
-    tier: "Silver Member",
-    tierTone: "info",
-    totalSpent: 8650000,
+    tier: "Gold Member",
+    tierTone: "warning",
+    totalSpent: 8200000,
     ordersCount: 42,
-    points: 865,
+    points: 820,
     favoriteBranch: "CN06 — Bình Thạnh",
   },
   {
     name: "Anh Vũ Tuấn Khang",
     phone: "0977 777 888",
-    tier: "Member",
-    tierTone: "gray",
-    totalSpent: 3420000,
+    tier: "Silver Member",
+    tierTone: "info",
+    totalSpent: 4600000,
     ordersCount: 19,
-    points: 342,
+    points: 460,
     favoriteBranch: "CN02 — Quận 3",
   },
 ];
@@ -103,7 +103,7 @@ export default function CustomerReportPage() {
           <StatCard
             label="Tổng Số Thành Viên"
             value="28.450"
-            subLabel="● +1.820 mới trong tháng"
+            subLabel="+1.820 mới trong tháng"
             tone="info"
             trend="up"
             icon={
@@ -179,19 +179,19 @@ export default function CustomerReportPage() {
           </div>
           <div className="space-y-1.5 border-t border-[var(--border)] pt-3 mt-3 text-xs">
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 font-semibold">● Hạng Member (0 - 499 điểm)</span>
+              <span className="text-gray-500 font-semibold">Hạng Thành Viên: 0 - 199 điểm (Tích lũy 1 điểm / 10.000đ)</span>
               <span className="font-bold">65% (18.490)</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-400 font-semibold">● Hạng Silver (500 - 1.499 điểm)</span>
+              <span className="text-slate-500 font-semibold">Hạng Bạc (Silver): 200 - 499 điểm (Chiết khấu 5%)</span>
               <span className="font-bold">24% (6.840)</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-amber-500 font-semibold">● Hạng Gold (1.500 - 3.999 điểm)</span>
+              <span className="text-amber-500 font-semibold">Hạng Vàng (Gold): 500 - 999 điểm (Chiết khấu 10% + Free Topping)</span>
               <span className="font-bold">8% (2.280)</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-purple-600 font-semibold">● Hạng VIP Diamond (≥ 4.000 điểm)</span>
+              <span className="text-purple-600 font-semibold">Hạng VIP (Diamond): Từ 1.000 điểm trở lên (Chiết khấu 15% + x2 điểm thứ 4)</span>
               <span className="font-bold">3% (840)</span>
             </div>
           </div>

@@ -136,7 +136,7 @@ export default function RecipesPage() {
     setEditing(null);
     setForm({
       ...EMPTY_FORM,
-      effectiveDate: new Date().toISOString().slice(0, 10),
+      effectiveDate: getTodayISO(),
     });
     setLines([EMPTY_LINE()]);
     setModalOpen(true);
@@ -240,18 +240,21 @@ export default function RecipesPage() {
     }));
   }
   function approve(recipe: RecipeVersion) {
-    if (
-      recipe.status !== "pending" ||
-      !recipe.approver.trim() ||
-      !recipe.ingredients.length ||
-      recipe.effectiveDate > getTodayISO()
-    ) {
+    if (recipe.status !== "pending" || !recipe.ingredients.length) {
       return;
     }
 
+    const approverName = recipe.approver.trim() || "Quản lý sản phẩm";
+
     setData((current) => {
       const recipes = current.recipes.map((item) =>
-        item.id === recipe.id ? { ...item, status: "approved" as const } : item,
+        item.id === recipe.id
+          ? {
+              ...item,
+              approver: approverName,
+              status: "approved" as const,
+            }
+          : item,
       );
 
       const productId = recipe.productId;
@@ -266,15 +269,12 @@ export default function RecipesPage() {
         return { ...current, recipes };
       }
 
-      const today = getTodayISO();
-
       const complete = product.variants.every((variant) =>
         recipes.some(
           (item) =>
             item.productId === productId &&
             item.size === variant.size &&
             item.status === "approved" &&
-            item.effectiveDate <= today &&
             item.ingredients.length > 0,
         ),
       );
@@ -570,7 +570,6 @@ export default function RecipesPage() {
                         {recipe.status === "pending" && (
                           <button
                             className="btn btn-primary"
-                            disabled={!recipe.approver.trim()}
                             onClick={() => approve(recipe)}
                           >
                             Duyệt
@@ -603,12 +602,21 @@ export default function RecipesPage() {
                 className="form-input form-select"
                 value={form.kind}
                 disabled={!!editing}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const nextKind = event.target.value as RecipeKind;
+                  const prepOutput = getIngredient(
+                    data,
+                    form.outputIngredientId,
+                  );
                   setForm((current) => ({
                     ...current,
-                    kind: event.target.value as RecipeKind,
-                  }))
-                }
+                    kind: nextKind,
+                    yieldUnit:
+                      nextKind === "prep"
+                        ? (prepOutput?.baseUnit ?? current.yieldUnit)
+                        : "ly",
+                  }));
+                }}
               >
                 <option value="drink">Pha món theo size</option>
                 <option value="prep">Chế biến bán thành phẩm</option>
@@ -646,12 +654,15 @@ export default function RecipesPage() {
                   id="recipe-output"
                   className="form-input form-select"
                   value={form.outputIngredientId}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const nextIngredientId = event.target.value;
+                    const nextOutput = getIngredient(data, nextIngredientId);
                     setForm((current) => ({
                       ...current,
-                      outputIngredientId: event.target.value,
-                    }))
-                  }
+                      outputIngredientId: nextIngredientId,
+                      yieldUnit: nextOutput?.baseUnit ?? current.yieldUnit,
+                    }));
+                  }}
                 >
                   {data.ingredients
                     .filter((ingredient) => ingredient.group === "prepared")

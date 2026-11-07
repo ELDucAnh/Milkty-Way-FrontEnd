@@ -88,16 +88,39 @@ const INITIAL_EXPENSES: ExpenseItem[] = [
   },
 ];
 
+const STORAGE_EXPENSES = "miltyway_expenses_v1";
+
 export default function ExpensesPage() {
   const toast = useToast();
-  const [expenses, setExpenses] = useState<ExpenseItem[]>(INITIAL_EXPENSES);
+  const [expenses, setExpensesState] = useState<ExpenseItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_EXPENSES);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return INITIAL_EXPENSES;
+  });
+
+  function setExpenses(next: ExpenseItem[]) {
+    setExpensesState(next);
+    try {
+      localStorage.setItem(STORAGE_EXPENSES, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }
+
   const [search, setSearch] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [newBranch, setNewBranch] = useState("CN01 — Quận 1");
-  const [newCategory, setNewCategory] = useState("Tiền điện nước");
+  const [newCategory, setNewCategory] = useState("Điện nước");
   const [newAmount, setNewAmount] = useState("");
   const [newDescription, setNewDescription] = useState("");
 
@@ -124,10 +147,9 @@ export default function ExpensesPage() {
       return;
     }
 
+    const branchCode = newBranch.slice(0, 4);
     const newExpense: ExpenseItem = {
-      id: `PC-CN${Math.floor(Math.random() * 9 + 1).toString().padStart(2, "0")}-${Math.floor(
-        Math.random() * 9000 + 1000
-      )}`,
+      id: `PC-${branchCode}-${Math.floor(Math.random() * 9000 + 1000)}`,
       branch: newBranch,
       category: newCategory,
       description: newDescription || "Chi vận hành cửa hàng",
@@ -145,6 +167,16 @@ export default function ExpensesPage() {
     setNewAmount("");
     setNewDescription("");
     toast.success("Đã lập phiếu chi thành công và gửi phê duyệt!", { title: "Thành Công" });
+  };
+
+  const handleApproveExpense = (id: string) => {
+    const next = expenses.map((exp) =>
+      exp.id === id
+        ? { ...exp, status: "Đã Duyệt Chi" as const, statusVariant: "success" as BadgeVariant, approver: "BGD duyệt" }
+        : exp
+    );
+    setExpenses(next);
+    toast.success(`Đã phê duyệt phiếu chi ${id}!`, { title: "Duyệt Chi" });
   };
 
   return (
@@ -279,9 +311,9 @@ export default function ExpensesPage() {
           <option value="Mặt bằng">Tiền thuê mặt bằng</option>
           <option value="Lương">Lương &amp; Thưởng ca Barista</option>
           <option value="Điện nước">Tiền điện &amp; Nước làm đá</option>
-          <option value="Bảo trì">Bảo trì máy dập nắp &amp; tủ lạnh</option>
-          <option value="Hủy">Hủy nguyên liệu cận date</option>
-          <option value="Vật tư">Vật tư quầy &amp; Bao bì</option>
+          <option value="Bảo trì máy">Bảo trì máy dập nắp &amp; tủ lạnh</option>
+          <option value="Hủy cận date">Hủy nguyên liệu cận date</option>
+          <option value="Vật tư quầy">Vật tư quầy &amp; Bao bì</option>
         </select>
       </div>
 
@@ -340,7 +372,18 @@ export default function ExpensesPage() {
                         </button>
                       </td>
                       <td>
-                        <Badge variant={exp.statusVariant}>{exp.status}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={exp.statusVariant}>{exp.status}</Badge>
+                          {exp.status === "Chờ Duyệt" && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm text-xs"
+                              onClick={() => handleApproveExpense(exp.id)}
+                            >
+                              Duyệt chi
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -399,8 +442,9 @@ export default function ExpensesPage() {
               value={newCategory}
               onChange={(e) => setNewCategory(e.target.value)}
             >
-              <option value="Tiền điện nước">Tiền điện &amp; Nước làm đá</option>
+              <option value="Điện nước">Tiền điện &amp; Nước làm đá</option>
               <option value="Mặt bằng">Tiền thuê mặt bằng</option>
+              <option value="Lương">Lương &amp; Thưởng ca Barista</option>
               <option value="Bảo trì máy">Bảo trì máy móc / tủ lạnh</option>
               <option value="Vật tư quầy">Vật tư / bao bì ly nắp</option>
               <option value="Hủy cận date">Hủy hàng cận date</option>

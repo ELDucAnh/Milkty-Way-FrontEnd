@@ -70,6 +70,18 @@ const initialShifts: readonly CashShift[] = [
     },
 ];
 
+const STORAGE_SHIFTS = "miltyway_shifts_v1";
+
+const RECIPIENT_NAMES: Record<string, string> = {
+    NV02: "Trần Bình",
+    NV03: "Lê Quốc Tuấn",
+    NV04: "Vũ Minh Khoa",
+};
+
+function getRecipientName(id: string | null | undefined): string {
+    return (id && RECIPIENT_NAMES[id]) || "Trần Bình";
+}
+
 function parseCash(value: string): number | null {
     if (!value.trim()) return null;
     const amount = Number(value);
@@ -81,7 +93,30 @@ export default function ShiftsPage() {
     const [pageSize, setPageSize] = useState(10);
     const [handoverId, setHandoverId] = useState<string | null>(null);
 
-    const [shifts, setShifts] = useState<CashShift[]>(() => [...initialShifts]);
+    const [shifts, setShiftsState] = useState<CashShift[]>(() => {
+        try {
+            const raw = localStorage.getItem(STORAGE_SHIFTS);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch {
+            // ignore
+        }
+        return [...initialShifts];
+    });
+
+    function setShifts(updater: (current: CashShift[]) => CashShift[]) {
+        setShiftsState((current) => {
+            const next = updater(current);
+            try {
+                localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(next));
+            } catch {
+                // ignore
+            }
+            return next;
+        });
+    }
     const [selectedId, setSelectedId] = useState("CA-001");
     const [openingForm, setOpeningForm] = useState<OpenShiftForm>({
         branchId: "CN01",
@@ -101,13 +136,14 @@ export default function ShiftsPage() {
     const cashFromSales = useMemo(() => {
         try {
             const orders = loadOrders();
+            const targetBranch = selectedShift?.branchId ?? "CN01";
             return orders
-                .filter(o => o.paymentMethod === "cash" && o.payment === "paid")
+                .filter(o => o.branchId === targetBranch && o.paymentMethod === "cash" && o.payment === "paid")
                 .reduce((sum, o) => sum + o.total, 0);
         } catch {
             return 0;
         }
-    }, [shifts]);
+    }, [shifts, selectedShift?.branchId]);
 
     const effectiveExpectedCash = selectedShift?.expectedCash ?? ((selectedShift?.openingCash ?? 500000) + cashFromSales);
     const difference = countedCash !== null ? countedCash - effectiveExpectedCash : null;
@@ -137,7 +173,7 @@ export default function ShiftsPage() {
             id: `CA-MP-${crypto.randomUUID()}`,
             branchId: openingForm.branchId,
             counterId: openingForm.counterId,
-            counterName: "Quầy 01",
+            counterName: openingForm.counterId === "POS02" ? "Quầy 02" : openingForm.counterId === "POS03" ? "Quầy 03" : "Quầy 01",
             staffName: "Nguyễn An",
             openedAt: new Date().toISOString(),
             closedAt: null,
@@ -343,7 +379,18 @@ export default function ShiftsPage() {
                                     ...current, branchId: event.target.value,
                                 }))}
                             >
-                                <option value="CN01">Chi nhánh 01</option>
+                                <option value="CN01">Chi nhánh 01 (CN01 - Bến Nghé)</option>
+                                <option value="CN02">Chi nhánh 02 (CN02 - Bàn Cờ)</option>
+                                <option value="CN03">Chi nhánh 03 (CN03 - Chợ Lớn)</option>
+                                <option value="CN04">Chi nhánh 04 (CN04 - Tân Hưng)</option>
+                                <option value="CN05">Chi nhánh 05 (CN05 - Hàng Xanh)</option>
+                                <option value="CN06">Chi nhánh 06 (CN06 - Làng Đại Học)</option>
+                                <option value="CN07">Chi nhánh 07 (CN07 - Bảy Hiền)</option>
+                                <option value="CN08">Chi nhánh 08 (CN08 - Cityland)</option>
+                                <option value="CN09">Chi nhánh 09 (CN09 - Phan Xích Long)</option>
+                                <option value="CN10">Chi nhánh 10 (CN10 - Bắc Hải)</option>
+                                <option value="CN11">Chi nhánh 11 (CN11 - Lãnh Binh Thăng)</option>
+                                <option value="CN12">Chi nhánh 12 (CN12 - Kênh Nước Đen)</option>
                             </select>
                         </div>
                         <div>
@@ -359,6 +406,8 @@ export default function ShiftsPage() {
                                 }))}
                             >
                                 <option value="POS01">Quầy 01</option>
+                                <option value="POS02">Quầy 02</option>
+                                <option value="POS03">Quầy 03</option>
                             </select>
                         </div>
                         <div>
@@ -531,13 +580,13 @@ export default function ShiftsPage() {
                     <button type="button" className="btn btn-primary" onClick={() => setHandoverId(selectedShift.id)}>Xác nhận bàn giao và đóng ca</button>
                     <button type="button" className="btn btn-secondary" onClick={withdrawCloseRequest}>Rút yêu cầu để chỉnh sửa</button>
                 </div>}
-                {selectedShift?.status === "closed" && <p className="mt-4" role="status">Đã đóng lúc {formatDateTime(selectedShift.closedAt!)} · Người nhận: Trần Bình.</p>}
+                {selectedShift?.status === "closed" && <p className="mt-4" role="status">Đã đóng lúc {formatDateTime(selectedShift.closedAt!)} · Người nhận: {getRecipientName(selectedShift.recipientId)}.</p>}
             </section>
 
             <ConfirmDialog
                 open={handoverId !== null}
                 title="Xác nhận bàn giao và đóng ca?"
-                message={<>Ca {handoverId} · Người nhận: Trần Bình. Xác nhận đã bàn giao tiền và các đơn chưa xong. Thao tác này ghi nhận đóng ca trong phiên hiện tại, chưa xác nhận đối soát tiền với máy chủ.</>}
+                message={<>Ca {handoverId} · Người nhận: {getRecipientName(shifts.find(s => s.id === handoverId)?.recipientId)}. Xác nhận đã bàn giao tiền và các đơn chưa xong. Thao tác này ghi nhận đóng ca trong phiên hiện tại, chưa xác nhận đối soát tiền với máy chủ.</>}
                 confirmText="Xác nhận đóng ca"
                 variant="warning"
                 onCancel={() => setHandoverId(null)}
@@ -548,7 +597,7 @@ export default function ShiftsPage() {
                 title="Gửi yêu cầu đóng ca?"
                 message={
                     <>
-                        Ca {pendingRequest?.shiftId} · Tiền thực đếm: {formatCurrency(pendingRequest?.countedCash ?? 0)} · Người nhận: Trần Bình.
+                        Ca {pendingRequest?.shiftId} · Tiền thực đếm: {formatCurrency(pendingRequest?.countedCash ?? 0)} · Người nhận: {getRecipientName(pendingRequest?.recipientId)}.
                         {pendingRequest?.note && <p>Nội dung bàn giao: {pendingRequest.note}</p>}
                         
                     </>

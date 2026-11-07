@@ -35,6 +35,14 @@ const statusVariant = {
   approved: "success",
 } as const;
 
+const DIRECT_COUNTER_INGREDIENT_IDS = new Set([
+  "ing-milk",
+  "ing-syrup",
+  "ing-peach",
+  "ing-cup",
+  "ing-seal",
+]);
+
 export default function DistributionPlanningPage() {
   const [data, setData] = useDemoState();
   const [date, setDate] = useState("all");
@@ -66,14 +74,16 @@ export default function DistributionPlanningPage() {
   );
   const preparedLots = data.lots.filter(
     (lot) =>
-      lot.location === "kitchen" &&
       availableLotQuantity(lot) > 0 &&
-      data.batches.some(
-        (batch) =>
-          batch.id === lot.batchId &&
-          batch.status === "completed" &&
-          batch.quality === "pass",
-      ),
+      ((lot.location === "kitchen" &&
+        data.batches.some(
+          (batch) =>
+            batch.id === lot.batchId &&
+            batch.status === "completed" &&
+            batch.quality === "pass",
+        )) ||
+        (lot.location === "central" &&
+          DIRECT_COUNTER_INGREDIENT_IDS.has(lot.ingredientId))),
   );
   const readyBatches = data.batches.filter(
     (batch) =>

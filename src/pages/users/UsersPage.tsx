@@ -137,11 +137,12 @@ export default function UsersPage() {
       return;
     }
 
+    const nextIndex = employees.length + 1;
     const newEmp: UserEmployee = {
-      id: `EMP-${String(employees.length + 1).padStart(2, "0")}`,
+      id: `EMP-${String(nextIndex).padStart(2, "0")}`,
       name: formName.trim(),
       email: formEmail.trim(),
-      code: formCode.trim() || `NV-${Date.now().toString().slice(-4)}`,
+      code: formCode.trim() || `NV-TN-01${String(nextIndex).padStart(2, "0")}`,
       role: formRole,
       roleTone:
         formRole.includes("Chủ")
@@ -168,6 +169,7 @@ export default function UsersPage() {
     setEmployees([...employees, newEmp]);
     setShowAddModal(false);
     setFormName("");
+    setFormCode(`NV-TN-01${String(nextIndex + 1).padStart(2, "0")}`);
     setFormEmail("");
     setFormPhone("");
 
@@ -298,9 +300,12 @@ export default function UsersPage() {
             <option value="">Tất cả 12 Chi Nhánh</option>
             <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>
             <option value="CN02">CN02 — Quận 3 (Võ Văn Tần)</option>
+            <option value="CN03">CN03 — Quận 5 (Trần Hưng Đạo)</option>
+            <option value="CN04">CN04 — Quận 7 (Phú Mỹ Hưng)</option>
             <option value="CN05">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
             <option value="CN06">CN06 — Bình Thạnh (D2)</option>
             <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
+            <option value="Kho Tổng">Kho Tổng Trung Tâm (Bình Tân)</option>
             <option value="Trụ Sở">Trụ Sở Chính (Văn Phòng Điều Hành)</option>
           </select>
           <select
@@ -523,6 +528,7 @@ export default function UsersPage() {
                 <option>CN06 — Bình Thạnh (D2)</option>
                 <option>CN07 — Gò Vấp (Phan Văn Trị)</option>
                 <option>Kho Tổng Trung Tâm (Bình Tân)</option>
+                <option>Trụ Sở Chính (Văn Phòng Điều Hành)</option>
               </select>
             </div>
           </div>

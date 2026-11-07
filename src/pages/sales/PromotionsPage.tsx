@@ -178,6 +178,29 @@ export const initialPromotions: readonly Promotion[] = [
     },
 ];
 
+export const STORAGE_PROMOTIONS = "miltyway_promotions_v1";
+
+export function loadPromotions(): Promotion[] {
+    try {
+        const raw = localStorage.getItem(STORAGE_PROMOTIONS);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch {
+        // ignore
+    }
+    return [...initialPromotions];
+}
+
+export function savePromotions(promotions: Promotion[]): void {
+    try {
+        localStorage.setItem(STORAGE_PROMOTIONS, JSON.stringify(promotions));
+    } catch {
+        // ignore
+    }
+}
+
 const emptyFilters: PromotionFilters = {
     search: "",
     status: "",
@@ -228,7 +251,7 @@ export default function PromotionsPage() {
     const toast = useToast();
     const listRef = useRef<HTMLElement>(null);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [rows, setRows] = useState<Promotion[]>(() => [...initialPromotions]);
+    const [rows, setRows] = useState<Promotion[]>(() => loadPromotions());
     const [form, setForm] = useState<PromotionForm>(createForm);
     const [draftFilters, setDraftFilters] = useState<PromotionFilters>(emptyFilters);
     const [filters, setFilters] = useState<PromotionFilters>(emptyFilters);
@@ -339,7 +362,11 @@ export default function PromotionsPage() {
             stackable: form.stackable,
         };
 
-        setRows((current) => [promotion, ...current]);
+        setRows((current) => {
+            const next = [promotion, ...current];
+            savePromotions(next);
+            return next;
+        });
         setForm(createForm());
         setFilters(emptyFilters);
         setDraftFilters(emptyFilters);
@@ -347,6 +374,19 @@ export default function PromotionsPage() {
         toast.success("Đã tạo chương trình khuyến mãi mới thành công!", {
             title: "Khuyến Mãi",
         });
+    }
+
+    function togglePromotionStatus(id: string) {
+        setRows((current) => {
+            const next = current.map((row) => {
+                if (row.id !== id) return row;
+                const nextStatus: PromotionStatus = row.status === "active" ? "ended" : "active";
+                return { ...row, status: nextStatus };
+            });
+            savePromotions(next);
+            return next;
+        });
+        toast.info("Đã cập nhật trạng thái chương trình khuyến mãi.");
     }
 
     const columns: readonly DataTableColumn<Promotion>[] = [
@@ -420,6 +460,19 @@ export default function PromotionsPage() {
             header: "Trạng thái",
             render: (row) => (
                 <Badge variant={statusVariants[row.status]}>{statusLabels[row.status]}</Badge>
+            ),
+        },
+        {
+            id: "actions",
+            header: "Thao tác",
+            render: (row) => (
+                <button
+                    type="button"
+                    className={`btn btn-sm ${row.status === "active" ? "btn-secondary" : "btn-primary"}`}
+                    onClick={() => togglePromotionStatus(row.id)}
+                >
+                    {row.status === "active" ? "Tạm ngưng" : "Kích hoạt"}
+                </button>
             ),
         },
     ];

@@ -502,7 +502,15 @@ export default function AddProductPage() {
                   <input
                     type="checkbox"
                     checked={supportsM}
-                    onChange={(event) => setSupportsM(event.target.checked)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setSupportsM(checked);
+                      if (!checked && selectedSize === "M") {
+                        setSelectedSize("L");
+                      } else if (checked && !supportsL) {
+                        setSelectedSize("M");
+                      }
+                    }}
                   />{" "}
                   Size M
                 </label>
@@ -510,7 +518,15 @@ export default function AddProductPage() {
                   <input
                     type="checkbox"
                     checked={supportsL}
-                    onChange={(event) => setSupportsL(event.target.checked)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setSupportsL(checked);
+                      if (!checked && selectedSize === "L") {
+                        setSelectedSize("M");
+                      } else if (checked && !supportsM) {
+                        setSelectedSize("L");
+                      }
+                    }}
                   />{" "}
                   Size L
                 </label>

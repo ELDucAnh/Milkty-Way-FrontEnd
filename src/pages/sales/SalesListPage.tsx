@@ -240,7 +240,7 @@ export default function SalesListPage() {
                             onChange={e => setQuery(e.target.value)}
                         />
                     </div>
-                    {groups.slice(0, 3).map(g => (
+                    {groups.map(g => (
                         <div key={g.key} className="min-w-0">
                             <label className="form-label" htmlFor={`sale-${g.key}`}>{g.label}</label>
                             <select

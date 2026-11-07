@@ -35,7 +35,7 @@ const mockSuppliers: Supplier[] = [
     initials: "LP",
     avatarBg: "bg-emerald-50",
     avatarColor: "text-emerald-700",
-    category: "Trà lá & Oolong",
+    category: "Trà lá & Cà phê",
     categoryTone: "success",
     contactPerson: "Anh Nguyễn Văn Lộc",
     phone: "0908 123 456",
@@ -55,7 +55,7 @@ const mockSuppliers: Supplier[] = [
     initials: "GTP",
     avatarBg: "bg-amber-50",
     avatarColor: "text-amber-700",
-    category: "Topping & Bột sữa",
+    category: "Bột sữa & Topping trân châu",
     categoryTone: "info",
     contactPerson: "Chị Mai Phương",
     phone: "0912 345 678",
@@ -75,7 +75,7 @@ const mockSuppliers: Supplier[] = [
     initials: "VNM",
     avatarBg: "bg-blue-50",
     avatarColor: "text-blue-700",
-    category: "Sữa thanh trùng & Sữa đặc",
+    category: "Sữa tươi & Kem béo",
     categoryTone: "info",
     contactPerson: "Anh Lê Hoàng Nam",
     phone: "028 5415 5555",
@@ -91,11 +91,11 @@ const mockSuppliers: Supplier[] = [
     id: "NCC-04",
     name: "Công ty TNHH Bao Bì Xanh Sài Gòn",
     taxCode: "0314567890",
-    province: "Bình Tân",
+    province: "TP.HCM",
     initials: "BBX",
     avatarBg: "bg-purple-50",
     avatarColor: "text-purple-700",
-    category: "Ly nhựa, màng ép & túi chữ T",
+    category: "Bao bì ly nắp & Vật tư",
     categoryTone: "gray",
     contactPerson: "Chị Trần Bích Ngọc",
     phone: "0938 999 888",
@@ -111,11 +111,11 @@ const mockSuppliers: Supplier[] = [
     id: "NCC-05",
     name: "HTX Nông Sản Sạch Đà Lạt GAP",
     taxCode: "5800987654",
-    province: "Đà Lạt",
+    province: "Lâm Đồng",
     initials: "DLG",
     avatarBg: "bg-orange-50",
     avatarColor: "text-orange-700",
-    category: "Trái cây tươi, chanh dây, dâu",
+    category: "Trái cây tươi & Nông sản",
     categoryTone: "warning",
     contactPerson: "Anh Bùi Tiến Dũng",
     phone: "0977 444 333",
@@ -146,6 +146,7 @@ export default function SuppliersPage() {
   const [newContact, setNewContact] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newProvince, setNewProvince] = useState("TP.HCM");
   const [newAddress, setNewAddress] = useState("");
   const [newPaymentTerm, setNewPaymentTerm] = useState("Gối đầu 15 ngày");
   const [newFoodSafety, setNewFoodSafety] = useState("Đã thẩm định đạt chuẩn");
@@ -160,7 +161,7 @@ export default function SuppliersPage() {
         item.phone.includes(q) ||
         item.contactPerson.toLowerCase().includes(q);
 
-      const matchCategory = !selectedCategory || item.category.includes(selectedCategory);
+      const matchCategory = !selectedCategory || item.category === selectedCategory;
       const matchStatus = !selectedStatus || item.status === selectedStatus;
 
       return matchSearch && matchCategory && matchStatus;
@@ -178,7 +179,7 @@ export default function SuppliersPage() {
       id: `NCC-${String(suppliers.length + 1).padStart(2, "0")}`,
       name: newName.trim(),
       taxCode: newTaxCode.trim() || "Chưa cập nhật",
-      province: newAddress.trim() || "TP.HCM",
+      province: newProvince.trim() || "TP.HCM",
       initials: newName
         .split(" ")
         .slice(-2)
@@ -207,6 +208,7 @@ export default function SuppliersPage() {
     setNewContact("");
     setNewPhone("");
     setNewEmail("");
+    setNewProvince("TP.HCM");
     setNewAddress("");
 
     toast.success("Đã thêm nhà cung cấp mới vào hệ thống chuỗi MilktyWay!", {
@@ -265,7 +267,7 @@ export default function SuppliersPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Nhà Cung Cấp"
-            value="18 Đơn vị"
+            value={`${suppliers.length} Đơn vị`}
             subLabel="Thuộc 6 nhóm nguyên liệu F&B"
             tone="info"
             icon={
@@ -343,11 +345,12 @@ export default function SuppliersPage() {
             onChange={(e) => setSelectedCategory(e.target.value)}
           >
             <option value="">Tất cả ngành hàng nguyên liệu</option>
-            <option value="Trà lá">Trà lá & Cà phê</option>
-            <option value="Topping">Bột sữa & Topping trân châu</option>
-            <option value="Sữa thanh trùng">Sữa tươi & Kem béo</option>
-            <option value="Ly nhựa">Bao bì ly nắp & Vật tư</option>
-            <option value="Trái cây">Trái cây tươi & Nông sản</option>
+            <option value="Trà lá & Cà phê">Trà lá &amp; Cà phê</option>
+            <option value="Bột sữa & Topping trân châu">Bột sữa &amp; Topping trân châu</option>
+            <option value="Sữa tươi & Kem béo">Sữa tươi &amp; Kem béo</option>
+            <option value="Bao bì ly nắp & Vật tư">Bao bì ly nắp &amp; Vật tư</option>
+            <option value="Trái cây tươi & Nông sản">Trái cây tươi &amp; Nông sản</option>
+            <option value="Thiết bị Barista quầy bar">Thiết bị Barista quầy bar</option>
           </select>
           <select
             className="form-input form-select w-auto"
@@ -384,7 +387,14 @@ export default function SuppliersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSuppliers.map((supplier) => (
+                {filteredSuppliers.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-8 text-xs text-[var(--muted)]">
+                      Không tìm thấy nhà cung cấp nào phù hợp với điều kiện lọc hiện tại.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSuppliers.map((supplier) => (
                   <tr key={supplier.id}>
                     <td>
                       <input type="checkbox" aria-label={`Chọn ${supplier.name}`} />
@@ -479,7 +489,8 @@ export default function SuppliersPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -546,12 +557,12 @@ export default function SuppliersPage() {
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
               >
-                <option>Trà lá &amp; Cà phê</option>
-                <option>Bột sữa &amp; Topping trân châu</option>
-                <option>Sữa tươi &amp; Kem béo</option>
-                <option>Bao bì ly nắp &amp; Màng ép</option>
-                <option>Trái cây tươi Đà Lạt</option>
-                <option>Thiết bị Barista quầy bar</option>
+                <option value="Trà lá & Cà phê">Trà lá &amp; Cà phê</option>
+                <option value="Bột sữa & Topping trân châu">Bột sữa &amp; Topping trân châu</option>
+                <option value="Sữa tươi & Kem béo">Sữa tươi &amp; Kem béo</option>
+                <option value="Bao bì ly nắp & Vật tư">Bao bì ly nắp &amp; Vật tư</option>
+                <option value="Trái cây tươi & Nông sản">Trái cây tươi &amp; Nông sản</option>
+                <option value="Thiết bị Barista quầy bar">Thiết bị Barista quầy bar</option>
               </select>
             </div>
           </div>
@@ -580,6 +591,28 @@ export default function SuppliersPage() {
                 value={newPhone}
                 onChange={(e) => setNewPhone(e.target.value)}
                 required
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Email Liên Hệ</label>
+              <input
+                type="email"
+                className="form-input"
+                placeholder="contact@supplier.vn"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="form-label">Tỉnh / Thành Phố</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="TP.HCM, Lâm Đồng..."
+                value={newProvince}
+                onChange={(e) => setNewProvince(e.target.value)}
               />
             </div>
           </div>

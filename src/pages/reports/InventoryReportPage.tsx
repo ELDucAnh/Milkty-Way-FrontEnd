@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
@@ -66,6 +66,7 @@ const mockExpiringLots: ExpiringLot[] = [
 interface StockItem {
   sku: string;
   name: string;
+  warehouse: string;
   category: string;
   categoryTone: "success" | "info" | "warning";
   unit: string;
@@ -81,6 +82,7 @@ const mockStockItems: StockItem[] = [
   {
     sku: "NL-TRA-01",
     name: "Trà Đen Lộc Phát Thượng Hạng",
+    warehouse: "Kho Tổng — Bình Tân",
     category: "Trà lá",
     categoryTone: "success",
     unit: "Kg",
@@ -94,6 +96,7 @@ const mockStockItems: StockItem[] = [
   {
     sku: "NL-BOT-02",
     name: "Bột Béo Pha Trà Sữa Indo B-One (Bao 25kg)",
+    warehouse: "CN01 — Q.1",
     category: "Bột sữa",
     categoryTone: "info",
     unit: "Bao",
@@ -107,6 +110,7 @@ const mockStockItems: StockItem[] = [
   {
     sku: "NL-TOP-03",
     name: "Trân Châu Đen Gia Thịnh Phát (Thùng 18kg)",
+    warehouse: "CN05 — Q.10",
     category: "Topping",
     categoryTone: "warning",
     unit: "Thùng",
@@ -117,11 +121,49 @@ const mockStockItems: StockItem[] = [
     status: "Sắp hết",
     statusTone: "warning",
   },
+  {
+    sku: "NL-SUA-04",
+    name: "Sữa Tươi Thanh Trùng Vinamilk 100% (Thùng 12L)",
+    warehouse: "CN06 — Bình Thạnh",
+    category: "Bột sữa",
+    categoryTone: "info",
+    unit: "Thùng",
+    stockActual: 6,
+    stockMin: 10,
+    costPrice: 420000,
+    totalValue: 2520000,
+    status: "Sắp hết",
+    statusTone: "warning",
+  },
 ];
 
 export default function InventoryReportPage() {
   const toast = useToast();
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
+
+  const filteredExpiringLots = useMemo(() => {
+    return mockExpiringLots.filter(
+      (lot) => !selectedWarehouse || lot.warehouse.includes(selectedWarehouse)
+    );
+  }, [selectedWarehouse]);
+
+  const filteredStockItems = useMemo(() => {
+    return mockStockItems.filter(
+      (item) => !selectedWarehouse || item.warehouse.includes(selectedWarehouse)
+    );
+  }, [selectedWarehouse]);
+
+  const totalValuation = useMemo(() => {
+    return filteredStockItems.reduce((sum, item) => sum + item.totalValue, 0);
+  }, [filteredStockItems]);
+
+  const estimatedRevenue = useMemo(() => {
+    return Math.round(totalValuation * 2.65);
+  }, [totalValuation]);
+
+  const lowStockCount = useMemo(() => {
+    return filteredStockItems.filter((item) => item.stockActual < item.stockMin).length;
+  }, [filteredStockItems]);
 
   return (
     <div className="space-y-6">
@@ -178,7 +220,7 @@ export default function InventoryReportPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Định Giá Tồn Kho Toàn Chuỗi"
-            value="486.200.000 đ"
+            value={`${totalValuation.toLocaleString("vi-VN")} đ`}
             subLabel="Theo giá vốn nhập (COGS)"
             tone="info"
             icon={
@@ -191,9 +233,9 @@ export default function InventoryReportPage() {
           />
           <StatCard
             label="Giá Trị Bán Ra Dự Kiến"
-            value="1.280.500.000 đ"
+            value={`${estimatedRevenue.toLocaleString("vi-VN")} đ`}
             valueClassName="text-[var(--primary)]"
-            subLabel="Tương đương ~28.000 ly đồ uống"
+            subLabel={`Trên ${filteredStockItems.length} danh mục nguyên liệu`}
             tone="primary"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -204,7 +246,7 @@ export default function InventoryReportPage() {
           />
           <StatCard
             label="Nguyên Liệu Dưới Tồn An Toàn"
-            value="4 Mặt hàng"
+            value={`${lowStockCount} Mặt hàng`}
             valueClassName="text-[var(--warning)]"
             subLabel="Cần đặt NCC hoặc chuyển kho"
             tone="warning"
@@ -218,7 +260,7 @@ export default function InventoryReportPage() {
           />
           <StatCard
             label="Lô Cận Date 7 Ngày (FEFO)"
-            value="6 Lô hàng"
+            value={`${filteredExpiringLots.length} Lô hàng`}
             valueClassName="text-[var(--danger)]"
             subLabel="Sữa tươi, trân châu, trái cây"
             tone="danger"
@@ -259,39 +301,47 @@ export default function InventoryReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockExpiringLots.map((lot) => (
-                  <tr
-                    key={lot.batchId}
-                    className={lot.remainingTone === "danger" ? "bg-red-50/50" : ""}
-                  >
-                    <td className="font-bold text-red-600">{lot.batchId}</td>
-                    <td className="font-semibold text-[var(--text)]">{lot.name}</td>
-                    <td>
-                      <Badge variant="info">{lot.warehouse}</Badge>
-                    </td>
-                    <td className="font-bold">{lot.quantity}</td>
-                    <td className="font-bold text-red-600">{lot.expDate}</td>
-                    <td>
-                      <Badge variant={lot.remainingTone}>{lot.remainingText}</Badge>
-                    </td>
-                    <td className="text-xs font-semibold text-red-700">{lot.actionNote}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${
-                          lot.remainingTone === "danger" ? "btn-primary" : "btn-secondary"
-                        }`}
-                        onClick={() =>
-                          toast.info(`Thực hiện: ${lot.actionButtonText} cho lô ${lot.batchId}`, {
-                            title: "FEFO",
-                          })
-                        }
-                      >
-                        {lot.actionButtonText}
-                      </button>
+                {filteredExpiringLots.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-6 text-xs text-[var(--muted)]">
+                      Không có lô nguyên liệu cận date tại kho đã chọn.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredExpiringLots.map((lot) => (
+                    <tr
+                      key={lot.batchId}
+                      className={lot.remainingTone === "danger" ? "bg-red-50/50" : ""}
+                    >
+                      <td className="font-bold text-red-600">{lot.batchId}</td>
+                      <td className="font-semibold text-[var(--text)]">{lot.name}</td>
+                      <td>
+                        <Badge variant="info">{lot.warehouse}</Badge>
+                      </td>
+                      <td className="font-bold">{lot.quantity}</td>
+                      <td className="font-bold text-red-600">{lot.expDate}</td>
+                      <td>
+                        <Badge variant={lot.remainingTone}>{lot.remainingText}</Badge>
+                      </td>
+                      <td className="text-xs font-semibold text-red-700">{lot.actionNote}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${
+                            lot.remainingTone === "danger" ? "btn-primary" : "btn-secondary"
+                          }`}
+                          onClick={() =>
+                            toast.info(`Thực hiện: ${lot.actionButtonText} cho lô ${lot.batchId}`, {
+                              title: "FEFO",
+                            })
+                          }
+                        >
+                          {lot.actionButtonText}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -315,6 +365,7 @@ export default function InventoryReportPage() {
                 <tr>
                   <th>Mã SKU</th>
                   <th>Tên Nguyên Liệu</th>
+                  <th>Kho Lưu Trữ</th>
                   <th>Nhóm Mặt Hàng</th>
                   <th>Đơn Vị</th>
                   <th className="text-right">Tồn Thực Tế</th>
@@ -325,25 +376,36 @@ export default function InventoryReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockStockItems.map((item) => (
-                  <tr key={item.sku}>
-                    <td className="font-bold">{item.sku}</td>
-                    <td className="font-semibold text-[var(--text)]">{item.name}</td>
-                    <td>
-                      <Badge variant={item.categoryTone}>{item.category}</Badge>
-                    </td>
-                    <td>{item.unit}</td>
-                    <td className="text-right font-bold">{item.stockActual}</td>
-                    <td className="text-right text-[var(--muted)]">{item.stockMin}</td>
-                    <td className="text-right">{item.costPrice.toLocaleString("vi-VN")} ₫</td>
-                    <td className="text-right font-bold text-[var(--text)]">
-                      {item.totalValue.toLocaleString("vi-VN")} ₫
-                    </td>
-                    <td className="text-center">
-                      <Badge variant={item.statusTone}>{item.status}</Badge>
+                {filteredStockItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-6 text-xs text-[var(--muted)]">
+                      Không có dữ liệu nguyên liệu tồn kho tại kho đã chọn.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredStockItems.map((item) => (
+                    <tr key={item.sku}>
+                      <td className="font-bold">{item.sku}</td>
+                      <td className="font-semibold text-[var(--text)]">{item.name}</td>
+                      <td>
+                        <Badge variant="info">{item.warehouse}</Badge>
+                      </td>
+                      <td>
+                        <Badge variant={item.categoryTone}>{item.category}</Badge>
+                      </td>
+                      <td>{item.unit}</td>
+                      <td className="text-right font-bold">{item.stockActual}</td>
+                      <td className="text-right text-[var(--muted)]">{item.stockMin}</td>
+                      <td className="text-right">{item.costPrice.toLocaleString("vi-VN")} ₫</td>
+                      <td className="text-right font-bold text-[var(--text)]">
+                        {item.totalValue.toLocaleString("vi-VN")} ₫
+                      </td>
+                      <td className="text-center">
+                        <Badge variant={item.statusTone}>{item.status}</Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

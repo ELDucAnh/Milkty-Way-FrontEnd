@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
@@ -20,7 +20,7 @@ const mockBestSellers: BestSeller[] = [
     categoryTone: "success",
     quantity: 9450,
     revenue: 425250000,
-    trend: "▲ +12%",
+    trend: "+12%",
   },
   {
     name: "Trà Oolong Nướng Kem Phô Mai (Size M)",
@@ -28,7 +28,7 @@ const mockBestSellers: BestSeller[] = [
     categoryTone: "success",
     quantity: 7820,
     revenue: 391000000,
-    trend: "▲ +18%",
+    trend: "+18%",
   },
   {
     name: "Trà Đào Cam Sả Tươi (Size L)",
@@ -36,7 +36,7 @@ const mockBestSellers: BestSeller[] = [
     categoryTone: "warning",
     quantity: 6150,
     revenue: 276750000,
-    trend: "▲ +8%",
+    trend: "+8%",
   },
   {
     name: "Sữa Tươi Trân Châu Đường Đen (Size M)",
@@ -44,7 +44,7 @@ const mockBestSellers: BestSeller[] = [
     categoryTone: "info",
     quantity: 5400,
     revenue: 243000000,
-    trend: "▲ +5%",
+    trend: "+5%",
   },
   {
     name: "Lục Trà Nhài Mãng Cầu Đắk Lắk (Size L)",
@@ -52,14 +52,47 @@ const mockBestSellers: BestSeller[] = [
     categoryTone: "warning",
     quantity: 4320,
     revenue: 216000000,
-    trend: "▲ +25%",
+    trend: "+25%",
   },
 ];
+
+const BRANCH_WEIGHTS: Record<string, number> = {
+  "": 1,
+  CN01: 0.18,
+  CN02: 0.11,
+  CN05: 0.14,
+  CN06: 0.12,
+  CN07: 0.09,
+};
+
+const TIME_WEIGHTS: Record<string, number> = {
+  month: 1,
+  week: 0.25,
+  day: 0.035,
+};
 
 export default function SalesReportPage() {
   const toast = useToast();
   const [selectedBranch, setSelectedBranch] = useState("");
   const [timeFilter, setTimeFilter] = useState("month");
+
+  const scaleFactor = (BRANCH_WEIGHTS[selectedBranch] ?? 1) * (TIME_WEIGHTS[timeFilter] ?? 1);
+
+  const displayedBestSellers = useMemo(() => {
+    return mockBestSellers.map((item) => ({
+      ...item,
+      quantity: Math.max(1, Math.round(item.quantity * scaleFactor)),
+      revenue: Math.round((item.revenue * scaleFactor) / 1000) * 1000,
+    }));
+  }, [scaleFactor]);
+
+  const totalRevenue = Math.round((1842600000 * scaleFactor) / 1000) * 1000;
+  const totalCups = Math.max(1, Math.round(42850 * scaleFactor));
+  const avgDailyCups = Math.max(
+    1,
+    Math.round(totalCups / (timeFilter === "month" ? 30 : timeFilter === "week" ? 7 : 1))
+  );
+  const totalDiscount = Math.round((54200000 * scaleFactor) / 1000) * 1000;
 
   return (
     <div className="space-y-6">
@@ -136,8 +169,8 @@ export default function SalesReportPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Doanh Thu Bán Hàng"
-            value="1.842.600.000 đ"
-            subLabel="● +14.8% so với tháng trước"
+            value={`${totalRevenue.toLocaleString("vi-VN")} đ`}
+            subLabel="+14.8% so với kỳ trước"
             tone="primary"
             trend="up"
             icon={
@@ -149,9 +182,9 @@ export default function SalesReportPage() {
           />
           <StatCard
             label="Tổng Số Ly Phục Vụ"
-            value="42.850 ly"
+            value={`${totalCups.toLocaleString("vi-VN")} ly`}
             valueClassName="text-[var(--primary)]"
-            subLabel="Trung bình 1.428 ly/ngày"
+            subLabel={`Trung bình ${avgDailyCups.toLocaleString("vi-VN")} ly/ngày`}
             tone="info"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -178,7 +211,7 @@ export default function SalesReportPage() {
           />
           <StatCard
             label="Ưu Đãi Hội Viên &amp; Voucher"
-            value="54.200.000 đ"
+            value={`${totalDiscount.toLocaleString("vi-VN")} đ`}
             valueClassName="text-[var(--warning)]"
             subLabel="Tỷ lệ chiết khấu 2.9%"
             tone="warning"
@@ -197,43 +230,46 @@ export default function SalesReportPage() {
         <div className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[15px] font-bold text-[var(--text)] mb-0">
-              Biểu Đồ Doanh Thu &amp; Lợi Nhuận Gộp (Tháng 10/2026)
+              Biểu Đồ Doanh Thu &amp; Lợi Nhuận Gộp ({timeFilter === "day" ? "Hôm Nay" : timeFilter === "week" ? "Tuần Này" : "Tháng 10/2026"})
             </h3>
-            <span className="badge badge-info">12 Chi Nhánh</span>
+            <span className="badge badge-info">{selectedBranch || "12 Chi Nhánh"}</span>
           </div>
           {/* Visual SVG Trend Graph */}
           <div className="h-[250px] flex flex-col justify-end">
             <div className="flex items-end justify-between h-[200px] gap-6 px-4 pt-4 border-b border-[var(--border)]">
               {[
-                { label: "Tuần 1 (01-07)", revenue: 412, profit: 238 },
-                { label: "Tuần 2 (08-14)", revenue: 458, profit: 265 },
-                { label: "Tuần 3 (15-21)", revenue: 479, profit: 278 },
-                { label: "Tuần 4 (22-28)", revenue: 493.6, profit: 286 },
-              ].map((item) => (
-                <div key={item.label} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                  <div className="flex items-end gap-2 w-full justify-center h-full">
-                    {/* Revenue Bar */}
-                    <div
-                      className="w-10 rounded-t-lg bg-[#22B573] hover:opacity-90 transition-all flex flex-col justify-between py-1 items-center text-[10px] text-white font-bold"
-                      style={{ height: `${(item.revenue / 520) * 100}%` }}
-                      title={`Doanh thu: ${item.revenue} Tr. VNĐ`}
-                    >
-                      <span>{item.revenue}</span>
+                { label: "Tuần 1 (01-07)", revenue: +(412 * scaleFactor).toFixed(1), profit: +(238 * scaleFactor).toFixed(1) },
+                { label: "Tuần 2 (08-14)", revenue: +(458 * scaleFactor).toFixed(1), profit: +(265 * scaleFactor).toFixed(1) },
+                { label: "Tuần 3 (15-21)", revenue: +(479 * scaleFactor).toFixed(1), profit: +(278 * scaleFactor).toFixed(1) },
+                { label: "Tuần 4 (22-28)", revenue: +(493.6 * scaleFactor).toFixed(1), profit: +(286 * scaleFactor).toFixed(1) },
+              ].map((item) => {
+                const maxVal = 520 * scaleFactor;
+                return (
+                  <div key={item.label} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <div className="flex items-end gap-2 w-full justify-center h-full">
+                      {/* Revenue Bar */}
+                      <div
+                        className="w-10 rounded-t-lg bg-[#22B573] hover:opacity-90 transition-all flex flex-col justify-between py-1 items-center text-[10px] text-white font-bold"
+                        style={{ height: `${(item.revenue / maxVal) * 100}%` }}
+                        title={`Doanh thu: ${item.revenue} Tr. VNĐ`}
+                      >
+                        <span>{item.revenue}</span>
+                      </div>
+                      {/* Profit Bar */}
+                      <div
+                        className="w-8 rounded-t-lg bg-[#3B82F6] hover:opacity-90 transition-all flex flex-col justify-between py-1 items-center text-[10px] text-white font-bold"
+                        style={{ height: `${(item.profit / maxVal) * 100}%` }}
+                        title={`Lợi nhuận gộp: ${item.profit} Tr. VNĐ`}
+                      >
+                        <span>{item.profit}</span>
+                      </div>
                     </div>
-                    {/* Profit Bar */}
-                    <div
-                      className="w-8 rounded-t-lg bg-[#3B82F6] hover:opacity-90 transition-all flex flex-col justify-between py-1 items-center text-[10px] text-white font-bold"
-                      style={{ height: `${(item.profit / 520) * 100}%` }}
-                      title={`Lợi nhuận gộp: ${item.profit} Tr. VNĐ`}
-                    >
-                      <span>{item.profit}</span>
-                    </div>
+                    <span className="text-[11px] font-semibold text-[var(--muted)] text-center">
+                      {item.label}
+                    </span>
                   </div>
-                  <span className="text-[11px] font-semibold text-[var(--muted)] text-center">
-                    {item.label}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="flex justify-center gap-6 mt-3 text-xs">
               <span className="flex items-center gap-1.5 font-medium text-[var(--text)]">
@@ -264,19 +300,19 @@ export default function SalesReportPage() {
           </div>
           <div className="space-y-1.5 border-t border-[var(--border)] pt-3 mt-3 text-xs">
             <div className="flex justify-between">
-              <span className="text-[#22B573] font-semibold">● Tại quầy (Counter POS)</span>
+              <span className="text-[#22B573] font-semibold">Tại quầy (Counter POS)</span>
               <span className="font-bold">48%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#3B82F6] font-semibold">● Đơn mang đi (Takeaway)</span>
+              <span className="text-[#3B82F6] font-semibold">Đơn mang đi (Takeaway)</span>
               <span className="font-bold">24%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#F59E0B] font-semibold">● Đặt Online / App Delivery</span>
+              <span className="text-[#F59E0B] font-semibold">Đặt Online / App Delivery</span>
               <span className="font-bold">18%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#8B5CF6] font-semibold">● Đơn sỉ B2B / Sự kiện</span>
+              <span className="text-[#8B5CF6] font-semibold">Đơn sỉ B2B / Sự kiện</span>
               <span className="font-bold">10%</span>
             </div>
           </div>
@@ -294,26 +330,29 @@ export default function SalesReportPage() {
           <div className="h-[230px] flex flex-col justify-end pt-4">
             <div className="flex items-end justify-between h-[180px] gap-2 px-2 border-b border-[var(--border)]">
               {[
-                { time: "8h-10h", cups: 320, color: "bg-emerald-300" },
-                { time: "11h-13h (Trưa)", cups: 890, color: "bg-[#22B573]" },
-                { time: "14h-16h", cups: 480, color: "bg-emerald-300" },
-                { time: "17h-19h (Tan tầm)", cups: 750, color: "bg-emerald-400" },
-                { time: "19h-21h (Tối)", cups: 920, color: "bg-emerald-600" },
-                { time: "21h-22h30", cups: 240, color: "bg-slate-300" },
-              ].map((h) => (
-                <div key={h.time} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                  <div
-                    className={`w-full rounded-t-md ${h.color} hover:opacity-90 transition-all flex items-start justify-center pt-1 text-[10px] font-bold text-white`}
-                    style={{ height: `${(h.cups / 1000) * 100}%` }}
-                    title={`${h.time}: ${h.cups} ly`}
-                  >
-                    <span>{h.cups}</span>
+                { time: "8h-10h", cups: Math.max(1, Math.round(320 * scaleFactor)), color: "bg-emerald-300" },
+                { time: "11h-13h (Trưa)", cups: Math.max(1, Math.round(890 * scaleFactor)), color: "bg-[#22B573]" },
+                { time: "14h-16h", cups: Math.max(1, Math.round(480 * scaleFactor)), color: "bg-emerald-300" },
+                { time: "17h-19h (Tan tầm)", cups: Math.max(1, Math.round(750 * scaleFactor)), color: "bg-emerald-400" },
+                { time: "19h-21h (Tối)", cups: Math.max(1, Math.round(920 * scaleFactor)), color: "bg-emerald-600" },
+                { time: "21h-22h30", cups: Math.max(1, Math.round(240 * scaleFactor)), color: "bg-slate-300" },
+              ].map((h) => {
+                const maxCups = Math.max(1, Math.round(1000 * scaleFactor));
+                return (
+                  <div key={h.time} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                    <div
+                      className={`w-full rounded-t-md ${h.color} hover:opacity-90 transition-all flex items-start justify-center pt-1 text-[10px] font-bold text-white`}
+                      style={{ height: `${(h.cups / maxCups) * 100}%` }}
+                      title={`${h.time}: ${h.cups} ly`}
+                    >
+                      <span>{h.cups}</span>
+                    </div>
+                    <span className="text-[10px] text-[var(--muted)] text-center leading-tight">
+                      {h.time}
+                    </span>
                   </div>
-                  <span className="text-[10px] text-[var(--muted)] text-center leading-tight">
-                    {h.time}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -321,8 +360,12 @@ export default function SalesReportPage() {
         {/* Top Món Bán Chạy */}
         <div className="card p-0 overflow-hidden flex flex-col justify-between">
           <div className="py-3 px-5 border-b border-[var(--border)] flex items-center justify-between">
-            <h3 className="card-title text-[15px] mb-0">Top 5 Món Bán Chạy Nhất Toàn Chuỗi</h3>
-            <span className="text-xs font-semibold text-[var(--primary)]">Tháng 10/2026</span>
+            <h3 className="card-title text-[15px] mb-0">
+              Top 5 Món Bán Chạy Nhất {selectedBranch ? `(${selectedBranch})` : "Toàn Chuỗi"}
+            </h3>
+            <span className="text-xs font-semibold text-[var(--primary)]">
+              {timeFilter === "day" ? "Hôm nay" : timeFilter === "week" ? "Tuần này" : "Tháng 10/2026"}
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -336,7 +379,7 @@ export default function SalesReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockBestSellers.map((item) => (
+                {displayedBestSellers.map((item) => (
                   <tr key={item.name}>
                     <td className="font-bold text-[var(--text)]">{item.name}</td>
                     <td>

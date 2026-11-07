@@ -1,33 +1,35 @@
 import { useState } from "react";
 import { useToast } from "../../components/common/useToast";
 import { branches, formatCurrency, SalesPageHeader } from "./sales-support";
-import { initialPromotions } from "./PromotionsPage";
+import { loadPromotions, savePromotions } from "./PromotionsPage";
 import type { Promotion } from "./PromotionsPage";
 
 export default function BranchPromotionsPage() {
     const toast = useToast();
     const [branchSearch, setBranchSearch] = useState("");
-    const [promotions, setPromotions] = useState<Promotion[]>(() => [...initialPromotions]);
+    const [promotions, setPromotions] = useState<Promotion[]>(() => loadPromotions());
 
     function togglePromotionForBranch(promoId: string, branchId: string) {
-        setPromotions((prev) =>
-            prev.map((promo) => {
+        setPromotions((prev) => {
+            const next = prev.map((promo) => {
                 if (promo.id !== promoId) return promo;
                 const has = promo.branchIds.includes(branchId);
                 const nextBranchIds = has
                     ? promo.branchIds.filter((b) => b !== branchId)
                     : [...promo.branchIds, branchId];
                 return { ...promo, branchIds: nextBranchIds };
-            })
-        );
+            });
+            savePromotions(next);
+            return next;
+        });
         toast.success("Đã cập nhật phạm vi áp dụng chi nhánh!", {
             title: "Điều Chỉnh Khuyến Mãi",
         });
     }
 
     function toggleAllForBranch(branchId: string, enable: boolean) {
-        setPromotions((prev) =>
-            prev.map((promo) => {
+        setPromotions((prev) => {
+            const next = prev.map((promo) => {
                 const has = promo.branchIds.includes(branchId);
                 if (enable && !has) {
                     return { ...promo, branchIds: [...promo.branchIds, branchId] };
@@ -36,8 +38,10 @@ export default function BranchPromotionsPage() {
                     return { ...promo, branchIds: promo.branchIds.filter((b) => b !== branchId) };
                 }
                 return promo;
-            })
-        );
+            });
+            savePromotions(next);
+            return next;
+        });
         toast.info(
             enable
                 ? `Đã kích hoạt toàn bộ khuyến mãi cho chi nhánh ${branchId}`
@@ -64,7 +68,9 @@ export default function BranchPromotionsPage() {
                         </div>
                         <div className="stat-card-body">
                             <div className="stat-label">Chi nhánh áp dụng</div>
-                            <div className="stat-value">12 / 12</div>
+                            <div className="stat-value">
+                                {branches.filter((b) => promotions.some((p) => p.branchIds.includes(b.id))).length} / {branches.length}
+                            </div>
                             <div className="stat-sub-label">Toàn chuỗi TP.HCM</div>
                         </div>
                     </div>

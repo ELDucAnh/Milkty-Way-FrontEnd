@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../../components/common/useToast";
 
@@ -283,7 +283,7 @@ export default function RolesPage() {
               </thead>
               <tbody>
                 {permissions.map((sec, secIdx) => (
-                  <div key={sec.section} style={{ display: "contents" }}>
+                  <Fragment key={sec.section}>
                     <tr className="bg-[var(--background)]">
                       <td colSpan={5} className="font-extrabold text-[var(--text)] text-xs uppercase tracking-wide">
                         {sec.section}
@@ -335,7 +335,7 @@ export default function RolesPage() {
                         </td>
                       </tr>
                     ))}
-                  </div>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

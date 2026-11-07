@@ -1,13 +1,14 @@
 import { dashboardDemo, demoBranches } from "../../data/sales/dashboard-demo";
 import TemplateChart from "../../components/sales/TemplateChart";
 import { salesData, customerData } from "../../data/sales/charts";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
 import StatCard from "../../components/common/StatCard";
 import { useToast } from "../../components/common/useToast";
+import { loadOrders } from "../shared/sales-orders-store";
 import {
     branches,
     channelLabels,
@@ -65,7 +66,23 @@ export default function DashboardPage() {
     const from = filters.from ? parseVietnameseDate(filters.from) : null;
     const to = filters.to ? parseVietnameseDate(filters.to) : null;
 
-    const visibleOrders = recentOrders.filter((order) => {
+    const allRecentOrders = useMemo<SalesOrder[]>(() => {
+        try {
+            const stored = loadOrders();
+            const newOrders = stored.filter(
+                (so) => !recentOrders.some((ro) => ro.id === so.id) && so.id !== "DH-00122"
+            );
+            const updatedRecent = recentOrders.map((ro) => {
+                const match = stored.find((so) => so.id === ro.id);
+                return match ? { ...ro, payment: match.payment, total: match.total } : ro;
+            });
+            return [...newOrders, ...updatedRecent];
+        } catch {
+            return [...recentOrders];
+        }
+    }, []);
+
+    const visibleOrders = allRecentOrders.filter((order) => {
         // Dữ liệu mẫu có timestamp UTC+7, cùng múi giờ nghiệp vụ.
         const businessDate = order.createdAt.slice(0, 10);
 
@@ -106,11 +123,18 @@ export default function DashboardPage() {
         const month = parts.find((part) => part.type === "month")?.value ?? "01";
         const year = parts.find((part) => part.type === "year")?.value ?? "2026";
 
-        setDraft((current) => ({
-            ...current,
-            from: `01/${period === "year" ? "01" : month}/${year}`,
-            to: `${day}/${month}/${year}`,
-        }));
+        const nextFrom = `01/${period === "year" ? "01" : month}/${year}`;
+        const nextTo = `${day}/${month}/${year}`;
+
+        setDraft((current) => {
+            const next = {
+                ...current,
+                from: nextFrom,
+                to: nextTo,
+            };
+            setFilters(next);
+            return next;
+        });
     }
 
     const orderColumns: readonly DataTableColumn<SalesOrder>[] = [
@@ -428,7 +452,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-baseline gap-3 mb-5">
-            <div className="dash-chart-total">67.347 VND</div>
+            <div className="dash-chart-total">67.347.000 ₫</div>
             <span className="trend-up" style={{"fontSize": "12px"}}>↑ 8.2% so với kỳ trước</span>
           </div>
           <div className="chart-container h-[240px]">

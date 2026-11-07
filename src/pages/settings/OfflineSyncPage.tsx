@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
@@ -55,10 +55,15 @@ const initialOfflineOrders: OfflineOrder[] = [
 
 export default function OfflineSyncPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [offlineOrders, setOfflineOrders] = useState<OfflineOrder[]>(initialOfflineOrders);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const pendingCount = offlineOrders.filter((o) => !o.synced).length;
+
+  function getBranchPendingCount(branchCode: string) {
+    return offlineOrders.filter((o) => !o.synced && o.pos.includes(branchCode)).length;
+  }
 
   function forceSyncAll() {
     setIsSyncing(true);
@@ -94,6 +99,9 @@ export default function OfflineSyncPage() {
       title: "Đồng Bộ",
     });
     setTimeout(() => {
+      setOfflineOrders((prev) =>
+        prev.map((o) => (o.pos.includes(branchCode) ? { ...o, synced: true } : o))
+      );
       toast.success(`Đã đồng bộ xong dữ liệu cho ${branchCode}!`, {
         title: "Hoàn Tất",
       });
@@ -256,7 +264,9 @@ export default function OfflineSyncPage() {
                 <td className="text-center">
                   <Badge variant="success">Online (Cáp quang)</Badge>
                 </td>
-                <td className="text-center font-bold text-emerald-600">0 đơn</td>
+                <td className="text-center font-bold text-emerald-600">
+                  {getBranchPendingCount("CN01")} đơn
+                </td>
                 <td className="text-right font-bold text-[var(--text)]">18.450.000 ₫</td>
                 <td className="text-xs text-[var(--muted)]">28/10 21:04:15</td>
                 <td className="text-center">
@@ -271,22 +281,33 @@ export default function OfflineSyncPage() {
                   </button>
                 </td>
               </tr>
-              <tr className="bg-amber-50/40">
+              <tr className={getBranchPendingCount("CN05") > 0 ? "bg-amber-50/40" : ""}>
                 <td className="font-bold text-amber-900">CN05 — Quận 10 (Sư Vạn Hạnh)</td>
                 <td>2 POS</td>
                 <td className="text-center">
-                  <Badge variant="warning">Mạng Chập Chờn (4G dự phòng)</Badge>
+                  <Badge variant={getBranchPendingCount("CN05") > 0 ? "warning" : "success"}>
+                    {getBranchPendingCount("CN05") > 0 ? "Mạng Chập Chờn (4G dự phòng)" : "Đã đồng bộ xong"}
+                  </Badge>
                 </td>
-                <td className="text-center font-bold text-amber-700">3 đơn offline</td>
+                <td
+                  className={`text-center font-bold ${
+                    getBranchPendingCount("CN05") > 0 ? "text-amber-700" : "text-emerald-600"
+                  }`}
+                >
+                  {getBranchPendingCount("CN05") > 0
+                    ? `${getBranchPendingCount("CN05")} đơn offline`
+                    : "0 đơn"}
+                </td>
                 <td className="text-right font-bold text-[var(--text)]">14.280.000 ₫</td>
                 <td className="text-xs text-[var(--muted)]">28/10 20:52:10</td>
                 <td className="text-center">
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
+                    disabled={getBranchPendingCount("CN05") === 0}
                     onClick={() => syncBranch("CN05")}
                   >
-                    Đồng Bộ Ngay
+                    {getBranchPendingCount("CN05") > 0 ? "Đồng Bộ Ngay" : "Đã Đồng Bộ"}
                   </button>
                 </td>
               </tr>
@@ -296,7 +317,9 @@ export default function OfflineSyncPage() {
                 <td className="text-center">
                   <Badge variant="success">Online (Cáp quang)</Badge>
                 </td>
-                <td className="text-center font-bold text-emerald-600">0 đơn</td>
+                <td className="text-center font-bold text-emerald-600">
+                  {getBranchPendingCount("CN06")} đơn
+                </td>
                 <td className="text-right font-bold text-[var(--text)]">16.120.000 ₫</td>
                 <td className="text-xs text-[var(--muted)]">28/10 21:02:40</td>
                 <td className="text-center">
@@ -317,16 +340,25 @@ export default function OfflineSyncPage() {
                 <td className="text-center">
                   <Badge variant="success">Online (Cáp quang)</Badge>
                 </td>
-                <td className="text-center font-bold text-amber-600">1 đơn offline</td>
+                <td
+                  className={`text-center font-bold ${
+                    getBranchPendingCount("CN07") > 0 ? "text-amber-600" : "text-emerald-600"
+                  }`}
+                >
+                  {getBranchPendingCount("CN07") > 0
+                    ? `${getBranchPendingCount("CN07")} đơn offline`
+                    : "0 đơn"}
+                </td>
                 <td className="text-right font-bold text-[var(--text)]">12.850.000 ₫</td>
                 <td className="text-xs text-[var(--muted)]">28/10 20:59:00</td>
                 <td className="text-center">
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
+                    disabled={getBranchPendingCount("CN07") === 0}
                     onClick={() => syncBranch("CN07")}
                   >
-                    Đồng Bộ Ngay
+                    {getBranchPendingCount("CN07") > 0 ? "Đồng Bộ Ngay" : "Đã Đồng Bộ"}
                   </button>
                 </td>
               </tr>
@@ -336,7 +368,9 @@ export default function OfflineSyncPage() {
                 <td className="text-center">
                   <Badge variant="success">Online (Cáp quang)</Badge>
                 </td>
-                <td className="text-center font-bold text-emerald-600">0 đơn</td>
+                <td className="text-center font-bold text-emerald-600">
+                  {getBranchPendingCount("CN02")} đơn
+                </td>
                 <td className="text-right font-bold text-[var(--text)]">15.400.000 ₫</td>
                 <td className="text-xs text-[var(--muted)]">28/10 21:03:50</td>
                 <td className="text-center">
@@ -447,11 +481,7 @@ export default function OfflineSyncPage() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() =>
-              toast.info("Khởi động biểu mẫu đối soát doanh thu ca...", {
-                title: "Đối Soát",
-              })
-            }
+            onClick={() => navigate("/sales/shifts")}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
