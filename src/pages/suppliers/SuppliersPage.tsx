@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
+import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 
 interface Supplier {
@@ -130,6 +131,7 @@ const mockSuppliers: Supplier[] = [
 
 export default function SuppliersPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<Supplier[]>(mockSuppliers);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -507,143 +509,249 @@ export default function SuppliersPage() {
       </section>
 
       {/* Add Supplier Modal */}
-      {showAddModal && (
-        <div className="modal-backdrop fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="modal-dialog bg-white dark:bg-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-fadeIn">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border)]">
-              <h3 className="text-lg font-bold text-[var(--text)]">
-                Thêm Nhà Cung Cấp Nguyên Liệu Mới
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="text-[var(--muted)] hover:text-[var(--text)] p-1"
-              >
-                ✕
-              </button>
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Thêm Nhà Cung Cấp Nguyên Liệu Mới"
+        size="lg"
+      >
+        <form onSubmit={handleAddSupplier} className="space-y-4">
+          <div>
+            <label className="form-label">
+              Tên Doanh Nghiệp / Nhà Cung Cấp <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Ví dụ: Công ty Cổ Phần Trà Xanh..."
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Mã Số Thuế (MST)</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="03xxxxxxxxx"
+                value={newTaxCode}
+                onChange={(e) => setNewTaxCode(e.target.value)}
+              />
             </div>
-            <form onSubmit={handleAddSupplier} className="space-y-4">
-              <div>
-                <label className="form-label">
-                  Tên Doanh Nghiệp / Nhà Cung Cấp <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ví dụ: Công ty Cổ Phần Trà Xanh..."
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  required
-                />
+            <div>
+              <label className="form-label">Nhóm Nguyên Liệu</label>
+              <select
+                className="form-input form-select"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+              >
+                <option>Trà lá &amp; Cà phê</option>
+                <option>Bột sữa &amp; Topping trân châu</option>
+                <option>Sữa tươi &amp; Kem béo</option>
+                <option>Bao bì ly nắp &amp; Màng ép</option>
+                <option>Trái cây tươi Đà Lạt</option>
+                <option>Thiết bị Barista quầy bar</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">
+                Người Đại Diện Liên Hệ <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Họ và tên..."
+                value={newContact}
+                onChange={(e) => setNewContact(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="form-label">
+                Số Điện Thoại Hotline <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="09xxxxxxxx"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label className="form-label">Địa Chỉ Kho Hàng / Văn Phòng</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Địa chỉ giao nhận hàng..."
+              value={newAddress}
+              onChange={(e) => setNewAddress(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Thời Hạn Thanh Toán</label>
+              <select
+                className="form-input form-select"
+                value={newPaymentTerm}
+                onChange={(e) => setNewPaymentTerm(e.target.value)}
+              >
+                <option>Thanh toán ngay khi nhận hàng (COD)</option>
+                <option>Gối đầu 15 ngày</option>
+                <option>Gối đầu 30 ngày</option>
+                <option>Gối đầu 45 ngày</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Hồ Sơ ATVSTP / ISO 22000</label>
+              <select
+                className="form-input form-select"
+                value={newFoodSafety}
+                onChange={(e) => setNewFoodSafety(e.target.value)}
+              >
+                <option>Đã thẩm định đạt chuẩn</option>
+                <option>Đang chờ gửi hồ sơ kiểm định</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-[var(--border)]">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowAddModal(false)}
+            >
+              Hủy Bỏ
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Lưu Nhà Cung Cấp
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Supplier Details Modal */}
+      <Modal
+        open={!!selectedSupplier}
+        onClose={() => setSelectedSupplier(null)}
+        title="Hồ Sơ Đối Tác Cung Ứng &amp; Chứng Nhận ATVSTP"
+        size="lg"
+        footer={
+          <div className="flex justify-between items-center w-full">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                const supp = selectedSupplier;
+                setSelectedSupplier(null);
+                navigate("/purchases/new");
+                if (supp) {
+                  toast.info(`Bắt đầu lập đơn đặt mua nguyên liệu từ ${supp.name}`, {
+                    title: "Lập Đơn Mua PO",
+                  });
+                }
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+              Lập Đơn Mua PO Với Đối Tác Này
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setSelectedSupplier(null)}
+            >
+              Đóng
+            </button>
+          </div>
+        }
+      >
+        {selectedSupplier && (
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+              <div
+                className={`w-14 h-14 rounded-2xl ${selectedSupplier.avatarBg} ${selectedSupplier.avatarColor} font-bold text-xl flex items-center justify-center shrink-0 border border-current/20`}
+              >
+                {selectedSupplier.initials}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">Mã Số Thuế (MST)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="03xxxxxxxxx"
-                    value={newTaxCode}
-                    onChange={(e) => setNewTaxCode(e.target.value)}
-                  />
+              <div className="flex-1 min-w-0">
+                <div className="text-base font-bold text-[var(--text)]">
+                  {selectedSupplier.name}
                 </div>
-                <div>
-                  <label className="form-label">Nhóm Nguyên Liệu</label>
-                  <select
-                    className="form-input form-select"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                  >
-                    <option>Trà lá & Cà phê</option>
-                    <option>Bột sữa & Topping trân châu</option>
-                    <option>Sữa tươi & Kem béo</option>
-                    <option>Bao bì ly nắp & Màng ép</option>
-                    <option>Trái cây tươi Đà Lạt</option>
-                    <option>Thiết bị Barista quầy bar</option>
-                  </select>
+                <div className="text-xs text-[var(--muted)] mt-0.5">
+                  Mã đối tác: <strong className="font-mono">{selectedSupplier.id}</strong> · Mã số thuế: <strong className="font-mono">{selectedSupplier.taxCode}</strong>
+                </div>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  <Badge variant={selectedSupplier.categoryTone}>{selectedSupplier.category}</Badge>
+                  <Badge variant={selectedSupplier.status === "Đang giao dịch" ? "success" : "danger"}>
+                    {selectedSupplier.status}
+                  </Badge>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    ✓ {selectedSupplier.foodSafetyStandard}
+                  </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">
-                    Người Đại Diện Liên Hệ <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Họ và tên..."
-                    value={newContact}
-                    onChange={(e) => setNewContact(e.target.value)}
-                    required
-                  />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-3.5 rounded-xl border border-[var(--border)] space-y-2">
+                <div className="text-xs font-bold text-[var(--text)] uppercase tracking-wider text-[var(--muted)]">
+                  Đại Diện Liên Hệ &amp; Trụ Sở
                 </div>
                 <div>
-                  <label className="form-label">
-                    Số Điện Thoại Hotline <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="09xxxxxxxx"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="form-label">Địa Chỉ Kho Hàng / Văn Phòng</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Địa chỉ giao nhận hàng..."
-                  value={newAddress}
-                  onChange={(e) => setNewAddress(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">Thời Hạn Thanh Toán</label>
-                  <select
-                    className="form-input form-select"
-                    value={newPaymentTerm}
-                    onChange={(e) => setNewPaymentTerm(e.target.value)}
-                  >
-                    <option>Thanh toán ngay khi nhận hàng (COD)</option>
-                    <option>Gối đầu 15 ngày</option>
-                    <option>Gối đầu 30 ngày</option>
-                    <option>Gối đầu 45 ngày</option>
-                  </select>
+                  <div className="text-xs text-[var(--muted)]">Người phụ trách:</div>
+                  <div className="font-semibold text-[var(--text)]">{selectedSupplier.contactPerson}</div>
                 </div>
                 <div>
-                  <label className="form-label">Hồ Sơ ATVSTP / ISO 22000</label>
-                  <select
-                    className="form-input form-select"
-                    value={newFoodSafety}
-                    onChange={(e) => setNewFoodSafety(e.target.value)}
-                  >
-                    <option>Đã thẩm định đạt chuẩn</option>
-                    <option>Đang chờ gửi hồ sơ kiểm định</option>
-                  </select>
+                  <div className="text-xs text-[var(--muted)]">Số hotline / di động:</div>
+                  <div className="font-mono font-medium text-[var(--text)]">{selectedSupplier.phone}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-[var(--muted)]">Hộp thư điện tử:</div>
+                  <div className="text-xs text-blue-600">{selectedSupplier.email}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-[var(--muted)]">Khu vực kho:</div>
+                  <div className="text-xs text-[var(--text)]">{selectedSupplier.province}</div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-[var(--border)]">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Hủy Bỏ
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Lưu Nhà Cung Cấp
-                </button>
+              <div className="p-3.5 rounded-xl border border-[var(--border)] space-y-2">
+                <div className="text-xs font-bold text-[var(--text)] uppercase tracking-wider text-[var(--muted)]">
+                  Chỉ Số Cung Ứng &amp; Công Nợ
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[var(--muted)]">Số lô hàng đã giao:</span>
+                  <span className="font-bold text-[var(--text)]">{selectedSupplier.orderCount} lô thành công</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[var(--muted)]">Tổng kim ngạch mua:</span>
+                  <span className="font-bold text-[var(--text)]">{selectedSupplier.totalPurchase.toLocaleString("vi-VN")} ₫</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[var(--muted)]">Công nợ tồn đọng:</span>
+                  <span className={`font-bold ${selectedSupplier.debt > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {selectedSupplier.debt.toLocaleString("vi-VN")} ₫
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-[var(--muted)]">Thời hạn thanh toán:</span>
+                  <span className="font-semibold text-xs text-[var(--text)]">{selectedSupplier.paymentTerm}</span>
+                </div>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

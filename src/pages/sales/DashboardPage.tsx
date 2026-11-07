@@ -55,20 +55,6 @@ const ingredients: readonly LowStockIngredient[] = [
     { id: "NL-ST", name: "Sữa tươi", available: 0, minimum: 50, unit: "lít" },
 ];
 
-const revenueMetrics: readonly DashboardMetric[] = [
-    { label: "Tổng đơn hàng · 786 giao dịch", value: formatCurrency(17584) },
-    { label: "Doanh thu · Thu nhập ròng", value: formatCurrency(17584) },
-    { label: "Chi phí · Chi phí vận hành", value: formatCurrency(12487) },
-    { label: "Lợi nhuận · Biên lợi nhuận ròng", value: formatCurrency(5097) },
-];
-
-const purchaseMetrics: readonly DashboardMetric[] = [
-    { label: "Số đơn mua", value: 45 },
-    { label: "Chi phí mua hàng", value: formatCurrency(786) },
-    { label: "Đơn đã hủy", value: "04" },
-    { label: "Đổi trả", value: "07" },
-];
-
 export default function DashboardPage() {
     const toast = useToast();
     const [draft, setDraft] = useState<DashboardFilters>(emptyFilters);
@@ -383,7 +369,7 @@ export default function DashboardPage() {
             <div className="trend-up">↑ 12.5%</div>
           </div>
           
-          <div className="dash-stat-value">35.370.000 VND</div>
+          <div className="dash-stat-value">{formatCurrency(dashboardDemo.revenue)}</div>
           <div className="dash-stat-label">Doanh thu</div>
           <div className="dash-stat-bar"><div className="dash-stat-bar-fill" style={{ width: "85%", background: "var(--info)" }}></div></div>
         </div>

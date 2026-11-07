@@ -685,6 +685,7 @@ lots = [
       <Modal
         isOpen={createOpen}
         title="Tạo mẻ chế biến"
+        size="lg"
         onClose={() => setCreateOpen(false)}
       >
         <form className="space-y-3" onSubmit={createBatch}>
@@ -811,6 +812,7 @@ lots = [
       <Modal
         isOpen={!!completeBatch}
         title="Ghi nhận kết quả mẻ"
+        size="xl"
         onClose={() => setCompleteBatch(null)}
       >
         {completeBatch && (

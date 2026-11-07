@@ -631,6 +631,7 @@ export default function StockTransfersPage() {
       <Modal
         isOpen={createOpen}
         title="Tạo phiếu cấp phát theo ca (BM14)"
+        size="xl"
         onClose={() => setCreateOpen(false)}
       >
         <form className="space-y-3" onSubmit={submitAllocation}>
@@ -784,7 +785,7 @@ export default function StockTransfersPage() {
               </button>
             </div>
             <DataTable>
-              <table className="w-full min-w-[650px] text-sm">
+              <table className="w-full text-sm">
                 <thead>
                   <tr>
                     {["Lô / mẻ", "Khả dụng", "Lượng đề xuất", ""].map(
@@ -899,6 +900,7 @@ export default function StockTransfersPage() {
       <Modal
         isOpen={!!receiveTicket}
         title={`Xác nhận nhận · ${receiveTicket?.code ?? ""}`}
+        size="lg"
         onClose={() => setReceiveTicket(null)}
       >
         {receiveTicket && (

@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
+import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 
 interface UserEmployee {
@@ -90,12 +91,14 @@ const mockEmployees: UserEmployee[] = [
 
 export default function UsersPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState<UserEmployee[]>(mockEmployees);
   const [search, setSearch] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedShift, setSelectedShift] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<UserEmployee | null>(null);
 
   // Form states
   const [formName, setFormName] = useState("");
@@ -379,11 +382,13 @@ export default function UsersPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-icon-sm"
-                        onClick={() =>
+                        onClick={() => {
+                          setSelectedEmployee(emp);
                           toast.info(`Xem hồ sơ chi tiết nhân viên: ${emp.name}`, {
                             title: "Hồ Sơ Nhân Sự",
-                          })
-                        }
+                          });
+                        }}
+                        aria-label={`Xem hồ sơ chi tiết ${emp.name}`}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -424,140 +429,228 @@ export default function UsersPage() {
       </section>
 
       {/* Add Employee Modal */}
-      {showAddModal && (
-        <div className="modal-backdrop fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="modal-dialog bg-white dark:bg-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-fadeIn">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[var(--border)]">
-              <h3 className="text-lg font-bold text-[var(--text)]">
-                Thêm Nhân Viên &amp; Gán Chi Nhánh Mới
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="text-[var(--muted)] hover:text-[var(--text)] p-1"
-              >
-                ✕
-              </button>
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Thêm Nhân Viên &amp; Gán Chi Nhánh Mới"
+        size="lg"
+      >
+        <form onSubmit={handleAddUser} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">
+                Họ và Tên Nhân Viên <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Nguyễn Văn A..."
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                required
+              />
             </div>
-            <form onSubmit={handleAddUser} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">
-                    Họ và Tên Nhân Viên <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Nguyễn Văn A..."
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    required
-                  />
+            <div>
+              <label className="form-label">Mã Nhân Sự</label>
+              <input
+                type="text"
+                className="form-input"
+                value={formCode}
+                onChange={(e) => setFormCode(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">
+                Email Đăng Nhập <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                className="form-input"
+                placeholder="ten@MilktyWay.vn"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="form-label">
+                Số Điện Thoại <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                className="form-input"
+                placeholder="09xxxxxxxx"
+                value={formPhone}
+                onChange={(e) => setFormPhone(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">
+                Vai Trò Nghiệp Vụ <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="form-input form-select"
+                value={formRole}
+                onChange={(e) => setFormRole(e.target.value)}
+                required
+              >
+                <option>Quản Lý Chi Nhánh</option>
+                <option>Thu Ngân Quầy POS</option>
+                <option>Nhân Viên Kho Chi Nhánh</option>
+                <option>Chủ Doanh Nghiệp (Admin)</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">
+                Gán Chi Nhánh Công Tác <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="form-input form-select"
+                value={formBranch}
+                onChange={(e) => setFormBranch(e.target.value)}
+                required
+              >
+                <option>CN01 — Quận 1 (Nguyễn Huệ)</option>
+                <option>CN02 — Quận 3 (Võ Văn Tần)</option>
+                <option>CN03 — Quận 5 (Trần Hưng Đạo)</option>
+                <option>CN04 — Quận 7 (Phú Mỹ Hưng)</option>
+                <option>CN05 — Quận 10 (Sư Vạn Hạnh)</option>
+                <option>CN06 — Bình Thạnh (D2)</option>
+                <option>CN07 — Gò Vấp (Phan Văn Trị)</option>
+                <option>Kho Tổng Trung Tâm (Bình Tân)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="form-label">Mật Khẩu Ban Đầu (Mặc định)</label>
+            <input
+              type="password"
+              className="form-input"
+              defaultValue="MilktyWay@2026"
+            />
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Nhân viên sẽ được yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-[var(--border)]">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowAddModal(false)}
+            >
+              Hủy Bỏ
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Tạo Tài Khoản
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Employee Details Modal */}
+      <Modal
+        open={!!selectedEmployee}
+        onClose={() => setSelectedEmployee(null)}
+        title="Hồ Sơ Nhân Sự &amp; Chi Nhánh Trực Ca"
+        size="lg"
+        footer={
+          <div className="flex justify-between items-center w-full">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setSelectedEmployee(null);
+                navigate("/users/roles");
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Ma Trận Phân Quyền Vai Trò
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setSelectedEmployee(null)}
+            >
+              Đóng
+            </button>
+          </div>
+        }
+      >
+        {selectedEmployee && (
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--background)] border border-[var(--border)]">
+              <div
+                className={`w-14 h-14 rounded-2xl ${selectedEmployee.avatarBg} text-white font-bold text-xl flex items-center justify-center shrink-0 shadow-md`}
+              >
+                {selectedEmployee.initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-base font-bold text-[var(--text)]">
+                  {selectedEmployee.name}
                 </div>
-                <div>
-                  <label className="form-label">Mã Nhân Sự</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formCode}
-                    onChange={(e) => setFormCode(e.target.value)}
-                  />
+                <div className="text-xs text-[var(--muted)] mt-0.5">
+                  Mã nhân viên: <strong className="font-mono">{selectedEmployee.code}</strong> · ID: <span className="font-mono">{selectedEmployee.id}</span>
+                </div>
+                <div className="flex gap-2 mt-2 flex-wrap items-center">
+                  <Badge variant={selectedEmployee.roleTone}>{selectedEmployee.role}</Badge>
+                  <Badge variant={selectedEmployee.shiftTone}>{selectedEmployee.shiftStatus}</Badge>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">
-                    Email Đăng Nhập <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    className="form-input"
-                    placeholder="ten@MilktyWay.vn"
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
-                    required
-                  />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-3.5 rounded-xl border border-[var(--border)] space-y-2.5">
+                <div className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                  Thông Tin Liên Lạc &amp; Tài Khoản
                 </div>
                 <div>
-                  <label className="form-label">
-                    Số Điện Thoại <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    className="form-input"
-                    placeholder="09xxxxxxxx"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">
-                    Vai Trò Nghiệp Vụ <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    className="form-input form-select"
-                    value={formRole}
-                    onChange={(e) => setFormRole(e.target.value)}
-                    required
-                  >
-                    <option>Quản Lý Chi Nhánh</option>
-                    <option>Thu Ngân Quầy POS</option>
-                    <option>Nhân Viên Kho Chi Nhánh</option>
-                    <option>Chủ Doanh Nghiệp (Admin)</option>
-                  </select>
+                  <div className="text-xs text-[var(--muted)]">Email đăng nhập:</div>
+                  <div className="font-medium text-blue-600">{selectedEmployee.email}</div>
                 </div>
                 <div>
-                  <label className="form-label">
-                    Gán Chi Nhánh Công Tác <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    className="form-input form-select"
-                    value={formBranch}
-                    onChange={(e) => setFormBranch(e.target.value)}
-                    required
-                  >
-                    <option>CN01 — Quận 1 (Nguyễn Huệ)</option>
-                    <option>CN02 — Quận 3 (Võ Văn Tần)</option>
-                    <option>CN03 — Quận 5 (Trần Hưng Đạo)</option>
-                    <option>CN04 — Quận 7 (Phú Mỹ Hưng)</option>
-                    <option>CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-                    <option>CN06 — Bình Thạnh (D2)</option>
-                    <option>CN07 — Gò Vấp (Phan Văn Trị)</option>
-                    <option>Kho Tổng Trung Tâm (Bình Tân)</option>
-                  </select>
+                  <div className="text-xs text-[var(--muted)]">Số điện thoại:</div>
+                  <div className="font-mono font-medium text-[var(--text)]">{selectedEmployee.phone}</div>
                 </div>
-              </div>
-              <div>
-                <label className="form-label">Mật Khẩu Ban Đầu (Mặc định)</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  defaultValue="MilktyWay@2026"
-                />
-                <p className="text-xs text-[var(--muted)] mt-1">
-                  Nhân viên sẽ được yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.
-                </p>
+                <div>
+                  <div className="text-xs text-[var(--muted)]">Trực ca gần nhất:</div>
+                  <div className="text-xs text-[var(--text)] font-medium">{selectedEmployee.lastLogin}</div>
+                </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-[var(--border)]">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Hủy Bỏ
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Tạo Tài Khoản
-                </button>
+              <div className="p-3.5 rounded-xl border border-[var(--border)] space-y-2.5">
+                <div className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                  Chi Nhánh &amp; Phạm Vi Phân Quyền
+                </div>
+                <div>
+                  <div className="text-xs text-[var(--muted)]">Địa bàn công tác:</div>
+                  <div className="font-semibold text-[var(--text)]">{selectedEmployee.branch}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-[var(--muted)]">Quyền hạn truy cập:</div>
+                  <div className="text-xs text-[var(--text)]">
+                    {selectedEmployee.role.includes("Chủ Doanh Nghiệp")
+                      ? "Toàn quyền hệ thống chuỗi 12 chi nhánh & Kho tổng"
+                      : selectedEmployee.role.includes("Quản Lý")
+                      ? "Quản lý nhân sự, kho, đối soát ca tại chi nhánh được gán"
+                      : selectedEmployee.role.includes("Thu Ngân")
+                      ? "Bán hàng POS cảm ứng, tích điểm thành viên, mở/đóng ca"
+                      : "Quản lý nhập xuất lô hàng FEFO & kiểm kê mù"}
+                  </div>
+                </div>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

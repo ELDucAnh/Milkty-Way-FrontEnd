@@ -3,7 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
+import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
+import { formatCurrency } from "../shared/formatters";
+import { loadInvoices, saveInvoices } from "../shared/sales-orders-store";
+import type { InvoiceRecord, SalesOrderItem } from "../shared/sales-orders-store";
 
 export interface InvoiceItem {
   id: string;
@@ -109,11 +113,153 @@ export default function InvoicesPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [invoices] = useState<InvoiceItem[]>(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState<InvoiceItem[]>(() => {
+    try {
+      const stored = loadInvoices();
+      if (stored && stored.length > 0) {
+        return stored.map((inv) => ({
+          id: inv.id,
+          customerName: inv.customerName,
+          customerPhone: inv.customerPhone,
+          tier: inv.tier,
+          initials: inv.initials,
+          avatarBg: inv.avatarBg,
+          branch: inv.branch,
+          type: inv.type,
+          typeVariant: inv.typeVariant,
+          date: inv.date,
+          total: inv.total,
+          paid: inv.paid,
+          status: inv.status,
+          statusVariant: inv.statusVariant,
+        }));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+    return INITIAL_INVOICES;
+  });
   const [search, setSearch] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+
+  // Modal Lập hóa đơn mới (Popup độc lập, không chuyển trang POS)
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createBranch, setCreateBranch] = useState("CN01 - Bến Nghé");
+  const [createType, setCreateType] = useState<"Bán Lẻ" | "Đơn Sỉ B2B" | "Giao Hàng">("Bán Lẻ");
+  const [createCustomer, setCreateCustomer] = useState("");
+  const [createPhone, setCreatePhone] = useState("");
+  const [createTier, setCreateTier] = useState<"Member" | "Silver" | "Gold" | "VIP">("Member");
+  const [createPaymentMethod, setCreatePaymentMethod] = useState("Tiền mặt");
+  const [createPaymentStatus, setCreatePaymentStatus] = useState<"Đã Thanh Toán" | "Thanh Toán 50%" | "Chờ Thanh Toán">("Đã Thanh Toán");
+  const [createItems, setCreateItems] = useState<{ id: string; name: string; quantity: number; unitPrice: number }[]>([
+    { id: "line-1", name: "Trà sữa trân châu hoàng kim (Size L)", quantity: 2, unitPrice: 44000 },
+    { id: "line-2", name: "Trà đào cam sả tươi (Size L)", quantity: 1, unitPrice: 45000 },
+  ]);
+
+  const subtotal = createItems.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+  const vat = Math.round(subtotal * 0.08);
+  const total = subtotal + vat;
+
+  function handleAddItem() {
+    setCreateItems(prev => [
+      ...prev,
+      { id: `line-${Date.now()}`, name: "Trà Oolong nướng kem phô mai (Size M)", quantity: 1, unitPrice: 42000 }
+    ]);
+  }
+
+  function handleRemoveItem(id: string) {
+    if (createItems.length <= 1) return;
+    setCreateItems(prev => prev.filter(it => it.id !== id));
+  }
+
+  function handleItemChange(id: string, field: "name" | "quantity" | "unitPrice", val: string | number) {
+    setCreateItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      return { ...it, [field]: val };
+    }));
+  }
+
+  function handleCreateInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    if (!createCustomer.trim()) {
+      toast.warning("Vui lòng nhập họ tên khách hàng hoặc đơn vị mua hàng.");
+      return;
+    }
+    const prefix = createType === "Đơn Sỉ B2B" ? "SI" : "HD";
+    const branchCode = createBranch.slice(0, 4);
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const invoiceId = `${prefix}-${branchCode}-00${rand}`;
+    const paidAmount = createPaymentStatus === "Đã Thanh Toán" ? total : createPaymentStatus === "Thanh Toán 50%" ? Math.round(total / 2) : 0;
+    const typeVar: BadgeVariant = createType === "Đơn Sỉ B2B" ? "warning" : createType === "Giao Hàng" ? "purple" : "info";
+    const statusVar: BadgeVariant = createPaymentStatus === "Đã Thanh Toán" ? "success" : "warning";
+
+    const salesItems: SalesOrderItem[] = createItems.map((it, idx) => ({
+      id: `item-${Date.now()}-${idx}`,
+      name: it.name,
+      size: "L",
+      sugar: "70%",
+      ice: "Vừa đá",
+      toppings: ["Trân châu hoàng kim"],
+      note: "",
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+    }));
+
+    const newRecord: InvoiceRecord = {
+      id: invoiceId,
+      orderId: `DH-00${rand}`,
+      customerName: createCustomer.trim(),
+      customerPhone: createPhone.trim() || "0900.000.000",
+      tier: createTier,
+      initials: createCustomer.trim().split(" ").slice(-2).map(w => w[0]).join("").toUpperCase() || "KH",
+      avatarBg: "var(--primary)",
+      branch: createBranch,
+      branchAddress: "12 Pasteur, P. Bến Nghé, Quận 1, TP.HCM",
+      type: createType,
+      typeVariant: typeVar,
+      date: new Date().toLocaleDateString("vi-VN") + " " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      total,
+      paid: paidAmount,
+      change: 0,
+      paymentMethod: createPaymentMethod,
+      status: createPaymentStatus,
+      statusVariant: statusVar,
+      items: salesItems,
+    };
+
+    try {
+      saveInvoices([newRecord, ...loadInvoices()]);
+    } catch (err) {
+      console.error(err);
+    }
+
+    const newItem: InvoiceItem = {
+      id: invoiceId,
+      customerName: createCustomer.trim(),
+      customerPhone: createPhone.trim() || "0900.000.000",
+      tier: createTier,
+      initials: newRecord.initials,
+      avatarBg: "var(--primary)",
+      branch: createBranch,
+      type: createType,
+      typeVariant: typeVar,
+      date: newRecord.date,
+      total,
+      paid: paidAmount,
+      status: createPaymentStatus,
+      statusVariant: statusVar,
+    };
+
+    setInvoices(prev => [newItem, ...prev]);
+    setShowCreateModal(false);
+    setCreateCustomer("");
+    setCreatePhone("");
+    toast.success(`Đã lập thành công hóa đơn ${invoiceId} (${formatCurrency(total)})!`, {
+      title: "Lập Hóa Đơn Mới",
+    });
+  }
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((item) => {
@@ -160,13 +306,17 @@ export default function InvoicesPage() {
             </svg>
             Xuất Excel
           </button>
-          <Link to="/sales/pos" className="btn btn-primary">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowCreateModal(true)}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Tạo Hóa Đơn Mới
-          </Link>
+            Lập Hóa Đơn Mới
+          </button>
         </div>
       </div>
 
@@ -404,6 +554,275 @@ export default function InvoicesPage() {
           </div>
         </div>
       </section>
+
+      {/* Modal Lập Hóa Đơn & Chứng Từ Mới */}
+      <Modal
+        open={showCreateModal}
+        title="Lập Hóa Đơn Bán Lẻ &amp; Đơn Sỉ Mới"
+        size="xl"
+        onClose={() => setShowCreateModal(false)}
+        footer={
+          <div className="flex justify-between items-center w-full flex-wrap gap-3">
+            <div className="text-sm font-semibold">
+              Tổng thanh toán (gồm VAT 8%):{" "}
+              <span className="text-lg text-[var(--primary)] font-bold">
+                {formatCurrency(total)}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="submit"
+                form="create-invoice-form"
+                className="btn btn-primary"
+              >
+                Lưu &amp; Xuất Hóa Đơn
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <form
+          id="create-invoice-form"
+          className="space-y-4"
+          onSubmit={handleCreateInvoice}
+        >
+          {/* Thông tin chung */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div>
+              <label className="form-label">
+                Chi Nhánh Phát Hành <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="form-input form-select"
+                value={createBranch}
+                onChange={(e) => setCreateBranch(e.target.value)}
+              >
+                <option value="CN01 - Bến Nghé">CN01 - Bến Nghé (Quận 1)</option>
+                <option value="CN02 - Võ Văn Tần">CN02 - Võ Văn Tần (Quận 3)</option>
+                <option value="CN05 - Hàng Xanh">CN05 - Hàng Xanh (Bình Thạnh)</option>
+                <option value="CN06 - D2 Bình Thạnh">CN06 - D2 (Bình Thạnh)</option>
+                <option value="CN08 - Cityland">CN08 - Cityland (Gò Vấp)</option>
+                <option value="CN09 - Phan Xích Long">CN09 - Phan Xích Long (Phú Nhuận)</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">
+                Phân Loại Hóa Đơn <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="form-input form-select"
+                value={createType}
+                onChange={(e) =>
+                  setCreateType(
+                    e.target.value as "Bán Lẻ" | "Đơn Sỉ B2B" | "Giao Hàng"
+                  )
+                }
+              >
+                <option value="Bán Lẻ">Bán Lẻ (Tại Quầy / Mang Về)</option>
+                <option value="Đơn Sỉ B2B">Đơn Sỉ B2B (Doanh Nghiệp / Công Ty)</option>
+                <option value="Giao Hàng">Giao Hàng / Catering Sự Kiện</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <div>
+              <label className="form-label">
+                Tên Khách Hàng / Đơn Vị <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Ví dụ: Cty TNHH Sao Mai hoặc Anh Hùng"
+                value={createCustomer}
+                onChange={(e) => setCreateCustomer(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="form-label">Số Điện Thoại</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="09xxxxxxxx"
+                value={createPhone}
+                onChange={(e) => setCreatePhone(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="form-label">Hạng Hội Viên</label>
+              <select
+                className="form-input form-select"
+                value={createTier}
+                onChange={(e) =>
+                  setCreateTier(
+                    e.target.value as "Member" | "Silver" | "Gold" | "VIP"
+                  )
+                }
+              >
+                <option value="VIP">VIP (Chiết khấu 10%)</option>
+                <option value="Gold">Gold (Chiết khấu 8%)</option>
+                <option value="Silver">Silver (Chiết khấu 5%)</option>
+                <option value="Member">Member (Khách thường)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div>
+              <label className="form-label">Hình Thức Thanh Toán</label>
+              <select
+                className="form-input form-select"
+                value={createPaymentMethod}
+                onChange={(e) => setCreatePaymentMethod(e.target.value)}
+              >
+                <option value="Tiền mặt">Tiền mặt tại quầy</option>
+                <option value="Chuyển khoản QR">Chuyển khoản ngân hàng (QR)</option>
+                <option value="Thẻ ngân hàng">Thẻ tín dụng / ATM (POS)</option>
+                <option value="Công nợ gối đầu 15 ngày">Công nợ gối đầu 15 ngày (B2B)</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Trạng Thái Thanh Toán</label>
+              <select
+                className="form-input form-select"
+                value={createPaymentStatus}
+                onChange={(e) =>
+                  setCreatePaymentStatus(
+                    e.target.value as
+                      | "Đã Thanh Toán"
+                      | "Thanh Toán 50%"
+                      | "Chờ Thanh Toán"
+                  )
+                }
+              >
+                <option value="Đã Thanh Toán">Đã Thanh Toán (100%)</option>
+                <option value="Thanh Toán 50%">Đặt cọc 50% (Chờ giao hàng)</option>
+                <option value="Chờ Thanh Toán">Chờ Thanh Toán (Ghi nợ)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Danh mục mặt hàng */}
+          <div className="card p-0 overflow-hidden border border-[var(--border)]">
+            <div className="p-3 bg-[var(--background)] border-b border-[var(--border)] flex justify-between items-center">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                  Danh Sách Món &amp; Hàng Hóa Xuất Hóa Đơn
+                </h4>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleAddItem}
+              >
+                + Thêm Mặt Hàng
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]">
+                    <th className="py-2.5 px-3 text-left">Tên Món / Sản Phẩm</th>
+                    <th className="py-2.5 px-3 text-center w-24">Số Lượng</th>
+                    <th className="py-2.5 px-3 text-right w-32">Đơn Giá</th>
+                    <th className="py-2.5 px-3 text-right w-36">Thành Tiền</th>
+                    <th className="py-2.5 px-3 text-center w-12"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {createItems.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="border-b border-[var(--border)] hover:bg-[var(--background)]"
+                    >
+                      <td className="py-2 px-3">
+                        <input
+                          type="text"
+                          className="form-input text-xs py-1"
+                          value={item.name}
+                          onChange={(e) =>
+                            handleItemChange(item.id, "name", e.target.value)
+                          }
+                          required
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="number"
+                          min="1"
+                          className="form-input text-xs py-1 text-center"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            handleItemChange(
+                              item.id,
+                              "quantity",
+                              Math.max(1, Number(e.target.value))
+                            )
+                          }
+                          required
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="number"
+                          step="1000"
+                          min="0"
+                          className="form-input text-xs py-1 text-right"
+                          value={item.unitPrice}
+                          onChange={(e) =>
+                            handleItemChange(
+                              item.id,
+                              "unitPrice",
+                              Math.max(0, Number(e.target.value))
+                            )
+                          }
+                          required
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold">
+                        {formatCurrency(item.quantity * item.unitPrice)}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <button
+                          type="button"
+                          className="text-[var(--danger)] hover:opacity-75 disabled:opacity-30"
+                          disabled={createItems.length <= 1}
+                          onClick={() => handleRemoveItem(item.id)}
+                          aria-label="Xóa dòng"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="p-3 bg-[var(--background)] flex justify-end gap-6 text-xs font-medium">
+              <div>
+                Tạm tính: <b>{formatCurrency(subtotal)}</b>
+              </div>
+              <div>
+                Thuế GTGT (VAT 8%): <b>{formatCurrency(vat)}</b>
+              </div>
+              <div>
+                Tổng cộng:{" "}
+                <b className="text-sm text-[var(--primary)]">
+                  {formatCurrency(total)}
+                </b>
+              </div>
+            </div>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

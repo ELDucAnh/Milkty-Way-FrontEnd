@@ -198,7 +198,7 @@ export default function DistributionPlanningPage() {
         committed.set(
           line.ingredientId,
           (committed.get(line.ingredientId) ?? 0) +
-            (line.approvedQuantity ?? line.quantity),
+          (line.approvedQuantity ?? line.quantity),
         );
       }
     }
@@ -216,8 +216,8 @@ export default function DistributionPlanningPage() {
 
         setApprovalError(
           `${ingredient?.name ?? ingredientId} không đủ tồn khả dụng. ` +
-            `Nhu cầu duyệt: ${quantity}; đã được cam kết: ${alreadyCommitted}; ` +
-            `khả dụng hiện tại: ${available}.`,
+          `Nhu cầu duyệt: ${quantity}; đã được cam kết: ${alreadyCommitted}; ` +
+          `khả dụng hiện tại: ${available}.`,
         );
         return;
       }
@@ -240,13 +240,13 @@ export default function DistributionPlanningPage() {
       plans: current.plans.map((item) =>
         item.id === plan.id
           ? {
-              ...item,
-              status: "approved",
-              lines: item.lines.map((line) => ({
-                ...line,
-                approvedQuantity: line.quantity,
-              })),
-            }
+            ...item,
+            status: "approved",
+            lines: item.lines.map((line) => ({
+              ...line,
+              approvedQuantity: line.quantity,
+            })),
+          }
           : item,
       ),
     }));
@@ -515,6 +515,7 @@ export default function DistributionPlanningPage() {
       <Modal
         isOpen={createOpen}
         title="Tạo kế hoạch cấp phát"
+        size="xl"
         onClose={() => setCreateOpen(false)}
       >
         <form className="space-y-3" onSubmit={savePlan}>
@@ -558,49 +559,51 @@ export default function DistributionPlanningPage() {
               </select>
             </div>
           </div>
-          <div>
-            <label className="form-label" htmlFor="plan-store">
-              Cửa hàng *
-            </label>
-            <select
-              id="plan-store"
-              className="form-input form-select"
-              value={form.storeId}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  storeId: event.target.value,
-                }))
-              }
-            >
-              {data.stores
-                .filter((store) => store.status === "active")
-                .map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.code} · {store.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="plan-cups">
-              Nhu cầu dự kiến (ly) *
-            </label>
-            <input
-              id="plan-cups"
-              type="number"
-              min="1"
-              step="1"
-              className="form-input"
-              value={form.expectedCups}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  expectedCups: event.target.value,
-                }))
-              }
-              required
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="form-label" htmlFor="plan-store">
+                Cửa hàng *
+              </label>
+              <select
+                id="plan-store"
+                className="form-input form-select"
+                value={form.storeId}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    storeId: event.target.value,
+                  }))
+                }
+              >
+                {data.stores
+                  .filter((store) => store.status === "active")
+                  .map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.code} · {store.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="plan-cups">
+                Nhu cầu dự kiến (ly) *
+              </label>
+              <input
+                id="plan-cups"
+                type="number"
+                min="1"
+                step="1"
+                className="form-input"
+                value={form.expectedCups}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    expectedCups: event.target.value,
+                  }))
+                }
+                required
+              />
+            </div>
           </div>
           <section className="card p-0 overflow-hidden">
             <div className="p-3 flex justify-between">
@@ -619,7 +622,7 @@ export default function DistributionPlanningPage() {
               </button>
             </div>
             <DataTable>
-              <table className="w-full min-w-[650px] text-sm">
+              <table className="w-full text-sm">
                 <thead>
                   <tr>
                     {[
@@ -655,9 +658,9 @@ export default function DistributionPlanningPage() {
                                 current.map((item) =>
                                   item.id === line.id
                                     ? {
-                                        ...item,
-                                        ingredientId: event.target.value,
-                                      }
+                                      ...item,
+                                      ingredientId: event.target.value,
+                                    }
                                     : item,
                                 ),
                               )
@@ -788,6 +791,7 @@ export default function DistributionPlanningPage() {
       <Modal
         isOpen={!!selected}
         title="Chi tiết kế hoạch cấp phát"
+        size="lg"
         onClose={() => setSelected(null)}
       >
         {selected && (

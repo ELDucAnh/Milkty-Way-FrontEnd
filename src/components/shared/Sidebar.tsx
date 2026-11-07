@@ -114,11 +114,14 @@ export default function Sidebar({mobileOpen,onNavigate,collapsed = false}: Sideb
     <div className={`submenu ${expanded["sales"] ? "open" : ""}`} id="submenu-sales" inert={!expanded["sales"]}>
       <NavLink onClick={onNavigate} end to="/sales" className="submenu-item" data-page="sales">Tất cả đơn bán</NavLink>
       <NavLink onClick={onNavigate} end to="/sales/pos" className="submenu-item" data-page="add-sale">Điểm bán hàng (POS)</NavLink>
+      <NavLink onClick={onNavigate} end to="/sales/shifts" className="submenu-item" data-page="shifts">Ca làm việc &amp; Bàn giao quỹ</NavLink>
+      <NavLink onClick={onNavigate} end to="/sales/preparation" className="submenu-item" data-page="preparation">Hàng đợi pha chế (KDS)</NavLink>
       <NavLink onClick={onNavigate} end to="/sales/returns" className="submenu-item" data-page="sales-returns">Trả hàng bán</NavLink>
+      <NavLink onClick={onNavigate} end to="/marketing/promotions" className="submenu-item" data-page="promotions">Khuyến mãi &amp; Voucher</NavLink>
     </div>
   </div>
 
-  <NavLink onClick={onNavigate} end to="/invoices/invoices" className="nav-item" data-page="invoices">
+  <NavLink onClick={onNavigate} end to="/invoices" className="nav-item" data-page="invoices">
     <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
     <span className="sidebar-label flex-1">Hóa đơn</span>
   </NavLink>
@@ -130,12 +133,12 @@ export default function Sidebar({mobileOpen,onNavigate,collapsed = false}: Sideb
     <span className="sidebar-label flex-1">Khách hàng</span>
   </NavLink>
 
-  <NavLink onClick={onNavigate} end to="/suppliers/suppliers" className="nav-item" data-page="suppliers">
+  <NavLink onClick={onNavigate} end to="/suppliers" className="nav-item" data-page="suppliers">
     <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
     <span className="sidebar-label flex-1">Nhà cung cấp</span>
   </NavLink>
 
-  <NavLink onClick={onNavigate} end to="/expenses/expenses" className="nav-item" data-page="expenses">
+  <NavLink onClick={onNavigate} end to="/expenses" className="nav-item" data-page="expenses">
     <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
     <span className="sidebar-label flex-1">Chi phí</span>
   </NavLink>
@@ -175,7 +178,7 @@ export default function Sidebar({mobileOpen,onNavigate,collapsed = false}: Sideb
       </span>
     </button>
     <div className={`submenu ${expanded["users"] ? "open" : ""}`} id="submenu-users" inert={!expanded["users"]}>
-      <NavLink onClick={onNavigate} end to="/users/users" className="submenu-item" data-page="users-list">Tất cả người dùng</NavLink>
+      <NavLink onClick={onNavigate} end to="/users" className="submenu-item" data-page="users-list">Tất cả người dùng</NavLink>
       <NavLink onClick={onNavigate} end to="/users/roles" className="submenu-item" data-page="roles">Vai trò &amp; Quyền hạn</NavLink>
     </div>
   </div>

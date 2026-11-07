@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import SettingsNavTabs from "./SettingsNavTabs";
 import { useToast } from "../../components/common/useToast";
 
 export default function GeneralSettingsPage() {
@@ -30,9 +29,6 @@ export default function GeneralSettingsPage() {
           </p>
         </div>
       </div>
-
-      {/* Nav Tabs */}
-      <SettingsNavTabs />
 
       {/* General Settings Form */}
       <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">

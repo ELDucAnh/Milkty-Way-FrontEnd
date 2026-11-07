@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -11,6 +11,7 @@ import {
     formatDateTime,
     SalesPageHeader,
 } from "./sales-support";
+import { loadOrders } from "../shared/sales-orders-store";
 
 type ShiftStatus = "open" | "closing-requested" | "closed";
 
@@ -96,12 +97,20 @@ export default function ShiftsPage() {
 
     const selectedShift = shifts.find((shift) => shift.id === selectedId);
     const countedCash = parseCash(closingForm.countedCash);
-    const difference =
-        selectedShift?.expectedCash !== null &&
-        selectedShift?.expectedCash !== undefined &&
-        countedCash !== null
-            ? countedCash - selectedShift.expectedCash
-            : null;
+
+    const cashFromSales = useMemo(() => {
+        try {
+            const orders = loadOrders();
+            return orders
+                .filter(o => o.paymentMethod === "cash" && o.payment === "paid")
+                .reduce((sum, o) => sum + o.total, 0);
+        } catch {
+            return 0;
+        }
+    }, [shifts]);
+
+    const effectiveExpectedCash = selectedShift?.expectedCash ?? ((selectedShift?.openingCash ?? 500000) + cashFromSales);
+    const difference = countedCash !== null ? countedCash - effectiveExpectedCash : null;
 
     function openShift(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -156,7 +165,7 @@ export default function ShiftsPage() {
             return;
         }
 
-        if (countedCash === null || closingForm.recipientId !== "NV02") {
+        if (countedCash === null || !closingForm.recipientId.trim()) {
             toast.warning("Nhập tiền thực đếm và chọn người nhận bàn giao.");
             return;
         }
@@ -430,9 +439,7 @@ export default function ShiftsPage() {
                             <input
                                 id="shift-expected-cash"
                                 className="form-input"
-                                value={selectedShift?.expectedCash == null
-                                    ? "Chờ dữ liệu giao dịch"
-                                    : formatCurrency(selectedShift.expectedCash)}
+                                value={formatCurrency(effectiveExpectedCash)}
                                 readOnly
                             />
                         </div>
@@ -481,8 +488,10 @@ export default function ShiftsPage() {
                                     ...current, recipientId: event.target.value,
                                 }))}
                             >
-                                <option value="">Chọn nhân viên</option>
-                                <option value="NV02">Trần Bình</option>
+                                <option value="">-- Chọn nhân viên nhận ca --</option>
+                                <option value="NV02">Trần Bình (Thu ngân Ca chiều)</option>
+                                <option value="NV03">Lê Quốc Tuấn (Trưởng ca)</option>
+                                <option value="NV04">Vũ Minh Khoa (Thủ kho / Thu ngân)</option>
                             </select>
                         </div>
                     </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import ConfirmDialog from "../common/ConfirmDialog";
 import { useToast } from "../common/useToast";
 import { formatCurrency } from "../../utils/format";
+import { createPosOrder } from "../../pages/shared/sales-orders-store";
 
 export interface PosCartItem {
     id: string;
@@ -20,6 +21,7 @@ export interface PosCartProps {
     items: readonly PosCartItem[];
     onRemove: (id: string) => void;
     onClear: () => void;
+    branchId?: string;
 }
 
 function validPercentage(value: string): number | null {
@@ -30,11 +32,24 @@ function validPercentage(value: string): number | null {
         : null;
 }
 
-export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
+const SAMPLE_MEMBERS: Record<string, { name: string; tier: string; points: number; discount: number }> = {
+    "0903 123 456": { name: "Nguyễn An", tier: "VIP", points: 1250, discount: 10 },
+    "0903123456": { name: "Nguyễn An", tier: "VIP", points: 1250, discount: 10 },
+    "0908 123 456": { name: "Trần Văn An", tier: "Gold", points: 850, discount: 8 },
+    "0908123456": { name: "Trần Văn An", tier: "Gold", points: 850, discount: 8 },
+    "0912 345 678": { name: "Trần Bình", tier: "Silver", points: 420, discount: 5 },
+    "0912345678": { name: "Trần Bình", tier: "Silver", points: 420, discount: 5 },
+    "0988 777 666": { name: "Lê Minh Tuấn", tier: "Member", points: 150, discount: 0 },
+    "0988777666": { name: "Lê Minh Tuấn", tier: "Member", points: 150, discount: 0 },
+};
+
+export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }: PosCartProps) {
     const toast = useToast();
     const [clearOpen, setClearOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("cash");
     const [phone, setPhone] = useState("");
+    const [memberInfo, setMemberInfo] = useState<string | null>(null);
+    const [memberName, setMemberName] = useState<string>("");
     const [voucher, setVoucher] = useState("");
     const [discountInput, setDiscountInput] = useState("");
     const [taxInput, setTaxInput] = useState("10");
@@ -53,6 +68,60 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
     const paidValid = Number.isSafeInteger(paid) && paid >= 0;
     const change = paidValid ? Math.max(0, paid - total) : 0;
 
+    function handleLookupMember() {
+        const cleanPhone = phone.trim();
+        if (!cleanPhone) {
+            toast.warning("Vui lòng nhập số điện thoại để tra cứu.");
+            return;
+        }
+
+        const found = SAMPLE_MEMBERS[cleanPhone];
+        if (found) {
+            setMemberName(found.name);
+            setMemberInfo(`${found.name} · Hạng ${found.tier} (Điểm: ${found.points.toLocaleString()}đ)`);
+            if (found.discount > 0) {
+                setDiscountInput(String(found.discount));
+                toast.success(`Đã nhận diện hội viên ${found.name}! Tự động áp dụng giảm ${found.discount}% hạng ${found.tier}.`, {
+                    title: "Hội Viên Thân Thiết",
+                });
+            } else {
+                toast.info(`Đã tìm thấy hội viên ${found.name} (${found.tier}). Chưa có chiết khấu hạng thẻ.`, {
+                    title: "Hội Viên",
+                });
+            }
+        } else {
+            setMemberName("Khách Mới");
+            setMemberInfo(`Khách mới: ${cleanPhone}`);
+            toast.info(`Số điện thoại ${cleanPhone} chưa có trên hệ thống, sẽ tích điểm như Khách Mới.`, {
+                title: "Khách Mới",
+            });
+        }
+    }
+
+    function handleApplyVoucher() {
+        const code = voucher.trim().toUpperCase();
+        if (!code) {
+            toast.warning("Vui lòng nhập mã ưu đãi.");
+            return;
+        }
+
+        if (code === "CHAOBAN" || code === "MILTYWAY" || code === "GIAM10") {
+            setDiscountInput("10");
+            toast.success(`Mã ưu đãi [${code}] hợp lệ: Giảm ngay 10% tổng đơn!`, {
+                title: "Áp Dụng Thành Công",
+            });
+        } else if (code === "GIAM20" || code === "VIP20") {
+            setDiscountInput("20");
+            toast.success(`Mã ưu đãi [${code}] hợp lệ: Giảm ngay 20% tổng đơn!`, {
+                title: "Áp Dụng Thành Công",
+            });
+        } else {
+            toast.error(`Mã ưu đãi [${code}] không tồn tại hoặc đã hết lượt dùng.`, {
+                title: "Không Hợp Lệ",
+            });
+        }
+    }
+
     function completeSale() {
         if (!items.length) {
             toast.warning("Giỏ hàng đang trống.");
@@ -69,14 +138,35 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
             return;
         }
 
-        toast.info(
-            "Đã kiểm tra giỏ hàng mô phỏng. Chưa tạo đơn, thu tiền, giữ nguyên liệu hoặc đồng bộ máy chủ.",
+        // Tạo đơn hàng thực tế vào hệ thống chung
+        const { order, invoice } = createPosOrder({
+            branchId,
+            items: [...items],
+            customerPhone: phone.trim() || undefined,
+            customerName: memberName || undefined,
+            paymentMethod: paymentMethod as "cash" | "transfer" | "card",
+            paidAmount: paymentMethod === "cash" ? paid : total,
+            discountRate: discountRate ?? 0,
+            taxRate: taxRate ?? 10,
+        });
+
+        toast.success(
+            `Đã tạo đơn ${order.id} & Hóa đơn ${invoice.id}! Đã chuyển phiếu KOT sang màn hình pha chế KDS.`,
+            { title: "Bán Hàng Hoàn Tất" }
         );
+
+        onClear();
+        setPaidInput("");
+        setVoucher("");
+        setDiscountInput("");
+        setPhone("");
+        setMemberInfo(null);
+        setMemberName("");
     }
 
     return (
         <div className="lg:col-span-5 flex flex-col gap-4 sticky top-20">
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-5 py-4 border-b border-[var(--border)]">
                     <label className="form-label" htmlFor="member-phone">
                         Số điện thoại hội viên
@@ -87,78 +177,103 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                             type="tel"
                             inputMode="tel"
                             className="form-input"
-                            placeholder="Nhập số điện thoại"
+                            placeholder="Ví dụ: 0903 123 456"
                             value={phone}
                             onChange={(event) => setPhone(event.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleLookupMember();
+                                }
+                            }}
                         />
                         <button
                             type="button"
-                            className="btn btn-secondary"
-                            onClick={() =>
-                                toast.info("Chưa kết nối dữ liệu hội viên. Không tự áp dụng hạng thẻ.")
-                            }
+                            className="btn btn-secondary shrink-0"
+                            onClick={handleLookupMember}
                         >
                             Tra cứu
                         </button>
                     </div>
-                    <p className="text-xs text-[var(--muted)] mt-2">
-                        Chưa tra cứu hội viên.
-                    </p>
+                    {memberInfo ? (
+                        <p className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            {memberInfo}
+                        </p>
+                    ) : (
+                        <p className="text-xs text-[var(--muted)] mt-2">
+                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (VIP: -10%, Gold: -8%, Silver: -5%).
+                        </p>
+                    )}
                 </div>
 
                 <div className="px-5 pt-4 pb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-bold">Giỏ hàng hiện tại</span>
-                        <span className="text-sm text-[var(--primary)]">
-                            {items.reduce((sum, item) => sum + item.quantity, 0)}
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                            {items.reduce((sum, item) => sum + item.quantity, 0)} ly
                         </span>
                     </div>
                     <button
                         type="button"
-                        className="text-xs text-[var(--danger)]"
+                        className="text-xs text-[var(--danger)] hover:underline font-medium"
                         disabled={!items.length}
                         onClick={() => setClearOpen(true)}
                     >
-                        Xóa tất cả
+                        Xóa giỏ hàng
                     </button>
                 </div>
 
-                <div className="max-h-[280px] overflow-y-auto px-5 pb-4">
-                    {!items.length ? (
-                        <p className="py-6 text-center text-sm text-[var(--muted)]">
-                            Chưa có món trong giỏ hàng.
-                        </p>
-                    ) : items.map((item) => (
-                        <div key={item.id} className="border-b border-[var(--border)] py-3">
-                            <div className="flex justify-between gap-3">
-                                <strong className="text-sm">
-                                    {item.quantity} × {item.name} · {item.size}
-                                </strong>
-                                <button
-                                    type="button"
-                                    className="text-xs text-[var(--danger)]"
-                                    aria-label={`Xóa ${item.name} khỏi giỏ hàng`}
-                                    onClick={() => onRemove(item.id)}
-                                >
-                                    Xóa
-                                </button>
+                <div className="px-5 pb-4 divide-y divide-[var(--border)] max-h-[300px] overflow-y-auto">
+                    {!items.length && (
+                        <div className="py-8 text-center text-sm text-[var(--muted)]">
+                            <svg className="w-10 h-10 mx-auto mb-2 text-[var(--muted)]/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                            </svg>
+                            Chưa có món nào được chọn. Nhấp vào món bên trái để bắt đầu.
+                        </div>
+                    )}
+                    {items.map((item) => (
+                        <div key={item.id} className="py-3 text-sm">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="font-semibold">{item.name}</div>
+                                    <div className="text-xs text-[var(--muted)]">
+                                        Cỡ {item.size} · Đường {item.sugar} · Đá {item.ice}
+                                    </div>
+                                    {item.toppings.length > 0 && (
+                                        <div className="text-xs text-emerald-700 font-medium mt-0.5">
+                                            + {item.toppings.join(", ")}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-[var(--text)]">×{item.quantity}</span>
+                                    <button
+                                        type="button"
+                                        className="text-[var(--muted)] hover:text-[var(--danger)] p-1"
+                                        onClick={() => onRemove(item.id)}
+                                        title="Xóa món này"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    </button>
+                                </div>
                             </div>
-                            <p className="mt-1 text-xs text-[var(--muted)]">
-                                Đường {item.sugar}% · {item.ice}
-                                {item.toppings.length > 0 && ` · ${item.toppings.join(", ")}`}
-                            </p>
                             {item.note && (
-                                <p className="mt-1 text-xs">{item.note}</p>
+                                <p className="mt-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded italic">
+                                    Ghi chú: {item.note}
+                                </p>
                             )}
-                            <p className="mt-2 text-sm font-semibold">
+                            <div className="mt-1 text-sm font-bold text-[var(--primary)] text-right">
                                 {formatCurrency(item.unitPrice * item.quantity)}
-                            </p>
+                            </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-sm">
                 <div className="mb-4">
                     <label className="form-label" htmlFor="pos-voucher-code">
                         Mã ưu đãi
@@ -166,26 +281,30 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                     <div className="flex gap-2">
                         <input
                             id="pos-voucher-code"
-                            className="form-input"
-                            placeholder="Nhập mã ưu đãi"
+                            className="form-input uppercase font-mono"
+                            placeholder="Nhập CHAOBAN hoặc GIAM20"
                             value={voucher}
                             onChange={(event) => setVoucher(event.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleApplyVoucher();
+                                }
+                            }}
                         />
                         <button
                             type="button"
-                            className="btn btn-secondary"
-                            onClick={() =>
-                                toast.info("Chưa kết nối điều kiện áp dụng mã ưu đãi.")
-                            }
+                            className="btn btn-secondary shrink-0"
+                            onClick={handleApplyVoucher}
                         >
                             Áp dụng
                         </button>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center mb-4">
-                    <span>Tạm tính</span>
-                    <strong>{formatCurrency(subtotal)}</strong>
+                <div className="flex justify-between items-center mb-4 text-sm">
+                    <span className="text-[var(--muted)]">Tạm tính</span>
+                    <strong className="text-base">{formatCurrency(subtotal)}</strong>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mb-4">
@@ -205,7 +324,7 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                     </div>
                     <div>
                         <label className="form-label" htmlFor="pos-tax-input">
-                            Thuế (%)
+                            Thuế VAT (%)
                         </label>
                         <input
                             id="pos-tax-input"
@@ -219,79 +338,102 @@ export default function PosCart({ items, onRemove, onClear }: PosCartProps) {
                     </div>
                 </div>
 
-                <div className="space-y-2 mb-4 text-sm">
-                    <div className="flex justify-between">
-                        <span>Tiền giảm giá</span>
-                        <span className="text-[var(--danger)]">
-                            −{formatCurrency(discount)}
-                        </span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span>Tiền thuế</span>
-                        <span>{formatCurrency(tax)}</span>
+                <div className="space-y-1.5 mb-4 text-sm">
+                    {discount > 0 && (
+                        <div className="flex justify-between text-emerald-600 font-medium">
+                            <span>Chiết khấu ưu đãi</span>
+                            <span>−{formatCurrency(discount)}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between text-xs text-[var(--muted)]">
+                        <span>Tiền thuế VAT</span>
+                        <span>+{formatCurrency(tax)}</span>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-4 border-t border-[var(--border)]">
-                    <strong>Tổng thanh toán</strong>
-                    <strong className="text-2xl text-[var(--primary)]">
+                <div className="flex justify-between items-center pt-3 border-t border-[var(--border)]">
+                    <strong className="text-base">Tổng thanh toán</strong>
+                    <strong className="text-2xl text-[var(--primary)] font-extrabold">
                         {formatCurrency(total)}
                     </strong>
                 </div>
-                
             </div>
 
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">
-                <label className="form-label" htmlFor="payment-method">Phương thức thanh toán</label><select id="payment-method" className="form-input form-select mb-4" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value)}><option value="cash">Tiền mặt</option><option value="transfer">Chuyển khoản</option><option value="card">Thẻ</option></select>
-                <div className="flex flex-wrap gap-2 mb-4">
-                    {[50000, 100000, 200000, 500000].map((amount) => (
-                        <button
-                            key={amount}
-                            type="button"
-                            className="quick-amount-btn px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[12px] font-semibold text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--primary-light)]"
-                            disabled={paymentMethod !== "cash"} onClick={() => setPaidInput(String(amount))}
-                        >
-                            {formatCurrency(amount)}
-                        </button>
-                    ))}
-                </div>
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-sm">
+                <label className="form-label" htmlFor="payment-method">Phương thức thanh toán</label>
+                <select
+                    id="payment-method"
+                    className="form-input form-select mb-4"
+                    value={paymentMethod}
+                    onChange={event => setPaymentMethod(event.target.value)}
+                >
+                    <option value="cash">Tiền mặt tại quầy</option>
+                    <option value="transfer">Chuyển khoản QR (VietQR / MoMo)</option>
+                    <option value="card">Thẻ ngân hàng (POS quẹt thẻ)</option>
+                </select>
 
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div>
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1.5" htmlFor="pos-paid-amount">
-                            Tiền khách đưa (đ)
-                        </label>
-                        <input
-                            disabled={paymentMethod !== "cash"} id="pos-paid-amount"
-                            type="number"
-                            min="0"
-                            step="1"
-                            className="w-full h-11 px-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--text)] text-sm font-bold focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all"
-                            value={paidInput}
-                            onChange={(event) => setPaidInput(event.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1.5" htmlFor="pos-change">Tiền thừa</label>
-                        <output
-                            id="pos-change"
-                            className="h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center px-3.5 font-bold text-sm text-emerald-700"
-                        >
-                            {paymentMethod === "cash" ? formatCurrency(change) : "Không áp dụng"}
-                        </output>
-                    </div>
-                </div>
+                {paymentMethod === "cash" && (
+                    <>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {[50000, 100000, 200000, 500000].map((amount) => (
+                                <button
+                                    key={amount}
+                                    type="button"
+                                    className="quick-amount-btn px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-[12px] font-semibold text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--primary-light)] transition-colors"
+                                    onClick={() => setPaidInput(String(amount))}
+                                >
+                                    {formatCurrency(amount)}
+                                </button>
+                            ))}
+                        </div>
 
-<button id="pos-complete-btn" type="button" onClick={completeSale} className="group relative w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-500 to-emerald-600 text-white text-[15px] font-bold flex items-center justify-center gap-3 transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(34,181,115,0.5)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_4px_15px_-2px_rgba(34,181,115,0.4)] overflow-hidden">
-              <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></span>
-              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:bg-white/30 transition-all">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              </div>
-              <span className="flex items-center gap-2">
-                Hoàn tất bán hàng
-                <span className="px-2.5 py-0.5 rounded-lg bg-white/20 text-[14px] font-extrabold backdrop-blur-sm"><span id="pos-total-label">{formatCurrency(total)}</span></span>
-              </span>
-            </button>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <label className="block text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1.5" htmlFor="pos-paid-amount">
+                                    Tiền khách đưa (₫)
+                                </label>
+                                <input
+                                    id="pos-paid-amount"
+                                    type="number"
+                                    min="0"
+                                    step="1000"
+                                    className="w-full h-11 px-3 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--text)] text-sm font-bold focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all"
+                                    placeholder={String(total)}
+                                    value={paidInput}
+                                    onChange={(event) => setPaidInput(event.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider mb-1.5" htmlFor="pos-change">Tiền thừa</label>
+                                <output
+                                    id="pos-change"
+                                    className="h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center px-3.5 font-bold text-sm text-emerald-700"
+                                >
+                                    {formatCurrency(change)}
+                                </output>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                <button
+                    id="pos-complete-btn"
+                    type="button"
+                    onClick={completeSale}
+                    disabled={!items.length}
+                    className="group relative w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 text-white text-[15px] font-bold flex items-center justify-center gap-3 transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(34,181,115,0.5)] hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                >
+                    <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></span>
+                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:bg-white/30 transition-all">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <span className="flex items-center gap-2">
+                        Hoàn tất thanh toán
+                        <span className="px-2.5 py-0.5 rounded-lg bg-white/20 text-[14px] font-extrabold backdrop-blur-sm">
+                            {formatCurrency(total)}
+                        </span>
+                    </span>
+                </button>
             </div>
 
             <ConfirmDialog

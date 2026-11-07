@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
@@ -43,6 +43,186 @@ interface EditableLine extends ReconciliationLine {
   countedText: string;
   actualUseText: string;
   wasteText: string;
+}
+
+interface ReasonMultiSelectProps {
+  selected: string;
+  onChange: (value: string) => void;
+  options: string[];
+  openUpward?: boolean;
+  ingredientName?: string;
+}
+
+function ReasonMultiSelect({
+  selected,
+  onChange,
+  options,
+  openUpward = false,
+  ingredientName,
+}: ReasonMultiSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedList = selected
+    ? selected
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  function toggleReason(item: string) {
+    let nextList: string[];
+    if (selectedList.includes(item)) {
+      nextList = selectedList.filter((s) => s !== item);
+    } else {
+      nextList = [...selectedList, item];
+    }
+    onChange(nextList.join(", "));
+  }
+
+  function clearAll() {
+    onChange("");
+  }
+
+  return (
+    <div
+      className="relative inline-block w-full min-w-[190px] max-w-[230px]"
+      ref={containerRef}
+    >
+      {/* Trigger Button - Gọn gàng, cố định chiều rộng, chống tràn bảng */}
+      <button
+        type="button"
+        aria-label={`Chọn nguyên nhân hao hụt ${ingredientName ?? ""}`}
+        className={`form-input flex items-center justify-between gap-1.5 w-full text-left cursor-pointer min-h-[38px] py-1 px-2.5 bg-[var(--surface)] transition-all ${
+          isOpen
+            ? "border-[var(--primary)] ring-1 ring-[var(--primary)]"
+            : "hover:border-[var(--primary)]"
+        }`}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        <div className="flex items-center gap-1 flex-1 overflow-hidden">
+          {selectedList.length === 0 ? (
+            <span className="text-xs text-[var(--muted)]">Chọn lý do...</span>
+          ) : selectedList.length === 1 ? (
+            <span
+              className="badge badge-warning text-[11px] truncate max-w-[145px]"
+              title={selectedList[0]}
+            >
+              {selectedList[0]}
+            </span>
+          ) : (
+            <div
+              className="flex items-center gap-1 overflow-hidden"
+              title={selectedList.join(", ")}
+            >
+              <span className="badge badge-warning text-[11px] truncate max-w-[95px]">
+                {selectedList[0]}
+              </span>
+              <span className="badge badge-gray text-[11px] shrink-0 font-medium">
+                +{selectedList.length - 1}
+              </span>
+            </div>
+          )}
+        </div>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          className={`shrink-0 text-[var(--muted)] transition-transform duration-150 ${
+            isOpen ? "rotate-180 text-[var(--primary)]" : ""
+          }`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {/* Popover Dropdown Checkboxes */}
+      {isOpen && (
+        <div
+          className={`absolute right-0 w-64 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl z-50 p-2.5 animate-fadeIn ${
+            openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
+          }`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-[var(--border)] text-xs">
+            <span className="font-semibold text-[var(--heading-color)]">
+              Nguyên nhân hao hụt
+            </span>
+            {selectedList.length > 0 && (
+              <button
+                type="button"
+                className="text-[11px] text-[var(--danger)] hover:underline font-medium"
+                onClick={clearAll}
+              >
+                Xóa chọn
+              </button>
+            )}
+          </div>
+
+          {/* List Checkboxes */}
+          <div className="space-y-0.5 max-h-52 overflow-y-auto py-0.5">
+            {options.map((option) => {
+              const isChecked = selectedList.includes(option);
+              return (
+                <label
+                  key={option}
+                  className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
+                    isChecked
+                      ? "bg-[rgba(34,181,115,0.08)] text-[var(--text)] font-semibold"
+                      : "hover:bg-[var(--background)] text-[var(--text)]"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleReason(option)}
+                    className="w-4 h-4 rounded border-[var(--border)] text-[#22B573] focus:ring-[#22B573] focus:ring-offset-0 cursor-pointer accent-[#22B573]"
+                  />
+                  <span className="flex-1 truncate">{option}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="pt-2 mt-1.5 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted)]">
+            <span>
+              Đã chọn:{" "}
+              <b className="text-[var(--primary)]">{selectedList.length}</b> lý
+              do
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary !py-0.5 !px-2.5 !text-xs !h-6"
+              onClick={() => setIsOpen(false)}
+            >
+              Xong
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function buildSessionLines(
@@ -495,7 +675,7 @@ export default function ShiftReconciliationPage() {
                     "Thực đếm",
                     "Chênh lệch",
                     "Giá trị",
-                    "Nguyên nhân",
+                    "Nguyên nhân hao hụt",
                   ].map((label) => (
                     <th
                       key={label}
@@ -507,7 +687,7 @@ export default function ShiftReconciliationPage() {
                 </tr>
               </thead>
               <tbody>
-                {lines.map((line) => {
+                {lines.map((line, index) => {
                   const ingredient = getIngredient(data, line.ingredientId);
                   const difference = variance(line);
                   return (
@@ -586,18 +766,15 @@ export default function ShiftReconciliationPage() {
                         {formatCurrency(Math.abs(difference) * line.unitCost)}
                       </td>
                       <td className="px-2 py-2">
-                        <select
-                          aria-label={`Nguyên nhân ${ingredient?.name}`}
-                          className="form-input form-select min-w-[170px]"
-                          value={line.reason}
-                          onChange={(event) =>
-                            updateLine(line.id, { reason: event.target.value })
+                        <ReasonMultiSelect
+                          ingredientName={ingredient?.name}
+                          selected={line.reason}
+                          options={REASONS}
+                          openUpward={index >= Math.max(1, lines.length - 2)}
+                          onChange={(newReason) =>
+                            updateLine(line.id, { reason: newReason })
                           }
-                        >
-                          {REASONS.map((item) => (
-                            <option key={item}>{item}</option>
-                          ))}
-                        </select>
+                        />
                       </td>
                     </tr>
                   );
@@ -728,6 +905,7 @@ export default function ShiftReconciliationPage() {
       <Modal
         isOpen={!!selectedRecord}
         title="Chi tiết đối soát"
+        size="lg"
         onClose={() => setSelectedRecord(null)}
       >
         {selectedRecord && (
@@ -748,6 +926,11 @@ export default function ShiftReconciliationPage() {
                   line.waste,
                 )}
                 ; đếm {line.counted}.
+                {line.reason && (
+                  <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">
+                    [Lý do: {line.reason}]
+                  </span>
+                )}
               </p>
             ))}
             <p className="text-sm text-[var(--muted)]">
