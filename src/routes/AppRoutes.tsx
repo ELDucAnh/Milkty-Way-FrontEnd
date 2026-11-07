@@ -12,6 +12,7 @@ import ShiftsPage from "../pages/sales/ShiftsPage";
 import PreparationQueuePage from "../pages/sales/PreparationQueuePage";
 import CustomersPage from "../pages/sales/CustomersPage";
 import PromotionsPage from "../pages/sales/PromotionsPage";
+import BranchPromotionsPage from "../pages/sales/BranchPromotionsPage";
 
 // Inventory
 import ProductsPage from "../pages/inventory/ProductsPage";
@@ -100,9 +101,12 @@ export default function AppRoutes() {
         <Route path="/sales/returns" element={<SalesReturnsPage />} />
         <Route path="/sales/shifts" element={<ShiftsPage />} />
         <Route path="/sales/preparation" element={<PreparationQueuePage />} />
+        <Route path="/sales/promotions" element={<Navigate to="/marketing/promotions" replace />} />
         <Route path="/customers" element={<CustomersPage />} />
+        {/* Marketing & Khuyến Mãi */}
         <Route path="/marketing" element={<Navigate to="/marketing/promotions" replace />} />
         <Route path="/marketing/promotions" element={<PromotionsPage />} />
+        <Route path="/marketing/branch-promotions" element={<BranchPromotionsPage />} />
 
         {/* Kho & Nguyên Liệu */}
         <Route path="/inventory" element={<Navigate to="/inventory/products" replace />} />

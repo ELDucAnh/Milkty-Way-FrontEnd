@@ -251,7 +251,7 @@ export default function PreparationQueuePage() {
                     )}
                     {order.status === "ready" && (
                         <span className="text-xs text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg">
-                            ✓ Đã hoàn tất
+                            Đã hoàn tất
                         </span>
                     )}
                     {order.status !== "ready" && (

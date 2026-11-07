@@ -43,10 +43,121 @@ interface CustomerForm {
     phone: string;
 }
 
+export interface TierRule {
+    tier: MemberTier;
+    label: string;
+    variant: BadgeVariant;
+    minPoints: number;
+    maxPoints: number;
+    discountText: string;
+    discountPercent: number;
+    spendingRequired: string;
+    benefits: string;
+    nextTier: string | null;
+}
+
+export const TIER_RULES: Record<MemberTier, TierRule> = {
+    member: {
+        tier: "member",
+        label: "Hạng Thành Viên",
+        variant: "gray",
+        minPoints: 0,
+        maxPoints: 199,
+        discountText: "Tích 1 điểm / 10k",
+        discountPercent: 0,
+        spendingRequired: "Dưới 2.000.000 ₫",
+        benefits: "Tích lũy 1 điểm cho mỗi 10.000 ₫ chi tiêu, voucher chào mừng thành viên mới.",
+        nextTier: "Hạng Bạc (Cần 200 điểm)",
+    },
+    silver: {
+        tier: "silver",
+        label: "Hạng Bạc",
+        variant: "info",
+        minPoints: 200,
+        maxPoints: 499,
+        discountText: "Giảm 5% hóa đơn",
+        discountPercent: 5,
+        spendingRequired: "Từ 2.000.000 ₫ (200 điểm)",
+        benefits: "Giảm 5% trực tiếp trên mọi đơn hàng toàn chuỗi, tặng voucher 50.000 ₫ ngày sinh nhật.",
+        nextTier: "Hạng Vàng (Cần 500 điểm)",
+    },
+    gold: {
+        tier: "gold",
+        label: "Hạng Vàng",
+        variant: "warning",
+        minPoints: 500,
+        maxPoints: 999,
+        discountText: "Giảm 10% + Free Topping",
+        discountPercent: 10,
+        spendingRequired: "Từ 5.000.000 ₫ (500 điểm)",
+        benefits: "Giảm 10% trực tiếp, miễn phí 1 topping / ly, ưu tiên nhận đồ uống giờ cao điểm.",
+        nextTier: "Hạng VIP (Cần 1.000 điểm)",
+    },
+    vip: {
+        tier: "vip",
+        label: "Hạng VIP",
+        variant: "purple",
+        minPoints: 1000,
+        maxPoints: Infinity,
+        discountText: "Giảm 15% tối đa",
+        discountPercent: 15,
+        spendingRequired: "Từ 10.000.000 ₫ (1.000 điểm)",
+        benefits: "Giảm 15% mọi hóa đơn, nhân đôi điểm tích lũy vào thứ 4, hộp quà sinh nhật độc quyền.",
+        nextTier: null,
+    },
+};
+
+export function calculateTierProgression(points: number) {
+    if (points >= 1000) {
+        return {
+            tier: "vip" as MemberTier,
+            currentTierLabel: "Hạng VIP",
+            nextTierLabel: "Đã đạt hạng cao nhất",
+            neededPoints: 0,
+            percent: 100,
+            summary: "Đã đạt hạng VIP cao nhất (Giảm 15%)",
+        };
+    }
+    if (points >= 500) {
+        const needed = 1000 - points;
+        const percent = Math.min(100, Math.round(((points - 500) / 500) * 100));
+        return {
+            tier: "gold" as MemberTier,
+            currentTierLabel: "Hạng Vàng",
+            nextTierLabel: "Hạng VIP (Mốc 1.000 điểm)",
+            neededPoints: needed,
+            percent,
+            summary: `Cần thêm ${needed} điểm để lên Hạng VIP`,
+        };
+    }
+    if (points >= 200) {
+        const needed = 500 - points;
+        const percent = Math.min(100, Math.round(((points - 200) / 300) * 100));
+        return {
+            tier: "silver" as MemberTier,
+            currentTierLabel: "Hạng Bạc",
+            nextTierLabel: "Hạng Vàng (Mốc 500 điểm)",
+            neededPoints: needed,
+            percent,
+            summary: `Cần thêm ${needed} điểm để lên Hạng Vàng`,
+        };
+    }
+    const needed = 200 - points;
+    const percent = Math.min(100, Math.round((points / 200) * 100));
+    return {
+        tier: "member" as MemberTier,
+        currentTierLabel: "Hạng Thành Viên",
+        nextTierLabel: "Hạng Bạc (Mốc 200 điểm)",
+        neededPoints: needed,
+        percent,
+        summary: `Cần thêm ${needed} điểm để lên Hạng Bạc`,
+    };
+}
+
 const tierLabels: Record<MemberTier, string> = {
-    member: "Thành viên",
-    silver: "Hạng bạc",
-    gold: "Hạng vàng",
+    member: "Hạng Thành Viên",
+    silver: "Hạng Bạc",
+    gold: "Hạng Vàng",
     vip: "Hạng VIP",
 };
 
@@ -257,12 +368,16 @@ export default function CustomersPage() {
         },
         {
             id: "tier",
-            header: "Hạng thẻ",
-            render: (customer) => (
-                <Badge variant={tierVariants[customer.tier]}>
-                    {tierLabels[customer.tier]}
-                </Badge>
-            ),
+            header: "Hạng thành viên",
+            render: (customer) => {
+                const rule = TIER_RULES[customer.tier];
+                return (
+                    <div>
+                        <Badge variant={rule.variant}>{rule.label}</Badge>
+                        <div className="text-[11px] text-[var(--muted)] mt-0.5">{rule.discountText}</div>
+                    </div>
+                );
+            },
         },
         {
             id: "spending",
@@ -272,9 +387,37 @@ export default function CustomersPage() {
         },
         {
             id: "points",
-            header: "Điểm khả dụng",
-            className: "font-bold text-[var(--primary)]",
-            render: (customer) => `${customer.points.toLocaleString("vi-VN")} điểm`,
+            header: "Điểm & Tiến độ lên hạng",
+            render: (customer) => {
+                const prog = calculateTierProgression(customer.points);
+                return (
+                    <div className="min-w-[170px]">
+                        <div className="flex justify-between items-baseline mb-1">
+                            <span className="font-bold text-sm text-[var(--primary)]">{customer.points.toLocaleString("vi-VN")} điểm</span>
+                            {customer.tier !== "vip" && (
+                                <span className="text-[10px] text-[var(--muted)] font-medium">Cần {prog.neededPoints}đ</span>
+                            )}
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-100 dark:bg-zinc-700 rounded-full overflow-hidden mb-1">
+                            <div
+                                className={`h-full rounded-full transition-all ${
+                                    customer.tier === "vip"
+                                        ? "bg-purple-500"
+                                        : customer.tier === "gold"
+                                        ? "bg-amber-500"
+                                        : customer.tier === "silver"
+                                        ? "bg-blue-500"
+                                        : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${prog.percent}%` }}
+                            />
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)] leading-tight">
+                            {customer.tier === "vip" ? "Đã đạt hạng cao nhất" : `Lên ${prog.nextTierLabel.replace(" (Mốc ", " (")}`}
+                        </div>
+                    </div>
+                );
+            },
         },
         {
             id: "lastPurchase",
@@ -409,6 +552,83 @@ export default function CustomersPage() {
                 </div>
             </section>
 
+            {/* Chính Sách Phân Cấp Hạng Thành Viên & Điểm Thăng Hạng */}
+            <section className="card mb-6" aria-label="Chính sách hạng thành viên">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-4 pb-3 border-b border-[var(--border)]">
+                    <div>
+                        <h2 className="card-title text-base">Chính Sách 4 Cấp Độ Hạng Thành Viên Chuỗi MilktyWay</h2>
+                        <p className="card-subtitle text-xs">
+                            Hệ thống tự động nâng hạng ngay khi khách hàng đạt đủ mốc điểm tích lũy hoặc chi tiêu 12 tháng.
+                        </p>
+                    </div>
+                    <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
+                        Quy chế tích 1 điểm / 10.000 ₫
+                    </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {/* Hạng Thành viên */}
+                    <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 dark:bg-zinc-800/40 space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="font-bold text-sm text-[var(--text)]">1. Thành Viên Mới</span>
+                            <Badge variant="gray">0 – 199 Điểm</Badge>
+                        </div>
+                        <div className="text-xs font-semibold text-[var(--primary)]">Mức chi: Dưới 2.000.000 ₫</div>
+                        <div className="text-xs text-[var(--muted)] leading-relaxed">
+                            {TIER_RULES.member.benefits}
+                        </div>
+                        <div className="pt-2 border-t border-[var(--border)] text-[11px] font-medium text-blue-600">
+                            Cần đạt <strong>200 điểm</strong> để thăng Hạng Bạc
+                        </div>
+                    </div>
+
+                    {/* Hạng Bạc */}
+                    <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/30 dark:bg-zinc-800/40 space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="font-bold text-sm text-[var(--text)]">2. Hạng Bạc (Silver)</span>
+                            <Badge variant="info">200 – 499 Điểm</Badge>
+                        </div>
+                        <div className="text-xs font-semibold text-blue-600">Giảm 5% mọi hóa đơn</div>
+                        <div className="text-xs text-[var(--muted)] leading-relaxed">
+                            {TIER_RULES.silver.benefits}
+                        </div>
+                        <div className="pt-2 border-t border-[var(--border)] text-[11px] font-medium text-amber-600">
+                            Cần đạt <strong>500 điểm</strong> để thăng Hạng Vàng
+                        </div>
+                    </div>
+
+                    {/* Hạng Vàng */}
+                    <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/30 dark:bg-zinc-800/40 space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="font-bold text-sm text-[var(--text)]">3. Hạng Vàng (Gold)</span>
+                            <Badge variant="warning">500 – 999 Điểm</Badge>
+                        </div>
+                        <div className="text-xs font-semibold text-amber-600">Giảm 10% + Free Topping</div>
+                        <div className="text-xs text-[var(--muted)] leading-relaxed">
+                            {TIER_RULES.gold.benefits}
+                        </div>
+                        <div className="pt-2 border-t border-[var(--border)] text-[11px] font-medium text-purple-600">
+                            Cần đạt <strong>1.000 điểm</strong> để thăng Hạng VIP
+                        </div>
+                    </div>
+
+                    {/* Hạng VIP */}
+                    <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/30 dark:bg-zinc-800/40 space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="font-bold text-sm text-[var(--text)]">4. Hạng VIP (Diamond)</span>
+                            <Badge variant="purple">Từ 1.000 Điểm</Badge>
+                        </div>
+                        <div className="text-xs font-semibold text-purple-600">Giảm 15% tối đa</div>
+                        <div className="text-xs text-[var(--muted)] leading-relaxed">
+                            {TIER_RULES.vip.benefits}
+                        </div>
+                        <div className="pt-2 border-t border-[var(--border)] text-[11px] font-bold text-emerald-600">
+                            Hạng hội viên cao cấp nhất toàn hệ thống
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section className="card mb-6" aria-labelledby="customer-filter-title">
                 <h2 id="customer-filter-title" className="card-title mb-4">Bộ lọc hội viên</h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -476,21 +696,58 @@ export default function CustomersPage() {
                 />
             </section>
 
-            {/* Bảng Lịch sử giao dịch điểm tích lũy của khách hàng được chọn */}
+            {/* Bảng Lịch sử & Tiến trình thăng hạng của khách hàng được chọn */}
             <section id="customer-history-section" className="card scroll-mt-24" aria-labelledby="history-title">
                 <div className="card-header pb-3 mb-4 border-b border-[var(--border)] flex justify-between items-center flex-wrap gap-3">
                     <div>
                         <h2 id="history-title" className="card-title text-base">
-                            Sổ Cái Lịch Sử Tích &amp; Đổi Điểm Thưởng: <span className="text-[var(--primary)]">{selectedCustomer.name}</span> ({selectedCustomer.id})
+                            Hồ Sơ Hạng Thành Viên &amp; Tiến Độ Thăng Cấp: <span className="text-[var(--primary)]">{selectedCustomer.name}</span> ({selectedCustomer.id})
                         </h2>
                         <p className="card-subtitle text-xs">
-                            SĐT: <strong>{selectedCustomer.phone}</strong> · Hạng: <strong>{tierLabels[selectedCustomer.tier]}</strong> · Số dư khả dụng: <strong className="text-[var(--primary)]">{selectedCustomer.points.toLocaleString("vi-VN")} điểm</strong>
+                            SĐT: <strong>{selectedCustomer.phone}</strong> · Hạng hiện tại: <strong>{TIER_RULES[selectedCustomer.tier].label}</strong> · Điểm tích lũy: <strong className="text-[var(--primary)]">{selectedCustomer.points.toLocaleString("vi-VN")} điểm</strong>
                         </p>
                     </div>
-                    <Badge variant={tierVariants[selectedCustomer.tier]}>
-                        {tierLabels[selectedCustomer.tier]}
+                    <Badge variant={TIER_RULES[selectedCustomer.tier].variant}>
+                        {TIER_RULES[selectedCustomer.tier].label} · {TIER_RULES[selectedCustomer.tier].discountText}
                     </Badge>
                 </div>
+
+                {/* Thanh tiến trình thăng hạng trực quan */}
+                {(() => {
+                    const prog = calculateTierProgression(selectedCustomer.points);
+                    return (
+                        <div className="p-4 rounded-xl bg-[var(--background)] border border-[var(--border)] mb-5">
+                            <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+                                <span className="text-xs font-bold text-[var(--text)]">
+                                    Tiến trình thăng hạng của {selectedCustomer.name}:
+                                </span>
+                                <span className="text-xs font-semibold text-[var(--primary)]">
+                                    {prog.summary}
+                                </span>
+                            </div>
+                            <div className="w-full h-3 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden mb-2 relative">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                        selectedCustomer.tier === "vip"
+                                            ? "bg-purple-600"
+                                            : selectedCustomer.tier === "gold"
+                                            ? "bg-amber-500"
+                                            : selectedCustomer.tier === "silver"
+                                            ? "bg-blue-500"
+                                            : "bg-emerald-500"
+                                    }`}
+                                    style={{ width: `${selectedCustomer.tier === "vip" ? 100 : Math.min(100, Math.round((selectedCustomer.points / 1000) * 100))}%` }}
+                                />
+                            </div>
+                            <div className="flex justify-between text-[11px] text-[var(--muted)] font-mono">
+                                <span className={selectedCustomer.points >= 0 ? "font-bold text-[var(--text)]" : ""}>Thành Viên (0đ)</span>
+                                <span className={selectedCustomer.points >= 200 ? "font-bold text-blue-600" : ""}>Hạng Bạc (200đ)</span>
+                                <span className={selectedCustomer.points >= 500 ? "font-bold text-amber-600" : ""}>Hạng Vàng (500đ)</span>
+                                <span className={selectedCustomer.points >= 1000 ? "font-bold text-purple-600" : ""}>Hạng VIP (1.000đ)</span>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div className="overflow-x-auto">
                     <table className="data-table w-full">

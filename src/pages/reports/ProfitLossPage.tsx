@@ -241,7 +241,7 @@ export default function ProfitLossPage() {
                     <strong>85.000.000 ₫</strong> (Đạt 80.5%)
                   </div>
                   <div className="text-red-600 font-semibold mt-1">
-                    ⚠ 3 tuần liên tiếp dưới điểm hòa vốn — Cần tái cơ cấu menu &amp; chạy Flash Sale
+                    Cảnh báo: 3 tuần liên tiếp dưới điểm hòa vốn — Cần tái cơ cấu menu &amp; chạy Flash Sale
                   </div>
                 </div>
 
@@ -255,7 +255,7 @@ export default function ProfitLossPage() {
                     <strong>78.000.000 ₫</strong> (Đạt 97.7%)
                   </div>
                   <div className="text-amber-700 font-semibold mt-1">
-                    ⚠ Cận ngưỡng hòa vốn (Trung bình trượt 4 tuần tiệm cận) — Đang theo dõi
+                    Lưu ý: Cận ngưỡng hòa vốn (Trung bình trượt 4 tuần tiệm cận) — Đang theo dõi
                   </div>
                 </div>
               </div>

@@ -426,11 +426,10 @@ export default function SuppliersPage() {
                       {supplier.totalPurchase.toLocaleString("vi-VN")} đ
                     </td>
                     <td
-                      className={`text-[13px] ${
-                        supplier.debt > 0
+                      className={`text-[13px] ${supplier.debt > 0
                           ? "font-semibold text-[var(--danger)]"
                           : "text-[var(--muted)]"
-                      }`}
+                        }`}
                     >
                       {supplier.debt.toLocaleString("vi-VN")} đ
                     </td>
@@ -696,7 +695,7 @@ export default function SuppliersPage() {
                     {selectedSupplier.status}
                   </Badge>
                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    ✓ {selectedSupplier.foodSafetyStandard}
+                    Đạt chuẩn: {selectedSupplier.foodSafetyStandard}
                   </span>
                 </div>
               </div>
