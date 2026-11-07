@@ -138,12 +138,18 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
             return;
         }
 
+        // Xác định hạng thành viên nếu tìm thấy
+        const cleanPhone = phone.trim();
+        const found = cleanPhone ? SAMPLE_MEMBERS[cleanPhone] : null;
+        const tier = found ? (found.tier.includes("VIP") ? "VIP" : found.tier.includes("Vàng") ? "Gold" : found.tier.includes("Bạc") ? "Silver" : "Member") : (cleanPhone ? "Member" : undefined);
+
         // Tạo đơn hàng thực tế vào hệ thống chung
         const { order, invoice } = createPosOrder({
             branchId,
             items: [...items],
-            customerPhone: phone.trim() || undefined,
+            customerPhone: cleanPhone || undefined,
             customerName: memberName || undefined,
+            tier,
             paymentMethod: paymentMethod as "cash" | "transfer" | "card",
             paidAmount: paymentMethod === "cash" ? paid : total,
             discountRate: discountRate ?? 0,
@@ -202,7 +208,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                         </p>
                     ) : (
                         <p className="text-xs text-[var(--muted)] mt-2">
-                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (VIP: -10%, Gold: -8%, Silver: -5%).
+                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (Hạng VIP: -15%, Hạng Vàng: -10%, Hạng Bạc: -5%).
                         </p>
                     )}
                 </div>

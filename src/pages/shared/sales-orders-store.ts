@@ -411,6 +411,7 @@ export function createPosOrder(params: {
   items: PosCartItem[];
   customerPhone?: string;
   customerName?: string;
+  tier?: "Member" | "Silver" | "Gold" | "VIP";
   paymentMethod: "cash" | "transfer" | "card";
   paidAmount: number;
   discountRate: number;
@@ -466,7 +467,7 @@ export function createPosOrder(params: {
     orderId,
     customerName,
     customerPhone,
-    tier: params.customerPhone ? "Gold" : "Member",
+    tier: params.tier || (params.customerPhone ? "Gold" : "Member"),
     initials: customerName.split(" ").slice(-2).map(w => w[0]).join("").toUpperCase() || "KH",
     avatarBg: "var(--primary)",
     branch: `${params.branchId} - Bến Nghé (Quận 1)`,
