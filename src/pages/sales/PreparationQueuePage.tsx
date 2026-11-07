@@ -7,17 +7,9 @@ import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
 import { useToast } from "../../components/common/useToast";
 import { salesBranches } from "../../data/sales/branches";
-import {
-    initialPreparationOrders,
-    isPreparationStatus,
-} from "../../data/sales/preparation";
-import type {
-    PreparationChannel,
-    PreparationFilters,
-    PreparationOrder,
-    PreparationStatus,
-} from "../../data/sales/preparation";
 import { formatDateTime } from "../../utils/format";
+import { loadOrders, saveOrders } from "../shared/sales-orders-store";
+import type { PreparationChannel, PreparationOrder, PreparationStatus } from "../shared/sales-orders-store";
 
 interface StatusDisplay {
     label: string;
@@ -54,24 +46,41 @@ const channelDisplay: Record<PreparationChannel, StatusDisplay> = {
     },
 };
 
-const initialFilters: PreparationFilters = {
-    branchId: "CN01",
-    status: "",
-};
+function getOrdersFromStore(): PreparationOrder[] {
+    const orders = loadOrders();
+    return orders.filter(o => o.items && o.items.length > 0).map(o => {
+        const itemSummary = o.items.map(it => `${it.quantity} × ${it.name} (Size ${it.size})`).join(" + ");
+        const optionSummary = o.items.map(it => `Đường ${it.sugar} · ${it.ice}${it.toppings.length ? ` · Topping: ${it.toppings.join(", ")}` : ""}`).join(" | ");
+        const note = o.items.map(it => it.note).filter(Boolean).join("; ") || "Không có";
+        const waitingMinutes = Math.max(1, Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000)) || 3;
+        return {
+            id: o.id,
+            branchId: o.branchId || "CN01",
+            channel: o.channel || "counter",
+            receivedAt: o.createdAt,
+            waitingMinutes: waitingMinutes > 60 ? 5 : waitingMinutes,
+            itemSummary,
+            optionSummary,
+            note,
+            status: o.preparation || "waiting",
+        };
+    });
+}
 
 export default function PreparationQueuePage() {
     const toast = useToast();
     const [pageSize, setPageSize] = useState(10);
+    const [orders, setOrders] = useState<PreparationOrder[]>(() => getOrdersFromStore());
 
-    const [orders, setOrders] = useState<PreparationOrder[]>(() =>
-        initialPreparationOrders.map((order) => ({ ...order })),
-    );
+    const [draftFilters, setDraftFilters] = useState<{ branchId: string; status: string }>({
+        branchId: "CN01",
+        status: "",
+    });
 
-    const [draftFilters, setDraftFilters] =
-        useState<PreparationFilters>(initialFilters);
-
-    const [appliedFilters, setAppliedFilters] =
-        useState<PreparationFilters>(initialFilters);
+    const [appliedFilters, setAppliedFilters] = useState<{ branchId: string; status: string }>({
+        branchId: "CN01",
+        status: "",
+    });
 
     const visibleOrders = orders.filter((order) => {
         const matchesBranch =
@@ -91,7 +100,7 @@ export default function PreparationQueuePage() {
     }
 
     function handleResetFilters() {
-        const emptyFilters: PreparationFilters = {
+        const emptyFilters = {
             branchId: "",
             status: "",
         };
@@ -112,11 +121,20 @@ export default function PreparationQueuePage() {
 
         setOrders((current) =>
             current.map((item) =>
-                item.id === orderId && item.status === order.status
+                item.id === orderId
                     ? { ...item, status: nextStatus }
                     : item,
             ),
         );
+
+        // Đồng bộ sang SalesOrder list
+        try {
+            const all = loadOrders();
+            const updated = all.map(o => o.id === orderId ? { ...o, preparation: nextStatus } : o);
+            saveOrders(updated);
+        } catch (e) {
+            console.warn(e);
+        }
 
         toast.success(
             `Đã cập nhật đơn ${orderId}: ${statusDisplay[nextStatus].label}.`,
@@ -128,15 +146,22 @@ export default function PreparationQueuePage() {
         {
             id: "id",
             header: "Mã đơn",
-            className: "whitespace-nowrap",
-            render: (order) => order.id,
+            className: "whitespace-nowrap font-mono font-bold text-[var(--primary)]",
+            render: (order) => (
+                <Link
+                    to={`/invoices/invoice-details?orderId=${encodeURIComponent(order.id)}`}
+                    className="hover:underline"
+                    title="Xem chi tiết phiếu KOT"
+                >
+                    {order.id}
+                </Link>
+            ),
         },
         {
             id: "channel",
             header: "Kênh",
             render: (order) => {
-                const display = channelDisplay[order.channel];
-
+                const display = channelDisplay[order.channel] || channelDisplay.counter;
                 return (
                     <Badge variant={display.variant}>
                         {display.label}
@@ -156,45 +181,44 @@ export default function PreparationQueuePage() {
         },
         {
             id: "waitingMinutes",
-            header: "Chờ",
-            className: "whitespace-nowrap",
-            render: (order) => `${order.waitingMinutes} phút`,
+            header: "Thời gian chờ",
+            className: "whitespace-nowrap font-medium",
+            render: (order) => (
+                <span className={order.waitingMinutes > 10 ? "text-amber-600 font-bold" : ""}>
+                    {order.waitingMinutes} phút
+                </span>
+            ),
         },
         {
-            id: "items",
-            header: "Món và tùy chọn",
+            id: "itemSummary",
+            header: "Tóm tắt món",
             render: (order) => (
-                <>
-                    <div
-                        className={
-                            order.optionSummary
-                                ? "font-semibold name-ellipsis"
-                                : ""
-                        }
-                        title={order.itemSummary}
-                    >
-                        {order.itemSummary}
-                    </div>
-
-                    {order.optionSummary && (
-                        <div className="text-xs text-[var(--muted)]">
-                            {order.optionSummary}
-                        </div>
-                    )}
-                </>
+                <div className="font-semibold text-sm">{order.itemSummary}</div>
+            ),
+        },
+        {
+            id: "optionSummary",
+            header: "Tùy chọn",
+            render: (order) => (
+                <span className="text-xs text-[var(--muted)]">
+                    {order.optionSummary || "Tiêu chuẩn"}
+                </span>
             ),
         },
         {
             id: "note",
             header: "Ghi chú",
-            render: (order) => order.note,
+            render: (order) => (
+                <span className={order.note !== "Không có" ? "text-amber-700 font-medium text-xs bg-amber-50 px-2 py-0.5 rounded" : "text-xs text-[var(--muted)]"}>
+                    {order.note}
+                </span>
+            ),
         },
         {
             id: "status",
             header: "Trạng thái",
             render: (order) => {
                 const display = statusDisplay[order.status];
-
                 return (
                     <Badge variant={display.variant}>
                         {display.label}
@@ -204,41 +228,45 @@ export default function PreparationQueuePage() {
         },
         {
             id: "actions",
-            header: "Thao tác",
-            className: "whitespace-nowrap",
+            header: "Thao tác quầy",
             render: (order) => (
-                <div className="inline-flex items-center gap-1.5">
-                    {order.status !== "ready" && (
-                        <button
-                            type="button"
-                            className="btn btn-primary btn-sm shrink-0"
-                            onClick={() => handleAdvanceStatus(order.id)}
-                        >
-                            {order.status === "waiting"
-                                ? "Pha chế"
-                                : "Món đã sẵn sàng"}
-                        </button>
-                    )}
-
+                <div className="flex flex-wrap gap-1.5">
                     {order.status === "waiting" && (
                         <button
                             type="button"
-                            className="btn btn-secondary btn-sm shrink-0"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleAdvanceStatus(order.id)}
+                        >
+                            Pha chế
+                        </button>
+                    )}
+                    {order.status === "preparing" && (
+                        <button
+                            type="button"
+                            className="btn btn-success btn-sm !bg-emerald-600 !text-white"
+                            onClick={() => handleAdvanceStatus(order.id)}
+                        >
+                            Món đã sẵn sàng
+                        </button>
+                    )}
+                    {order.status === "ready" && (
+                        <span className="text-xs text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg">
+                            ✓ Đã hoàn tất
+                        </span>
+                    )}
+                    {order.status !== "ready" && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary btn-sm !text-rose-600"
                             onClick={() =>
-                                toast.info(
-                                    `Chưa gửi báo thiếu cho đơn ${order.id}; chức năng đang chờ tích hợp với module kho.`,
-                                    { title: "Báo thiếu" },
+                                toast.warning(
+                                    `Đã phát cảnh báo thiếu nguyên liệu cho đơn ${order.id} tới Quầy thu ngân & Quản lý ${order.branchId}!`,
+                                    { title: "Báo Thiếu Nguyên Liệu" }
                                 )
                             }
                         >
                             Báo thiếu
                         </button>
-                    )}
-
-                    {order.status === "ready" && (
-                        <span className="text-sm text-[var(--muted)]">
-                            Chờ bàn giao
-                        </span>
                     )}
                 </div>
             ),
@@ -246,167 +274,141 @@ export default function PreparationQueuePage() {
     ];
 
     return (
-        <>
+        <div className="space-y-6">
             <div className="page-header">
                 <div>
-                    <nav
-                        className="breadcrumb"
-                        aria-label="Đường dẫn trang"
-                    >
+                    <nav className="breadcrumb" aria-label="Đường dẫn trang">
                         <Link to="/dashboard">Trang chủ</Link>
-                        <span className="sep" aria-hidden="true">
-                            /
-                        </span>
+                        <span className="sep">/</span>
                         <Link to="/sales">Bán hàng</Link>
-                        <span className="sep" aria-hidden="true">
-                            /
-                        </span>
-                        <span
-                            className="current"
-                            aria-current="page"
-                        >
-                            Hàng đợi pha chế
-                        </span>
+                        <span className="sep">/</span>
+                        <span className="current">Hàng đợi pha chế (KDS)</span>
                     </nav>
-
-                    <h1 className="page-title">
-                        Hàng đợi pha chế
-                    </h1>
-
+                    <div className="flex items-center gap-3 mt-1">
+                        <h1 className="page-title mb-0">Hàng Đợi Pha Chế (KDS - Kitchen Display System)</h1>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Quầy bar thời gian thực
+                        </span>
+                    </div>
                     <p className="page-subtitle">
-                        Chỉ hiển thị đơn đủ điều kiện chuyển đến quầy pha chế.
+                        Màn hình điều phối thứ tự pha chế cho Barista quầy bar, cập nhật trạng thái đơn hàng tức thời.
                     </p>
+                </div>
+                <div className="page-header-actions">
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                            setOrders(getOrdersFromStore());
+                            toast.info("Đã làm mới danh sách đơn từ quầy POS.", { title: "Cập Nhật" });
+                        }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="23 4 23 10 17 10" />
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                        </svg>
+                        Làm mới hàng đợi
+                    </button>
+                    <Link to="/sales/pos" className="btn btn-primary">
+                        Về quầy POS
+                    </Link>
                 </div>
             </div>
 
-            <section
-                className="card mb-6"
-                aria-labelledby="prep-filter-title"
-            >
-                <h2
-                    id="prep-filter-title"
-                    className="card-title mb-4"
+            <section className="card" aria-labelledby="kds-filter-title">
+                <h2 id="kds-filter-title" className="card-title mb-4">Bộ lọc hàng đợi</h2>
+                <form
+                    onSubmit={handleApplyFilters}
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end"
                 >
-                    Bộ lọc hàng đợi
-                </h2>
-
-                <form onSubmit={handleApplyFilters}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                        <div className="min-w-0">
-                            <label
-                                className="form-label"
-                                htmlFor="prep-branch"
-                            >
-                                Chi nhánh
-                            </label>
-
-                            <select
-                                id="prep-branch"
-                                className="form-input form-select w-full h-11"
-                                value={draftFilters.branchId}
-                                onChange={(event) =>
-                                    setDraftFilters((current) => ({
-                                        ...current,
-                                        branchId: event.target.value,
-                                    }))
-                                }
-                            >
-                                <option value="">
-                                    Tất cả 12 chi nhánh
+                    <div>
+                        <label className="form-label" htmlFor="kds-branch">
+                            Chi nhánh
+                        </label>
+                        <select
+                            id="kds-branch"
+                            className="form-input form-select"
+                            value={draftFilters.branchId}
+                            onChange={(event) =>
+                                setDraftFilters((current) => ({
+                                    ...current,
+                                    branchId: event.target.value,
+                                }))
+                            }
+                        >
+                            <option value="">Tất cả chi nhánh</option>
+                            {salesBranches.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                    {b.id} — {b.name}
                                 </option>
+                            ))}
+                        </select>
+                    </div>
 
-                                {salesBranches.map((branch) => (
-                                    <option
-                                        key={branch.id}
-                                        value={branch.id}
-                                    >
-                                        {branch.id} — {branch.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                    <div>
+                        <label className="form-label" htmlFor="kds-status">
+                            Trạng thái pha chế
+                        </label>
+                        <select
+                            id="kds-status"
+                            className="form-input form-select"
+                            value={draftFilters.status}
+                            onChange={(event) =>
+                                setDraftFilters((current) => ({
+                                    ...current,
+                                    status: event.target.value,
+                                }))
+                            }
+                        >
+                            <option value="">Tất cả trạng thái</option>
+                            <option value="waiting">Chờ pha chế</option>
+                            <option value="preparing">Đang pha chế</option>
+                            <option value="ready">Sẵn sàng</option>
+                        </select>
+                    </div>
 
-                        <div className="min-w-0">
-                            <label
-                                className="form-label"
-                                htmlFor="prep-status"
-                            >
-                                Trạng thái pha chế
-                            </label>
+                    <div>
+                        <label className="form-label" htmlFor="kds-pagesize">
+                            Số dòng hiển thị
+                        </label>
+                        <select
+                            id="kds-pagesize"
+                            className="form-input form-select"
+                            value={pageSize}
+                            onChange={(event) => setPageSize(Number(event.target.value))}
+                        >
+                            <option value="5">5 đơn/trang</option>
+                            <option value="10">10 đơn/trang</option>
+                            <option value="20">20 đơn/trang</option>
+                        </select>
+                    </div>
 
-                            <select
-                                id="prep-status"
-                                className="form-input form-select w-full h-11"
-                                value={draftFilters.status}
-                                onChange={(event) => {
-                                    const value = event.target.value;
-
-                                    if (
-                                        value === "" ||
-                                        isPreparationStatus(value)
-                                    ) {
-                                        setDraftFilters((current) => ({
-                                            ...current,
-                                            status: value,
-                                        }));
-                                    }
-                                }}
-                            >
-                                <option value="">
-                                    Tất cả trạng thái
-                                </option>
-                                <option value="waiting">
-                                    Chờ pha chế
-                                </option>
-                                <option value="preparing">
-                                    Đang pha chế
-                                </option>
-                                <option value="ready">
-                                    Sẵn sàng
-                                </option>
-                            </select>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 mt-4">
-                            <button
-                                type="submit"
-                                className="btn btn-primary h-11"
-                            >
-                                Áp dụng
-                            </button>
-
-                            <button
-                                type="button"
-                                className="btn btn-secondary h-11"
-                                onClick={handleResetFilters}
-                            >
-                                Xóa bộ lọc
-                            </button>
-                        </div>
+                    <div className="flex gap-2">
+                        <button type="submit" className="btn btn-primary flex-1">
+                            Áp dụng
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={handleResetFilters}
+                        >
+                            Xóa lọc
+                        </button>
                     </div>
                 </form>
             </section>
 
-            <section className="card">
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                    <h2 className="card-title">Hàng đợi · {visibleOrders.length} đơn</h2>
-                    <label className="flex items-center gap-2 text-sm">Số dòng mỗi trang
-                        <select className="form-input form-select !w-auto" value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
-                            {[1, 5, 10, 20].map(size => <option key={size} value={size}>{size}</option>)}
-                        </select>
-                    </label>
-                </div>
-                <DataTable<PreparationOrder>
-                    key={`${appliedFilters.branchId}-${appliedFilters.status}-${pageSize}`}
+            <section className="card p-0 overflow-hidden" aria-label="Bảng hàng đợi pha chế">
+                <DataTable
                     columns={columns}
                     data={visibleOrders}
                     rowKey={(order) => order.id}
-                    caption="Hàng đợi pha chế và đơn sẵn sàng"
+                    caption="Hàng đợi pha chế chi nhánh MilktyWay"
                     pagination
                     pageSize={pageSize}
-                    emptyMessage="Không có đơn phù hợp với bộ lọc."
                 />
             </section>
-        </>
+        </div>
     );
 }

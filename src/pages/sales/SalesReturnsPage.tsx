@@ -1,20 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Modal from "../../components/common/Modal";
+import { useToast } from "../../components/common/useToast";
+import { formatCurrency } from "../../utils/format";
+import { loadOrders, loadReturns, saveReturns } from "../shared/sales-orders-store";
+import type { ReturnRequest } from "../shared/sales-orders-store";
 
 type RequestStatus = "Pending" | "Approved" | "Rejected";
-interface ReturnRequest {
-    id: string;
-    orderId: string;
-    customer: string;
-    createdAt: string;
-    resolution: string;
-    reason: string;
-    amount: number;
-    points: number;
-    memberId: string | null;
-    status: RequestStatus;
-}
+
 interface ReviewEntry {
     requestId: string;
     reviewer: string;
@@ -25,213 +18,436 @@ interface ReviewEntry {
     decision: "Approved" | "Rejected";
     note: string;
 }
-const statusLabels = {Pending: "Chờ duyệt", Approved: "Đã duyệt", Rejected: "Từ chối"};
-const statusClasses = {Pending: "badge-warning", Approved: "badge-success", Rejected: "badge-danger"};
-const initialRequests: ReturnRequest[] = [
-    {id: "HT-0001", orderId: "DH-00125", customer: "Nguyễn An", createdAt: "2026-10-28T09:30:00+07:00", resolution: "Hoàn tiền", reason: "Sai mức đường", amount: 45000, points: -45, memberId: "HV-0001", status: "Pending"},
-    {id: "HT-0002", orderId: "DH-00124", customer: "Trần Bình", createdAt: "2026-10-28T09:40:00+07:00", resolution: "Đổi món", reason: "Nhầm món", amount: 0, points: 0, memberId: null, status: "Pending"},
-];
+
+const statusLabels: Record<RequestStatus, string> = {
+    Pending: "Chờ duyệt",
+    Approved: "Đã duyệt",
+    Rejected: "Từ chối"
+};
+
+const statusClasses: Record<RequestStatus, string> = {
+    Pending: "badge-warning",
+    Approved: "badge-success",
+    Rejected: "badge-danger"
+};
+
 function displayTime(value: string) {
-    return new Date(value).toLocaleString("vi-VN", {timeZone: "Asia/Ho_Chi_Minh"});
+    try {
+        return new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+    } catch {
+        return value;
+    }
 }
+
 export default function SalesReturnsPage() {
+    const toast = useToast();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [status, setStatus] = useState("");
-    const [reviewState, setReviewState] = useState<{requests: ReturnRequest[]; history: ReviewEntry[]}>({requests: initialRequests, history: []});
+    const [reviewState, setReviewState] = useState<{ requests: ReturnRequest[]; history: ReviewEntry[] }>(() => ({
+        requests: loadReturns(),
+        history: [
+            {
+                requestId: "HT-0000",
+                reviewer: "Nguyễn Hoàng Long",
+                memberId: "HV-0001",
+                refundedAmount: 52000,
+                pointsChange: -52,
+                reviewedAt: "2026-10-27T16:20:00+07:00",
+                decision: "Approved",
+                note: "Đã hoàn tiền vào tài khoản hội viên do giao nhầm vị trà sữa.",
+            }
+        ]
+    }));
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [reviewNote, setReviewNote] = useState("");
+
+    // Form tạo khiếu nại mới
+    const availableOrders = useMemo(() => loadOrders(), [open]);
+    const [formOrderId, setFormOrderId] = useState("");
+    const [formReason, setFormReason] = useState("Sai mức đường / đá");
+    const [formResolution, setFormResolution] = useState("Hoàn tiền");
+    const [formAmount, setFormAmount] = useState("45000");
+    const [formNote, setFormNote] = useState("");
+
     const selected = reviewState.requests.find(request => request.id === selectedId);
     const visibleRequests = reviewState.requests.filter(request =>
         (!status || request.status === status) &&
         `${request.id} ${request.orderId} ${request.customer}`.toLocaleLowerCase("vi-VN").includes(query.trim().toLocaleLowerCase("vi-VN")));
 
     function reviewRequest(decision: "Approved" | "Rejected") {
-        if (!selected || (decision === "Rejected" && !reviewNote.trim())) return;
+        if (!selected) return;
+        if (decision === "Rejected" && !reviewNote.trim()) {
+            toast.warning("Vui lòng nhập lý do từ chối giải quyết khiếu nại.");
+            return;
+        }
+
         const isRefund = decision === "Approved" && selected.resolution === "Hoàn tiền" && selected.amount > 0;
         const entry: ReviewEntry = {
             requestId: selected.id,
-            reviewer: "Nguyễn Hoàng Long",
+            reviewer: "Nguyễn Hoàng Long (Quản Trị Viên)",
             memberId: selected.memberId,
             refundedAmount: isRefund ? selected.amount : 0,
             pointsChange: isRefund && selected.memberId ? selected.points : 0,
             reviewedAt: new Date().toISOString(),
             decision,
-            note: reviewNote.trim(),
+            note: reviewNote.trim() || (decision === "Approved" ? "Đã duyệt xử lý theo đúng quy trình." : "Từ chối."),
         };
-        // Demo: duyệt đồng thời ghi nhận hoàn tiền và điểm. Backend cần bảo đảm giao dịch nguyên tử.
-        setReviewState(current => {
-            if (!current.requests.some(request => request.id === entry.requestId && request.status === "Pending")) return current;
-            return {
-                requests: current.requests.map(request => request.id === entry.requestId ? {...request, status: decision} : request),
-                history: [entry, ...current.history],
-            };
-        });
+
+        const updatedRequests = reviewState.requests.map(request =>
+            request.id === entry.requestId ? { ...request, status: decision as RequestStatus } : request
+        );
+
+        setReviewState(current => ({
+            requests: updatedRequests,
+            history: [entry, ...current.history],
+        }));
+
+        saveReturns(updatedRequests);
+        toast.success(`Đã ${decision === "Approved" ? "phê duyệt" : "từ chối"} yêu cầu ${selected.id}!`);
         setSelectedId(null);
         setReviewNote("");
     }
-    return <>
 
+    function handleCreateReturn() {
+        if (!formOrderId) {
+            toast.warning("Vui lòng chọn đơn gốc cần xử lý khiếu nại.");
+            return;
+        }
 
-      
-      <div className="page-header">
-        <div>
-          <div className="breadcrumb">
-            <Link to="/dashboard">Tổng quan</Link>
-            <span className="sep">/</span>
-            <Link to="/sales">Đơn hàng</Link>
-            <span className="sep">/</span>
-            <span className="current">Khiếu nại và hoàn tiền</span>
-          </div>
-          <h1 className="page-title">Khiếu nại và hoàn tiền</h1>
-          <p className="page-subtitle"> Theo dõi đổi món, hủy trước pha, bù mã ưu đãi và hoàn tiền.</p>
-        </div>
-        <div className="flex gap-2.5 flex-wrap">
-          <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Tạo yêu cầu xử lý
-          </button>
-        </div>
-      </div>
+        const order = availableOrders.find(o => o.id === formOrderId);
+        const amount = Number(formAmount) || 0;
+        const nextId = `HT-${String(reviewState.requests.length + 1).padStart(4, "0")}`;
 
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="card p-4">
-          <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng yêu cầu</div>
-          <div className="text-[26px] font-extrabold text-[var(--text)] mt-1">{reviewState.requests.length}</div>
-          <div className="text-[11px] text-[var(--muted)] mt-0.5">1.5% tỷ lệ yêu cầu hoàn, đổi</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Số tiền đã hoàn</div>
-          <div className="text-[26px] font-extrabold text-red-500 mt-1">{reviewState.history.reduce((sum, entry) => sum + entry.refundedAmount, 0).toLocaleString("vi-VN")} VND</div>
-          <div className="text-[11px] text-[var(--muted)] mt-0.5">Đã hoàn cho khách</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Số lượng nhập lại kho</div>
-          <div className="text-[26px] font-extrabold text-[var(--primary)] mt-1">15 <span className="text-[13px] font-medium text-[var(--muted)]">Đơn vị</span></div>
-          <div className="text-[11px] text-[var(--muted)] mt-0.5">Đã đưa lại lên kệ</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Chờ phê duyệt</div>
-          <div className="text-[26px] font-extrabold text-amber-500 mt-1">{reviewState.requests.filter(request => request.status === "Pending").length}</div>
-          <div className="text-[11px] text-[var(--muted)] mt-0.5">Cần quản lý phê duyệt</div>
-        </div>
-      </div>
+        const newReq: ReturnRequest = {
+            id: nextId,
+            orderId: formOrderId,
+            customer: order?.customer || "Khách Hàng",
+            createdAt: new Date().toISOString(),
+            resolution: formResolution,
+            reason: formReason,
+            amount,
+            points: -Math.round(amount / 1000),
+            memberId: order?.phone ? "HV-0001" : null,
+            status: "Pending",
+        };
 
-      
-      <div className="card mb-5 p-4">
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="search-box flex-1 min-w-[200px]">
-            <svg className="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" className="form-input h-[38px] text-[13px]" aria-label="Tìm yêu cầu" value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm mã yêu cầu, hóa đơn hoặc khách hàng..." />
-          </div>
-          <select aria-label="Trạng thái" value={status} onChange={event => setStatus(event.target.value)} className="form-input form-select h-[38px] text-[13px] min-w-[140px]">
-            <option value="">Tất cả trạng thái</option>
-            <option value="Approved">Đã duyệt</option>
-            <option value="Pending">Chờ duyệt</option>
-            <option value="Rejected">Từ chối</option>
-          </select>
-        </div>
-      </div>
+        const updated = [newReq, ...reviewState.requests];
+        setReviewState(current => ({ ...current, requests: updated }));
+        saveReturns(updated);
+        toast.success(`Đã tạo yêu cầu xử lý khiếu nại ${nextId} thành công! Đang chờ Quản lý duyệt.`);
+        setOpen(false);
+        setFormOrderId("");
+        setFormNote("");
+    }
 
-      
-      <section className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto"><table className="data-table">
-          <thead><tr><th>Mã yêu cầu</th><th>Đơn gốc</th><th>Khách hàng</th><th>Thời gian yêu cầu</th><th>Hướng xử lý</th><th>Trạng thái</th></tr></thead>
-          <tbody>{visibleRequests.map(request => <tr key={request.id}>
-            <td><button className="text-[var(--primary)] font-semibold underline" onClick={() => {setSelectedId(request.id); setReviewNote("");}}>{request.id}</button></td>
-            <td>{request.orderId}</td><td>{request.customer}</td><td>{displayTime(request.createdAt)}</td><td>{request.resolution}</td>
-            <td><span className={`badge ${statusClasses[request.status]}`}>{statusLabels[request.status]}</span></td>
-          </tr>)}{visibleRequests.length === 0 && <tr><td colSpan={6}>Không có yêu cầu phù hợp.</td></tr>}</tbody>
-        </table></div>
-      </section>
-      <section className="card mt-4">
-        <h2 className="card-title mb-4">Lịch sử xử lý yêu cầu</h2>
-        <div className="overflow-x-auto"><table className="data-table">
-          <thead><tr><th>Mã yêu cầu</th><th>Người duyệt</th><th>Thời gian duyệt</th><th>Kết quả</th><th>Tiền đã hoàn</th><th>Hội viên</th><th>Điểm thay đổi</th><th>Ghi chú xử lý</th></tr></thead>
-          <tbody>{reviewState.history.map((entry, index) => <tr key={`${entry.requestId}-${index}`}>
-            <td><button className="text-[var(--primary)] underline" onClick={() => {setSelectedId(entry.requestId); setReviewNote("");}}>{entry.requestId}</button></td>
-            <td>{entry.reviewer}</td><td>{displayTime(entry.reviewedAt)}</td><td><span className={`badge ${statusClasses[entry.decision]}`}>{statusLabels[entry.decision]}</span></td><td className="whitespace-nowrap">{entry.refundedAmount.toLocaleString("vi-VN")} VND</td>
-            <td>{entry.memberId || "Không phải hội viên"}</td>
-            <td className={entry.pointsChange < 0 ? "text-[var(--danger)]" : entry.pointsChange > 0 ? "text-[var(--primary)]" : "text-[var(--muted)]"}>
-              {entry.memberId ? `${entry.pointsChange > 0 ? "+" : ""}${entry.pointsChange} điểm` : "—"}
-            </td>
-            
-            <td>{entry.note || "—"}</td>
-            
-          </tr>)}{reviewState.history.length === 0 && <tr><td colSpan={8}>Chưa có yêu cầu được xử lý.</td></tr>}</tbody>
-        </table></div>
-      </section>
-      <Modal open={Boolean(selected)} onClose={() => setSelectedId(null)} title={`Chi tiết yêu cầu ${selected?.id ?? ""}`} size="lg"
-        footer={<><button className="btn btn-secondary" onClick={() => setSelectedId(null)}>Đóng</button>
-          {selected?.status === "Pending" && <>
-          <button className="btn btn-secondary" disabled={!reviewNote.trim()} onClick={() => reviewRequest("Rejected")}>Từ chối</button>
-          <button className="btn btn-primary" onClick={() => reviewRequest("Approved")}>Duyệt yêu cầu</button>
-        </>}</>}>
-        {selected && <div className="space-y-4">
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><dt className="form-label">Đơn gốc</dt><dd>{selected.orderId}</dd></div>
-            <div><dt className="form-label">Khách hàng</dt><dd>{selected.customer}</dd></div>
-            <div><dt className="form-label">Hướng xử lý</dt><dd>{selected.resolution}</dd></div>
-            <div><dt className="form-label">Lý do</dt><dd>{selected.reason}</dd></div>
-            <div><dt className="form-label">Số tiền đề nghị hoàn</dt><dd>{selected.amount.toLocaleString("vi-VN")} VND</dd></div>
-            <div><dt className="form-label">Điểm điều chỉnh dự kiến</dt><dd>{selected.memberId ? `${selected.points > 0 ? "+" : ""}${selected.points} điểm · ${selected.memberId}` : "Không áp dụng"}</dd></div>
-            <div><dt className="form-label">Trạng thái</dt><dd>{statusLabels[selected.status]}</dd></div>
-          </dl>
-          {selected.status === "Pending" && <>
-            <p className="text-sm text-[var(--muted)]">Người duyệt demo: Nguyễn Hoàng Long</p>
-            <label className="form-label" htmlFor="review-note">Ghi chú xử lý (bắt buộc khi từ chối)</label>
-            <textarea id="review-note" className="form-input form-textarea" rows={3} value={reviewNote} onChange={event => setReviewNote(event.target.value)} />
-          </>}
-        </div>}
-      </Modal>
+    return (
+        <>
+            <div className="page-header">
+                <div>
+                    <div className="breadcrumb">
+                        <Link to="/dashboard">Tổng quan</Link>
+                        <span className="sep">/</span>
+                        <Link to="/sales">Đơn hàng</Link>
+                        <span className="sep">/</span>
+                        <span className="current">Khiếu nại và hoàn tiền</span>
+                    </div>
+                    <h1 className="page-title">Khiếu nại và hoàn tiền</h1>
+                    <p className="page-subtitle">Theo dõi đổi món, hủy trước pha, bù mã ưu đãi và hoàn tiền toàn chuỗi.</p>
+                </div>
+                <div className="flex gap-2.5 flex-wrap">
+                    <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        Tạo yêu cầu xử lý
+                    </button>
+                </div>
+            </div>
 
-<Modal open={open} onClose={() => setOpen(false)} title="Xử lý khiếu nại và hoàn tiền" size="md"
-    footer={<><button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>Hủy</button><button type="button" className="btn btn-primary" disabled>Gửi yêu cầu duyệt</button></>}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="card p-4">
+                    <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng yêu cầu</div>
+                    <div className="text-[26px] font-extrabold text-[var(--text)] mt-1">{reviewState.requests.length}</div>
+                    <div className="text-[11px] text-[var(--muted)] mt-0.5">Tỷ lệ khiếu nại ~0.8%</div>
+                </div>
+                <div className="card p-4">
+                    <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Số tiền đã hoàn</div>
+                    <div className="text-[26px] font-extrabold text-red-500 mt-1">
+                        {formatCurrency(reviewState.history.reduce((sum, entry) => sum + entry.refundedAmount, 0))}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)] mt-0.5">Đã hoàn lại cho khách hàng</div>
+                </div>
+                <div className="card p-4">
+                    <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Số lượng đổi món / bù</div>
+                    <div className="text-[26px] font-extrabold text-[var(--primary)] mt-1">
+                        {reviewState.requests.filter(r => r.resolution === "Đổi món" || r.resolution === "Bù voucher").length} <span className="text-[13px] font-medium text-[var(--muted)]">Trường hợp</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)] mt-0.5">Đã xử lý tại quầy bar</div>
+                </div>
+                <div className="card p-4">
+                    <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Chờ phê duyệt</div>
+                    <div className="text-[26px] font-extrabold text-amber-500 mt-1">
+                        {reviewState.requests.filter(request => request.status === "Pending").length}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)] mt-0.5">Cần quản lý xác nhận</div>
+                </div>
+            </div>
 
-          <div className="flex flex-col gap-3.5">
-  <div>
-    <label className="form-label" htmlFor="return-order">Đơn gốc</label>
-    <select id="return-order" className="form-input form-select">
-      <option value="">Chọn đơn hàng</option>
-      <option value="DH-00125">DH-00125 · Nguyễn An · 450.000 VND</option>
-    </select>
-  </div>
+            <div className="card mb-6">
+                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                    <input
+                        type="search"
+                        className="form-input w-full sm:w-80 h-11"
+                        placeholder="Tìm kiếm mã yêu cầu, mã đơn, khách hàng..."
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                    />
+                    <select
+                        className="form-input form-select w-full sm:w-48 h-11"
+                        value={status}
+                        onChange={e => setStatus(e.target.value)}
+                    >
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="Pending">Chờ duyệt</option>
+                        <option value="Approved">Đã duyệt</option>
+                        <option value="Rejected">Từ chối</option>
+                    </select>
+                </div>
+            </div>
 
-  <div>
-    <label className="form-label" htmlFor="return-reason">Lý do</label>
-    <select id="return-reason" className="form-input form-select">
-      <option>Hỏng vị / chất lượng không đạt</option>
-      <option value="Nhầm món hoặc size">Nhầm món hoặc cỡ ly</option>
-      <option>Sai mức đường / đá</option>
-      <option value="Thiếu topping">Thiếu món thêm</option>
-      <option>Khách yêu cầu hủy trước pha</option>
-    </select>
-  </div>
+            <section className="card p-0 overflow-hidden mb-8">
+                <div className="overflow-x-auto">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Mã Yêu Cầu</th>
+                                <th>Mã Đơn</th>
+                                <th>Khách Hàng</th>
+                                <th>Thời Gian</th>
+                                <th>Hướng Xử Lý</th>
+                                <th>Lý Do</th>
+                                <th className="text-right">Số Tiền Hoàn</th>
+                                <th>Trạng Thái</th>
+                                <th>Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {visibleRequests.length === 0 ? (
+                                <tr>
+                                    <td colSpan={9} className="text-center py-8 text-[var(--muted)]">
+                                        Không có yêu cầu khiếu nại nào phù hợp.
+                                    </td>
+                                </tr>
+                            ) : (
+                                visibleRequests.map(r => (
+                                    <tr key={r.id}>
+                                        <td className="font-mono font-bold text-[var(--primary)]">{r.id}</td>
+                                        <td className="font-mono">{r.orderId}</td>
+                                        <td className="font-medium">{r.customer}</td>
+                                        <td className="text-xs text-[var(--muted)]">{displayTime(r.createdAt)}</td>
+                                        <td>
+                                            <span className="font-semibold text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                                                {r.resolution}
+                                            </span>
+                                        </td>
+                                        <td className="text-xs">{r.reason}</td>
+                                        <td className="text-right font-bold text-red-600">
+                                            {r.amount > 0 ? formatCurrency(r.amount) : "—"}
+                                        </td>
+                                        <td>
+                                            <span className={`badge ${statusClasses[r.status]}`}>
+                                                {statusLabels[r.status]}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={() => {
+                                                    setSelectedId(r.id);
+                                                    setReviewNote("");
+                                                }}
+                                            >
+                                                Xem xét
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-  <div>
-    <label className="form-label" htmlFor="return-resolution">Hướng xử lý</label>
-    <select id="return-resolution" className="form-input form-select">
-      <option>Đổi món</option>
-      <option value="Bù voucher">Bù mã ưu đãi</option>
-      <option>Hoàn tiền</option>
-      <option>Hủy trước pha</option>
-    </select>
-  </div>
+            {/* Modal Xem xét & Duyệt */}
+            <Modal
+                open={!!selected}
+                onClose={() => setSelectedId(null)}
+                title={`Chi Tiết Yêu Cầu ${selected?.id || ""}`}
+                size="lg"
+            >
+                {selected && (
+                    <div className="space-y-4">
+                        <div className="bg-[var(--background)] p-4 rounded-xl space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-[var(--muted)]">Đơn hàng gốc:</span>
+                                <span className="font-mono font-bold text-[var(--primary)]">{selected.orderId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-[var(--muted)]">Khách hàng:</span>
+                                <span className="font-bold">{selected.customer}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-[var(--muted)]">Lý do khiếu nại:</span>
+                                <span className="font-medium text-amber-700">{selected.reason}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-[var(--muted)]">Hướng giải quyết đề xuất:</span>
+                                <span className="font-bold">{selected.resolution}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-[var(--muted)]">Số tiền đề nghị hoàn:</span>
+                                <span className="font-bold text-red-600 text-base">{formatCurrency(selected.amount)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-[var(--muted)]">Trạng thái hiện tại:</span>
+                                <span className={`badge ${statusClasses[selected.status]}`}>{statusLabels[selected.status]}</span>
+                            </div>
+                        </div>
 
-  <div>
-    <label className="form-label" htmlFor="return-amount">Số tiền đề nghị hoàn (VND)</label>
-    <input id="return-amount" type="number" min="0" step="1000"
-           className="form-input" placeholder="45000" />
-  </div>
+                        {selected.status === "Pending" ? (
+                            <div>
+                                <label className="form-label" htmlFor="review-note">Ghi chú phê duyệt / Lý do từ chối</label>
+                                <textarea
+                                    id="review-note"
+                                    className="form-input form-textarea"
+                                    placeholder="Nhập ghi chú giải trình trước khi duyệt hoặc từ chối..."
+                                    rows={3}
+                                    value={reviewNote}
+                                    onChange={e => setReviewNote(e.target.value)}
+                                />
+                                <div className="flex justify-end gap-2.5 mt-4">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary !text-red-600"
+                                        onClick={() => reviewRequest("Rejected")}
+                                    >
+                                        Từ Chối Yêu Cầu
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => reviewRequest("Approved")}
+                                    >
+                                        Phê Duyệt &amp; Hoàn Tiền
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg text-sm text-center font-medium">
+                                Yêu cầu này đã được xử lý ({statusLabels[selected.status]}).
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
 
-  <div>
-    <label className="form-label" htmlFor="return-note">Ghi chú xử lý</label>
-    <textarea id="return-note" className="form-input form-textarea"
-              rows={3}></textarea>
-  </div>
+            {/* Modal Tạo Yêu Cầu Mới */}
+            <Modal
+                open={open}
+                onClose={() => setOpen(false)}
+                title="Tạo Yêu Cầu Khiếu Nại &amp; Hoàn Tiền"
+                size="lg"
+                footer={
+                    <>
+                        <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
+                            Hủy Bỏ
+                        </button>
+                        <button type="button" className="btn btn-primary" onClick={handleCreateReturn}>
+                            Gửi Yêu Cầu Duyệt
+                        </button>
+                    </>
+                }
+            >
+                <div className="flex flex-col gap-3.5">
+                    <div>
+                        <label className="form-label" htmlFor="return-order">Đơn gốc cần xử lý (*)</label>
+                        <select
+                            id="return-order"
+                            className="form-input form-select"
+                            value={formOrderId}
+                            onChange={e => {
+                                setFormOrderId(e.target.value);
+                                const found = availableOrders.find(o => o.id === e.target.value);
+                                if (found) {
+                                    setFormAmount(String(found.total));
+                                }
+                            }}
+                        >
+                            <option value="">-- Chọn đơn hàng gốc --</option>
+                            {availableOrders.map(o => (
+                                <option key={o.id} value={o.id}>
+                                    {o.id} · {o.customer} ({o.phone}) · {formatCurrency(o.total)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-</div>
-        </Modal>
-    </>;
+                    <div>
+                        <label className="form-label" htmlFor="return-reason">Lý do khiếu nại</label>
+                        <select
+                            id="return-reason"
+                            className="form-input form-select"
+                            value={formReason}
+                            onChange={e => setFormReason(e.target.value)}
+                        >
+                            <option value="Sai mức đường / đá">Sai mức đường / mức đá so với đơn đặt</option>
+                            <option value="Hỏng vị / chất lượng không đạt">Hỏng vị / trà bị chua hoặc đắng gắt</option>
+                            <option value="Nhầm món hoặc cỡ ly">Nhầm món hoặc nhầm cỡ ly (M/L)</option>
+                            <option value="Thiếu món thêm">Thiếu món thêm (Topping)</option>
+                            <option value="Khách yêu cầu hủy trước pha">Khách đổi ý yêu cầu hủy trước khi pha chế</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="form-label" htmlFor="return-resolution">Hướng xử lý đề xuất</label>
+                        <select
+                            id="return-resolution"
+                            className="form-input form-select"
+                            value={formResolution}
+                            onChange={e => setFormResolution(e.target.value)}
+                        >
+                            <option value="Hoàn tiền">Hoàn tiền lại cho khách hàng</option>
+                            <option value="Đổi món">Đổi món mới cho khách</option>
+                            <option value="Bù voucher">Tặng voucher ưu đãi cho đơn kế tiếp</option>
+                            <option value="Hủy trước pha">Hủy đơn trước khi pha</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="form-label" htmlFor="return-amount">Số tiền đề nghị hoàn (₫)</label>
+                        <input
+                            id="return-amount"
+                            type="number"
+                            min="0"
+                            step="1000"
+                            className="form-input"
+                            value={formAmount}
+                            onChange={e => setFormAmount(e.target.value)}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="form-label" htmlFor="return-note">Ghi chú chi tiết</label>
+                        <textarea
+                            id="return-note"
+                            className="form-input form-textarea"
+                            placeholder="Mô tả cụ thể phản hồi của khách hàng tại quầy..."
+                            rows={3}
+                            value={formNote}
+                            onChange={e => setFormNote(e.target.value)}
+                        />
+                    </div>
+                </div>
+            </Modal>
+        </>
+    );
 }

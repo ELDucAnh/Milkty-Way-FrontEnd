@@ -9,15 +9,16 @@ export interface ModalProps {
     children: ReactNode;
     onClose: () => void;
     footer?: ReactNode;
-    size?: "sm" | "md" | "lg" | "xl";
+    size?: "sm" | "md" | "lg" | "xl" | "2xl";
     closeOnBackdrop?: boolean;
 }
 
-const sizeClasses = {
+const sizeClasses: Record<"sm" | "md" | "lg" | "xl" | "2xl", string> = {
     sm: "modal-sm",
     md: "",
     lg: "modal-lg",
     xl: "modal-xl",
+    "2xl": "modal-2xl",
 };
 
 const focusableSelector = [

@@ -1,13 +1,86 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
+import { formatCurrency } from "../../utils/format";
+import { loadInvoices, loadOrders } from "../shared/sales-orders-store";
+import type { InvoiceRecord, SalesOrder } from "../shared/sales-orders-store";
 
 export default function InvoiceDetailsPage() {
   const { id } = useParams<{ id: string }>();
-  const invoiceId = id || "HD-CN05-001247";
+  const [searchParams] = useSearchParams();
+  const orderIdParam = searchParams.get("orderId");
   const toast = useToast();
   const [printFormat, setPrintFormat] = useState<"k80" | "k57">("k80");
+
+  const invoices = useMemo(() => loadInvoices(), []);
+  const orders = useMemo(() => loadOrders(), []);
+
+  // Tìm hóa đơn hoặc đơn hàng tương ứng
+  const matchedInvoice = useMemo(() => {
+    if (id) {
+      const byId = invoices.find(inv => inv.id === id || inv.orderId === id);
+      if (byId) return byId;
+    }
+    if (orderIdParam) {
+      const byOrder = invoices.find(inv => inv.orderId === orderIdParam || inv.id === orderIdParam);
+      if (byOrder) return byOrder;
+    }
+    return invoices[0];
+  }, [id, orderIdParam, invoices]);
+
+  const matchedOrder = useMemo(() => {
+    if (orderIdParam) {
+      const byOrder = orders.find(o => o.id === orderIdParam);
+      if (byOrder) return byOrder;
+    }
+    if (matchedInvoice?.orderId) {
+      const byInv = orders.find(o => o.id === matchedInvoice.orderId);
+      if (byInv) return byInv;
+    }
+    return orders[0];
+  }, [orderIdParam, matchedInvoice, orders]);
+
+  const invoiceId = matchedInvoice ? matchedInvoice.id : (id || "HD-CN01-000125");
+  const orderId = matchedOrder ? matchedOrder.id : (orderIdParam || "DH-00125");
+  const customerName = matchedInvoice?.customerName || matchedOrder?.customer || "Trần Văn An";
+  const customerPhone = matchedInvoice?.customerPhone || matchedOrder?.phone || "0908 123 456";
+  const branchName = matchedInvoice?.branch || `${matchedOrder?.branchId || "CN01"} - Bến Nghé (Quận 1)`;
+  const branchAddress = matchedInvoice?.branchAddress || "12 Pasteur, P. Bến Nghé, Quận 1, TP.HCM";
+
+  const items = matchedInvoice?.items && matchedInvoice.items.length > 0
+    ? matchedInvoice.items
+    : (matchedOrder?.items && matchedOrder.items.length > 0 ? matchedOrder.items : [
+      {
+        id: "item-default-1",
+        name: "Trà Sữa Ô Long Nướng",
+        size: "L" as const,
+        sugar: "50%",
+        ice: "Ít đá",
+        toppings: ["Trân châu hoàng kim", "Kem phô mai"],
+        note: "Ít ngọt",
+        quantity: 1,
+        unitPrice: 55000,
+      },
+      {
+        id: "item-default-2",
+        name: "Trà Sữa Trân Châu Hoàng Kim",
+        size: "M" as const,
+        sugar: "70%",
+        ice: "Vừa đá",
+        toppings: ["Pudding trứng"],
+        note: "",
+        quantity: 1,
+        unitPrice: 46000,
+      }
+    ]);
+
+  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const total = matchedInvoice?.total ?? matchedOrder?.total ?? subtotal;
+  const discount = Math.max(0, subtotal - total);
+  const paid = matchedInvoice?.paid ?? (total + 11000);
+  const change = Math.max(0, paid - total);
+  const paymentMethod = matchedInvoice?.paymentMethod || (matchedOrder?.paymentMethod === "cash" ? "Tiền mặt" : "Chuyển khoản QR");
 
   const handlePrint = (format: "k80" | "k57") => {
     setPrintFormat(format);
@@ -46,7 +119,7 @@ export default function InvoiceDetailsPage() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            Quay Lại
+            Danh sách hóa đơn
           </Link>
           <div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
             <button
@@ -75,7 +148,7 @@ export default function InvoiceDetailsPage() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => toast.info("Đang in phiếu pha chế (KOT)...", { title: "In Phiếu Bếp" })}
+            onClick={() => toast.info(`Đang in phiếu pha chế (KOT) cho đơn ${orderId}...`, { title: "In Phiếu KOT" })}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 11l3 3L22 4" />
@@ -86,7 +159,7 @@ export default function InvoiceDetailsPage() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => toast.success("Đã gửi biên lai điện tử đến 0908.123.456", { title: "Gửi Thành Công" })}
+            onClick={() => toast.success(`Đã gửi hóa đơn điện tử đến SĐT ${customerPhone}`, { title: "Gửi Thành Công" })}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
@@ -103,12 +176,12 @@ export default function InvoiceDetailsPage() {
           <div className="flex items-center gap-4 text-[13px] flex-wrap">
             <div>
               <span className="text-[var(--muted)]">Chi nhánh: </span>
-              <span className="font-semibold text-[var(--text)]">CN05 - Hàng Xanh (Bình Thạnh)</span>
+              <span className="font-semibold text-[var(--text)]">{branchName}</span>
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
               <span className="text-[var(--muted)]">Thu ngân: </span>
-              <span className="font-semibold text-[var(--text)]">Nguyễn Thị Mai (NV-0502)</span>
+              <span className="font-semibold text-[var(--text)]">Nguyễn An (NV-01)</span>
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
@@ -117,181 +190,168 @@ export default function InvoiceDetailsPage() {
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
-              <span className="text-[var(--muted)]">Quầy: </span>
-              <span className="font-semibold text-[var(--text)]">POS #01</span>
+              <span className="text-[var(--muted)]">Mã đơn gốc: </span>
+              <span className="font-semibold text-[var(--primary)] font-mono">{orderId}</span>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Trực tuyến — Đã đồng bộ
+            Trực tuyến — Đã đồng bộ máy chủ
           </span>
         </div>
       </div>
 
       {/* Hóa đơn có thể in */}
-      <div className="card printable-card max-w-4xl mx-auto p-6 md:p-10 relative">
+      <div className="card printable-card max-w-4xl mx-auto p-6 md:p-10 relative shadow-md">
         {/* Dấu đã thanh toán */}
         <div className="absolute top-[30px] right-[40px] border-[3px] border-[var(--primary)] text-[var(--primary)] font-black text-xl px-[18px] py-1 rounded-lg rotate-[8deg] tracking-[2px] uppercase opacity-[0.85] no-print">
           ĐÃ THANH TOÁN
         </div>
 
         {/* Header hóa đơn */}
-        <div className="flex justify-between items-start flex-wrap gap-5 mb-9 pb-6 border-b border-[var(--border)]">
+        <div className="flex justify-between items-start flex-wrap gap-5 mb-8 pb-6 border-b border-[var(--border)]">
           <div className="flex items-center gap-3">
-            <div className="w-[44px] h-[44px] rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8">
-                <path d="M12 3c.9 2 2.5 3.5 4.5 4.5C18 8.5 19 10 19 12c0 4-3 7-7 8-4-1-7-4-7-8 0-2 1-3.5 2.5-4.5C9.5 6.5 11.1 5 12 3z" />
-                <circle cx="12" cy="12" r="3" />
+            <div className="w-[48px] h-[48px] rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] flex items-center justify-center shadow-md">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="white" fillOpacity="0.2"/>
+                <circle cx="12" cy="12" r="3" fill="white"/>
               </svg>
             </div>
             <div className="border-l border-[var(--border)] pl-3">
-              <div className="text-[22px] font-bold text-[var(--text)] leading-[1.1] tracking-[-0.3px]">MilktyWay</div>
-              <div className="text-[10px] text-[var(--primary)] font-semibold tracking-[0.8px] uppercase mt-[2px]">
-                Chuỗi Cửa Hàng Trà Sữa
+              <div className="text-[24px] font-extrabold text-[var(--text)] leading-tight tracking-tight">MilktyWay</div>
+              <div className="text-[11px] text-[var(--primary)] font-bold tracking-wider uppercase mt-0.5">
+                Chuỗi Cửa Hàng Trà Sữa Chuẩn Vị
               </div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-sm font-bold text-[var(--text)]">CN05 — Hàng Xanh, Bình Thạnh</div>
-            <div className="text-xs text-[var(--muted)] mt-[2px]">247 Xô Viết Nghệ Tĩnh, P.17, Q. Bình Thạnh</div>
-            <div className="text-xs text-[var(--muted)]">TP. Hồ Chí Minh</div>
-            <div className="text-xs text-[var(--muted)]">ĐT: 028.3840.5050 | MilktyWay.vn</div>
-            <div className="text-xs text-[var(--muted)]">MST: 0314-123-456</div>
+            <div className="text-sm font-bold text-[var(--text)]">{branchName}</div>
+            <div className="text-xs text-[var(--muted)] mt-0.5">{branchAddress}</div>
+            <div className="text-xs text-[var(--muted)]">TP. Hồ Chí Minh · Hotline: 1900 6868</div>
+            <div className="text-xs text-[var(--muted)]">MST: 0314-888-999 · MilktyWay.vn</div>
           </div>
         </div>
 
         {/* Thông tin khách & hóa đơn */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div>
-            <div className="text-[11px] font-bold text-[var(--muted)] uppercase tracking-[0.6px] mb-2">
+            <div className="text-[11px] font-bold text-[var(--muted)] uppercase tracking-wider mb-2">
               Thông Tin Khách Hàng:
             </div>
-            <div className="text-[15px] font-bold text-[var(--text)]">Trần Văn An</div>
-            <div className="text-[13px] text-[var(--muted)] mt-[2px]">SĐT: 0908.123.456</div>
+            <div className="text-[16px] font-bold text-[var(--text)]">{customerName}</div>
+            <div className="text-[13px] text-[var(--muted)] mt-0.5">SĐT: {customerPhone}</div>
             <div className="text-[13px] text-[var(--muted)]">
-              Hạng thành viên: <span className="font-semibold text-[var(--text)]">Gold</span>
-            </div>
-            <div className="text-[13px] text-[var(--muted)]">
-              Điểm hiện tại: <span className="font-semibold text-[var(--primary)]">120 điểm</span>
+              Hạng thành viên: <span className="font-semibold text-emerald-600">Hội viên thân thiết</span>
             </div>
             <div className="text-[13px] text-[var(--muted)] mt-1">
-              Điểm tích lũy đơn này: <span className="font-semibold text-[var(--primary)]">+9 điểm</span>
+              Điểm tích lũy đơn này: <span className="font-bold text-[var(--primary)]">+{Math.round(total / 10000)} điểm</span>
             </div>
           </div>
-          <div className="bg-[var(--background)] p-[18px] rounded-xl flex flex-col gap-2">
+          <div className="bg-[var(--background)] p-4 rounded-xl flex flex-col gap-2">
             <div className="flex justify-between text-[13px]">
               <span className="text-[var(--muted)]">Mã Hóa Đơn:</span>
               <span className="font-bold font-mono text-[var(--text)]">{invoiceId}</span>
             </div>
             <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Ngày &amp; Giờ:</span>
-              <span className="font-semibold text-[var(--text)]">28/10/2026 — 14:32</span>
+              <span className="text-[var(--muted)]">Mã Đơn Bán:</span>
+              <span className="font-bold font-mono text-[var(--primary)]">{orderId}</span>
             </div>
             <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Kênh Bán:</span>
-              <span className="font-semibold text-[var(--text)]">Tại Quầy (Counter POS)</span>
+              <span className="text-[var(--muted)]">Thời gian:</span>
+              <span className="font-semibold text-[var(--text)]">{new Date().toLocaleDateString("vi-VN")} — {new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
             </div>
             <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Thanh Toán:</span>
-              <span className="font-semibold text-[var(--text)]">Tiền mặt</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Số Thứ Tự Lấy:</span>
-              <span className="font-semibold text-[var(--text)]">#47</span>
+              <span className="text-[var(--muted)]">Hình thức thanh toán:</span>
+              <span className="font-semibold text-[var(--text)]">{paymentMethod}</span>
             </div>
           </div>
         </div>
 
         {/* Bảng các món */}
         <div className="overflow-x-auto mb-6">
-          <table className="data-table">
+          <table className="data-table w-full">
             <thead>
               <tr>
                 <th className="w-[40px]">#</th>
                 <th>Tên Món &amp; Tùy Chọn</th>
-                <th className="no-print-col">Mã Món</th>
                 <th className="text-right">Đơn Giá</th>
-                <th className="text-center">SL</th>
+                <th className="text-center w-[60px]">SL</th>
                 <th className="text-right">Thành Tiền</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td className="text-xs text-[var(--muted)]">1</td>
-                <td>
-                  <div className="font-semibold text-[var(--text)]">Trà Sữa Ô Long Nướng</div>
-                  <div className="text-[11px] text-[var(--muted)]">
-                    Size L · 50% Đường · 70% Đá · +Trân châu đen sợi · +Kem Foam Cheese
-                  </div>
-                </td>
-                <td className="font-mono text-xs text-[var(--muted)] no-print-col">TS-002-L</td>
-                <td className="text-right text-[13px]">62.000 đ</td>
-                <td className="text-center font-semibold">1</td>
-                <td className="text-right font-bold text-[var(--text)]">62.000 đ</td>
-              </tr>
-              <tr>
-                <td className="text-xs text-[var(--muted)]">2</td>
-                <td>
-                  <div className="font-semibold text-[var(--text)]">Trà Sữa Trân Châu Hoàng Kim</div>
-                  <div className="text-[11px] text-[var(--muted)]">
-                    Size M · 70% Đường · 100% Đá · +Trân châu hoàng kim
-                  </div>
-                </td>
-                <td className="font-mono text-xs text-[var(--muted)] no-print-col">TS-001-M</td>
-                <td className="text-right text-[13px]">41.000 đ</td>
-                <td className="text-center font-semibold">1</td>
-                <td className="text-right font-bold text-[var(--text)]">41.000 đ</td>
-              </tr>
+              {items.map((item, index) => (
+                <tr key={item.id || index}>
+                  <td className="text-xs text-[var(--muted)]">{index + 1}</td>
+                  <td>
+                    <div className="font-bold text-[var(--text)] text-sm">{item.name}</div>
+                    <div className="text-[12px] text-[var(--muted)]">
+                      Cỡ {item.size} · Đường {item.sugar} · Đá {item.ice}
+                      {item.toppings && item.toppings.length > 0 && ` · +${item.toppings.join(", ")}`}
+                    </div>
+                    {item.note && (
+                      <div className="text-[11px] text-amber-700 italic">
+                        Ghi chú: {item.note}
+                      </div>
+                    )}
+                  </td>
+                  <td className="text-right text-[13px]">{formatCurrency(item.unitPrice)}</td>
+                  <td className="text-center font-bold">{item.quantity}</td>
+                  <td className="text-right font-bold text-[var(--text)]">{formatCurrency(item.unitPrice * item.quantity)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
 
         {/* Tổng cộng */}
         <div className="flex justify-end mb-8">
-          <div className="w-[320px] flex flex-col gap-[10px]">
+          <div className="w-[340px] flex flex-col gap-2.5">
             <div className="flex justify-between text-[13px]">
               <span className="text-[var(--muted)]">Tạm tính:</span>
-              <span className="font-semibold text-[var(--text)]">103.000 đ</span>
+              <span className="font-semibold text-[var(--text)]">{formatCurrency(subtotal)}</span>
             </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-[13px] text-emerald-600 font-semibold">
+                <span>Ưu đãi chiết khấu:</span>
+                <span>−{formatCurrency(discount)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Ưu đãi hội viên Gold (Tặng topping):</span>
-              <span className="text-[var(--danger)]">-14.000 đ</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Thuế VAT (8%):</span>
+              <span className="text-[var(--muted)]">Thuế VAT (10%):</span>
               <span className="font-semibold text-[var(--text)]">Đã bao gồm</span>
             </div>
-            <div className="flex justify-between text-lg font-extrabold border-t-2 border-[var(--border)] pt-[10px] mt-1">
+            <div className="flex justify-between text-lg font-extrabold border-t-2 border-[var(--border)] pt-2.5 mt-1">
               <span className="text-[var(--text)]">Tổng Thanh Toán:</span>
-              <span className="text-[var(--primary)]">89.000 đ</span>
+              <span className="text-[var(--primary)] text-xl">{formatCurrency(total)}</span>
             </div>
-            <div className="flex justify-between text-[13px] text-[var(--primary)] font-semibold bg-[var(--primary-light)] py-2 px-3 rounded-lg mt-1.5">
-              <span>Tiền Khách Đưa (Tiền mặt):</span>
-              <span>100.000 đ</span>
+            <div className="flex justify-between text-[13px] text-[var(--primary)] font-semibold bg-emerald-50 py-2 px-3 rounded-lg mt-1">
+              <span>Tiền khách đưa:</span>
+              <span>{formatCurrency(paid)}</span>
             </div>
-            <div className="flex justify-between text-[13px] font-semibold">
-              <span className="text-[var(--muted)]">Tiền Thừa Trả Khách:</span>
-              <span className="text-[var(--text)]">11.000 đ</span>
+            <div className="flex justify-between text-[13px] font-semibold px-3">
+              <span className="text-[var(--muted)]">Tiền thừa trả lại:</span>
+              <span className="text-[var(--text)]">{formatCurrency(change)}</span>
             </div>
           </div>
         </div>
 
         {/* Footer hóa đơn */}
         <div className="border-t border-[var(--border)] pt-5 flex justify-between items-end flex-wrap gap-5">
-          <div className="max-w-[400px]">
-            <div className="text-xs font-bold text-[var(--text)] mb-1">Cảm ơn quý khách!</div>
+          <div className="max-w-[420px]">
+            <div className="text-xs font-bold text-[var(--text)] mb-1">Cảm ơn quý khách đã ủng hộ MilktyWay!</div>
             <div className="text-[11px] text-[var(--muted)] leading-relaxed">
-              Trà sữa MilktyWay — Đậm đà hương vị, tươi mát từng ngụm. Khiếu nại vui lòng liên hệ 028.3840.5050 hoặc
-              MilktyWay.vn trong vòng 30 phút kể từ khi nhận hàng.
+              Trà sữa MilktyWay — Đậm đà hương vị, tươi mát tự nhiên. Khiếu nại dịch vụ vui lòng liên hệ hotline 1900 6868 hoặc
+              truy cập MilktyWay.vn trong vòng 30 phút kể từ khi nhận nước.
             </div>
             <div className="text-[11px] text-[var(--muted)] mt-1">
-              Hóa đơn này là chứng từ hợp lệ. Mã đơn: <strong>{invoiceId}</strong>
+              Mã tra cứu hóa đơn: <strong>{invoiceId}</strong>
             </div>
           </div>
           <div className="text-center">
-            <div className="text-[11px] text-[var(--muted)] mb-2">Quét QR xem điểm thưởng</div>
-            <div className="w-[64px] h-[64px] bg-[var(--background)] border border-[var(--border)] rounded-lg flex items-center justify-center mx-auto">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--muted)]">
+            <div className="text-[11px] text-[var(--muted)] mb-1.5 font-medium">Quét QR tích điểm & nhận voucher</div>
+            <div className="w-[68px] h-[68px] bg-[var(--background)] border border-[var(--border)] rounded-lg flex items-center justify-center mx-auto">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--muted)]">
                 <rect x="3" y="3" width="7" height="7" />
                 <rect x="14" y="3" width="7" height="7" />
                 <rect x="3" y="14" width="7" height="7" />
@@ -299,11 +359,10 @@ export default function InvoiceDetailsPage() {
                 <path d="M17 17h4v4h-4z" />
               </svg>
             </div>
-            <div className="text-[10px] text-[var(--muted)] mt-1">MilktyWay.vn/loyalty</div>
+            <div className="text-[10px] text-[var(--muted)] mt-1 font-mono">MilktyWay.vn/loyalty</div>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

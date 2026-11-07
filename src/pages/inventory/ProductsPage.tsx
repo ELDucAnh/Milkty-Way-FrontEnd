@@ -372,6 +372,7 @@ export default function ProductsPage() {
       <Modal
         isOpen={selected !== null}
         title="Thông tin món và trạng thái bán"
+        size="lg"
         onClose={() => setSelected(null)}
       >
         {selected && (

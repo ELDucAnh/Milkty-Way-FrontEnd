@@ -589,6 +589,7 @@ export default function RecipesPage() {
       <Modal
         isOpen={modalOpen}
         title={editing ? "Chỉnh sửa công thức nháp" : "Tạo công thức"}
+        size="2xl"
         onClose={() => setModalOpen(false)}
       >
         <form className="space-y-4" onSubmit={saveDraft}>
@@ -824,7 +825,7 @@ export default function RecipesPage() {
               </button>
             </div>
             <DataTable>
-              <table className="w-full min-w-[900px] text-sm text-left">
+              <table className="w-full text-sm text-left">
                 <thead>
                   <tr>
                     {[
@@ -985,6 +986,7 @@ export default function RecipesPage() {
       <Modal
         isOpen={!!selected}
         title="Chi tiết công thức"
+        size="lg"
         onClose={() => setSelected(null)}
       >
         {selected && (

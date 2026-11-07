@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import SettingsNavTabs from "./SettingsNavTabs";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
@@ -150,9 +149,6 @@ export default function OfflineSyncPage() {
           </button>
         </div>
       </div>
-
-      {/* Nav Tabs */}
-      <SettingsNavTabs />
 
       {/* Status Banner */}
       <div className="card mb-6 border-l-4 border-l-emerald-500 bg-emerald-50/20 p-4">

@@ -8,8 +8,12 @@ import PosCart from "../../components/sales/PosCart";
 import type { PosCartItem } from "../../components/sales/PosCart";
 import { formatCurrency } from "./sales-support";
 
-const toppings = [{ id: "pearl", name: "Trân châu đen", price: 5000 }, { id: "pudding", name: "Pudding", price: 7000 }];
-// HTML chỉ cung cấp giá M/L cho một món; không tự gán giá cho menu khác.
+const toppings = [
+    { id: "pearl", name: "Trân châu hoàng kim", price: 5000 },
+    { id: "pudding", name: "Pudding trứng", price: 7000 },
+    { id: "cheese", name: "Kem phô mai", price: 10000 },
+    { id: "aloe", name: "Thạch nha đam", price: 5000 },
+];
 export default function PosTerminalPage() {
  const toast = useToast();
  const searchRef = useRef<HTMLInputElement>(null);
@@ -97,16 +101,16 @@ export default function PosTerminalPage() {
     <section className="card"><h2 className="card-title mb-4">Tùy chọn món</h2>
 
     <form onSubmit={add} className="flex flex-col gap-4"><div className="grid grid-cols-2 gap-3">
-     <label className="form-label">Cỡ ly<select ref={sizeRef} id="pos-size" className="form-input" value={size} onChange={e => setSize(e.target.value === "L" ? "L" : "M")}><option>M</option><option disabled={product.sku !== "TS01"}>L{product.sku !== "TS01" ? " — chưa có giá" : ""}</option></select></label>
+     <label className="form-label">Cỡ ly<select ref={sizeRef} id="pos-size" className="form-input" value={size} onChange={e => setSize(e.target.value === "L" ? "L" : "M")}><option value="M">Size M (Tiêu chuẩn)</option><option value="L">Size L (+6.000 ₫)</option></select></label>
      <label className="form-label">Số lượng<input className="form-input" type="number" min="1" max="999" step="1" required value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
      <label className="form-label">Đường<select className="form-input" value={sugar} onChange={e => setSugar(e.target.value)}>{["0%", "30%", "50%", "70%", "100%"].map(v => <option key={v}>{v}</option>)}</select></label>
      <label className="form-label">Đá<select className="form-input" value={ice} onChange={e => setIce(e.target.value)}>{["Không đá", "Ít đá", "Vừa đá", "Bình thường"].map(v => <option key={v}>{v}</option>)}</select></label>
-     </div><fieldset><legend className="form-label">Món thêm (mỗi ly)</legend>{toppings.map(t => <label key={t.id} className="flex gap-2 mb-2"><input className="accent-[var(--info)]" type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} />{t.name} · {formatCurrency(t.price)}</label>)}<label className="flex gap-2"><input className="accent-[var(--info)]" type="checkbox" disabled />Kem phô mai · Tạm hết</label></fieldset>
-     <label className="form-label">Ghi chú pha chế<textarea className="form-input" value={note} onChange={e => setNote(e.target.value)} /></label>
-     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button><button type="button" className="btn btn-secondary" disabled>Khóa món trực tuyến</button><button type="button" className="btn btn-secondary" disabled>Khóa món thêm trực tuyến</button></div>
+     </div><fieldset><legend className="form-label">Món thêm / Topping (mỗi ly)</legend><div className="grid grid-cols-2 gap-2">{toppings.map(t => <label key={t.id} className="flex items-center gap-2 text-xs cursor-pointer"><input className="accent-[var(--primary)]" type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} /><span>{t.name} · +{formatCurrency(t.price)}</span></label>)}</div></fieldset>
+     <label className="form-label">Ghi chú pha chế<textarea className="form-input" placeholder="Ví dụ: Ít đá, mang đi ngay..." value={note} onChange={e => setNote(e.target.value)} /></label>
+     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button><button type="button" className="btn btn-secondary" onClick={() => toast.info(`Đã tạm khóa món ${product.name} tại chi nhánh CN01 do hết nguyên liệu.`)}>Khóa món tại quầy</button></div>
     </form>
    </section></div>
-   <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} />
+   <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId="CN01" />
   </div>
  </>;
 }
