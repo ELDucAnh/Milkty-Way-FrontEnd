@@ -415,7 +415,7 @@ export default function OfflineSyncPage() {
                   </td>
                   <td className="text-center">
                     {order.synced ? (
-                      <span className="text-xs text-emerald-600 font-semibold">✓ Đã Sync</span>
+                      <span className="text-xs text-emerald-600 font-semibold">Đã đồng bộ</span>
                     ) : (
                       <button
                         type="button"

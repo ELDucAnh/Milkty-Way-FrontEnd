@@ -4,6 +4,7 @@ import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
+import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 import {
     branches,
@@ -20,7 +21,7 @@ type PromotionStatus = "draft" | "scheduled" | "active" | "ended";
 type PromotionChannel = SalesChannel | "all";
 type PromotionShift = SalesShift | "all";
 
-interface Promotion {
+export interface Promotion {
     id: string;
     code: string;
     name: string;
@@ -105,7 +106,7 @@ const statusVariants: Record<PromotionStatus, BadgeVariant> = {
     ended: "gray",
 };
 
-const initialPromotions: readonly Promotion[] = [
+export const initialPromotions: readonly Promotion[] = [
     {
         id: "KM-001",
         code: "KM-001",
@@ -225,8 +226,8 @@ function isShift(value: string): value is PromotionShift {
 
 export default function PromotionsPage() {
     const toast = useToast();
-    const editorRef = useRef<HTMLElement>(null);
     const listRef = useRef<HTMLElement>(null);
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [rows, setRows] = useState<Promotion[]>(() => [...initialPromotions]);
     const [form, setForm] = useState<PromotionForm>(createForm);
     const [draftFilters, setDraftFilters] = useState<PromotionFilters>(emptyFilters);
@@ -342,8 +343,10 @@ export default function PromotionsPage() {
         setForm(createForm());
         setFilters(emptyFilters);
         setDraftFilters(emptyFilters);
-        toast.success("Đã lưu bản nháp.");
-        listRef.current?.scrollIntoView({ block: "start" });
+        setIsCreateOpen(false);
+        toast.success("Đã tạo chương trình khuyến mãi mới thành công!", {
+            title: "Khuyến Mãi",
+        });
     }
 
     const columns: readonly DataTableColumn<Promotion>[] = [
@@ -424,21 +427,24 @@ export default function PromotionsPage() {
     return (
         <>
             <SalesPageHeader
-                title="Chương trình khuyến mãi"
-                breadcrumb="Khuyến mãi"
+                title="Chương trình khuyến mãi & Voucher"
+                breadcrumb="Marketing"
                 parent={{ label: "", to: "" }}
-                description="Quản lý ưu đãi, thời gian và phạm vi áp dụng."
+                description="Thiết lập các chương trình khuyến mãi, voucher ưu đãi và chính sách quà tặng toàn hệ thống MilktyWay."
                 actions={
                     <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => editorRef.current?.scrollIntoView({ block: "start" })}
+                        onClick={() => {
+                            setForm(createForm());
+                            setIsCreateOpen(true);
+                        }}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24"
                             fill="none" stroke="currentColor" strokeWidth="2"
                             strokeLinecap="round" aria-hidden="true">
                             <path d="M12 5v14M5 12h14" />
-                        </svg> Tạo chương trình
+                        </svg> Tạo chương trình mới
                     </button>
                 }
             />
@@ -527,146 +533,173 @@ export default function PromotionsPage() {
                 </div>
             </section>
 
-            <section ref={editorRef} id="promotion-editor" aria-labelledby="promotion-editor-title">
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                    <h2 id="promotion-editor-title" className="card-title">Tạo chương trình mới</h2>
-                    <Badge variant="gray">Bản nháp</Badge>
-                </div>
-
-                <form onSubmit={saveDraft}>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-                        <div className="min-w-0 flex flex-col gap-4">
-                            <section className="card">
-                                <h3 className="card-title mb-4">Thông tin chương trình</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <PromotionInput
-                                        id="promo-name"
-                                        label="Tên chương trình *"
-                                        wrapperClassName="sm:col-span-2"
-                                        maxLength={120}
-                                        required
-                                        value={form.name}
-                                        onChange={(event) => updateForm("name", event.target.value)}
-                                    />
-                                    <PromotionInput
-                                        id="promo-code"
-                                        label="Mã chương trình"
-                                        placeholder="Ví dụ: KM-004"
-                                        value={form.code}
-                                        onChange={(event) => updateForm("code", event.target.value)}
-                                    />
-                                    <PromotionInput id="promo-version" label="Phiên bản" value="1" readOnly />
-                                    <div className="sm:col-span-2">
-                                        <label className="form-label" htmlFor="promo-description">
-                                            Mô tả và điều kiện
-                                        </label>
-                                        <textarea
-                                            id="promo-description"
-                                            className="form-input form-textarea w-full"
-                                            rows={2}
-                                            value={form.description}
-                                            onChange={(event) => updateForm("description", event.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section className="card">
-                                <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-                                    <h3 className="card-title">Thời gian áp dụng</h3>
-                                    <span className="text-xs text-[var(--muted)]">UTC+7</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <PromotionInput
-                                        id="promo-start"
-                                        label="Ngày bắt đầu *"
-                                        placeholder="dd/MM/yyyy"
-                                        maxLength={10}
-                                        required
-                                        value={form.startDate}
-                                        onChange={(event) => updateForm("startDate", event.target.value)}
-                                    />
-                                    <PromotionInput
-                                        id="promo-end"
-                                        label="Ngày kết thúc *"
-                                        placeholder="dd/MM/yyyy"
-                                        maxLength={10}
-                                        required
-                                        value={form.endDate}
-                                        onChange={(event) => updateForm("endDate", event.target.value)}
-                                    />
-                                    <PromotionInput
-                                        id="promo-hour-from"
-                                        label="Từ giờ *"
-                                        placeholder="HH:mm"
-                                        maxLength={5}
-                                        required
-                                        value={form.hourFrom}
-                                        onChange={(event) => updateForm("hourFrom", event.target.value)}
-                                    />
-                                    <PromotionInput
-                                        id="promo-hour-to"
-                                        label="Đến giờ *"
-                                        placeholder="HH:mm"
-                                        maxLength={5}
-                                        required
-                                        value={form.hourTo}
-                                        onChange={(event) => updateForm("hourTo", event.target.value)}
-                                    />
-                                </div>
-                            </section>
+            {/* Modal Tạo chương trình khuyến mãi mới */}
+            <Modal
+                open={isCreateOpen}
+                onClose={() => setIsCreateOpen(false)}
+                title="Tạo chương trình khuyến mãi mới"
+                size="2xl"
+                footer={
+                    <div className="flex items-center justify-between w-full flex-wrap gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-secondary h-10 text-xs"
+                            onClick={() => setForm(createForm())}
+                        >
+                            Nhập lại dữ liệu
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                className="btn btn-ghost h-10 text-xs"
+                                onClick={() => setIsCreateOpen(false)}
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                type="submit"
+                                form="promotion-create-form"
+                                className="btn btn-primary h-10 text-xs"
+                            >
+                                Lưu chương trình
+                            </button>
                         </div>
-
-                        <section className="card min-w-0">
-                            <h3 className="card-title mb-4">Phạm vi áp dụng</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="form-label" htmlFor="promo-channel">Kênh bán</label>
-                                    <select
-                                        id="promo-channel"
-                                        className="form-input form-select w-full h-11"
-                                        value={form.channel}
-                                        onChange={(event) => {
-                                            if (isChannel(event.target.value)) {
-                                                updateForm("channel", event.target.value);
-                                            }
-                                        }}
-                                    >
-                                        <option value="all">Tất cả kênh</option>
-                                        {Object.entries(channelLabels).map(([value, label]) => (
-                                            <option key={value} value={value}>{label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="form-label" htmlFor="promo-shift">Ca áp dụng</label>
-                                    <select
-                                        id="promo-shift"
-                                        className="form-input form-select w-full h-11"
-                                        value={form.shift}
-                                        onChange={(event) => {
-                                            if (isShift(event.target.value)) {
-                                                updateForm("shift", event.target.value);
-                                            }
-                                        }}
-                                    >
-                                        <option value="all">Tất cả ca</option>
-                                        {Object.entries(shiftLabels).map(([value, label]) => (
-                                            <option key={value} value={value}>{label}</option>
-                                        ))}
-                                    </select>
+                    </div>
+                }
+            >
+                <form id="promotion-create-form" onSubmit={saveDraft} className="space-y-4">
+                    {/* Phần 1: Thông tin & Thời gian */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                            <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">1. Thông tin chương trình</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <PromotionInput
+                                    id="promo-name"
+                                    label="Tên chương trình *"
+                                    wrapperClassName="sm:col-span-2"
+                                    maxLength={120}
+                                    required
+                                    placeholder="Ví dụ: Mua 2 ly tặng trân châu hoàng kim"
+                                    value={form.name}
+                                    onChange={(event) => updateForm("name", event.target.value)}
+                                />
+                                <PromotionInput
+                                    id="promo-code"
+                                    label="Mã chương trình"
+                                    placeholder="Ví dụ: KM-004"
+                                    value={form.code}
+                                    onChange={(event) => updateForm("code", event.target.value)}
+                                />
+                                <PromotionInput id="promo-version" label="Phiên bản" value="1" readOnly />
+                                <div className="sm:col-span-2">
+                                    <label className="form-label" htmlFor="promo-description">
+                                        Mô tả và điều kiện áp dụng
+                                    </label>
+                                    <textarea
+                                        id="promo-description"
+                                        className="form-input form-textarea w-full text-xs"
+                                        rows={2}
+                                        placeholder="Điều kiện chi tiết, ghi chú phục vụ cho thu ngân và pha chế..."
+                                        value={form.description}
+                                        onChange={(event) => updateForm("description", event.target.value)}
+                                    />
                                 </div>
                             </div>
+                        </div>
 
-                            <fieldset className="min-w-0 mt-5">
-                                <legend className="form-label">Chi nhánh áp dụng</legend>
-                                <label className="sr-only" htmlFor="promo-branch-mode">
-                                    Cách áp dụng danh sách chi nhánh
-                                </label>
+                        <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-bold text-sm text-[var(--heading-color)]">2. Thời gian áp dụng</h3>
+                                <span className="text-xs text-[var(--muted)]">Giờ Việt Nam (UTC+7)</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <PromotionInput
+                                    id="promo-start"
+                                    label="Ngày bắt đầu *"
+                                    placeholder="dd/MM/yyyy"
+                                    maxLength={10}
+                                    required
+                                    value={form.startDate}
+                                    onChange={(event) => updateForm("startDate", event.target.value)}
+                                />
+                                <PromotionInput
+                                    id="promo-end"
+                                    label="Ngày kết thúc *"
+                                    placeholder="dd/MM/yyyy"
+                                    maxLength={10}
+                                    required
+                                    value={form.endDate}
+                                    onChange={(event) => updateForm("endDate", event.target.value)}
+                                />
+                                <PromotionInput
+                                    id="promo-hour-from"
+                                    label="Từ giờ *"
+                                    placeholder="HH:mm"
+                                    maxLength={5}
+                                    required
+                                    value={form.hourFrom}
+                                    onChange={(event) => updateForm("hourFrom", event.target.value)}
+                                />
+                                <PromotionInput
+                                    id="promo-hour-to"
+                                    label="Đến giờ *"
+                                    placeholder="HH:mm"
+                                    maxLength={5}
+                                    required
+                                    value={form.hourTo}
+                                    onChange={(event) => updateForm("hourTo", event.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Phần 2: Phạm vi áp dụng (Kênh, ca & chi nhánh) */}
+                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                        <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">3. Phạm vi & Kênh bán</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                            <div>
+                                <label className="form-label" htmlFor="promo-channel">Kênh bán</label>
+                                <select
+                                    id="promo-channel"
+                                    className="form-input form-select w-full h-10 text-xs"
+                                    value={form.channel}
+                                    onChange={(event) => {
+                                        if (isChannel(event.target.value)) {
+                                            updateForm("channel", event.target.value);
+                                        }
+                                    }}
+                                >
+                                    <option value="all">Tất cả kênh</option>
+                                    {Object.entries(channelLabels).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="form-label" htmlFor="promo-shift">Ca áp dụng</label>
+                                <select
+                                    id="promo-shift"
+                                    className="form-input form-select w-full h-10 text-xs"
+                                    value={form.shift}
+                                    onChange={(event) => {
+                                        if (isShift(event.target.value)) {
+                                            updateForm("shift", event.target.value);
+                                        }
+                                    }}
+                                >
+                                    <option value="all">Tất cả ca</option>
+                                    {Object.entries(shiftLabels).map(([value, label]) => (
+                                        <option key={value} value={value}>{label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="form-label" htmlFor="promo-branch-mode">Phương thức phân bổ</label>
                                 <select
                                     id="promo-branch-mode"
-                                    className="form-input form-select w-full h-11"
+                                    className="form-input form-select w-full h-10 text-xs"
                                     value={form.branchMode}
                                     onChange={(event) => {
                                         const value = event.target.value;
@@ -675,63 +708,67 @@ export default function PromotionsPage() {
                                         }
                                     }}
                                 >
-                                    <option value="include">Áp dụng tại chi nhánh được chọn</option>
-                                    <option value="exclude">Loại trừ chi nhánh được chọn</option>
+                                    <option value="include">Áp dụng tại các chi nhánh chọn</option>
+                                    <option value="exclude">Loại trừ các chi nhánh chọn</option>
                                 </select>
+                            </div>
+                        </div>
 
-                                <div className="flex items-center justify-between flex-wrap gap-3 mt-4 mb-3">
-                                    <span className="text-sm font-semibold">Danh sách chi nhánh</span>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            className="btn btn-secondary btn-sm"
-                                            onClick={() => updateForm("branchIds", branches.map((branch) => branch.id))}
-                                        >
-                                            Chọn tất cả
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="btn btn-ghost btn-sm"
-                                            onClick={() => updateForm("branchIds", [])}
-                                        >
-                                            Bỏ chọn
-                                        </button>
-                                    </div>
+                        <div>
+                            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                                <span className="text-xs font-semibold text-[var(--text)]">
+                                    Chi nhánh áp dụng ({form.branchIds.length}/{branches.length})
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm text-[11px] h-7 px-2"
+                                        onClick={() => updateForm("branchIds", branches.map((branch) => branch.id))}
+                                    >
+                                        Chọn tất cả
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-sm text-[11px] h-7 px-2"
+                                        onClick={() => updateForm("branchIds", [])}
+                                    >
+                                        Bỏ chọn
+                                    </button>
                                 </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {branches.map((branch) => (
-                                        <label
-                                            key={branch.id}
-                                            className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg cursor-pointer hover:bg-[var(--background)]"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                className="w-4 h-4 shrink-0 accent-[var(--info)]"
-                                                checked={form.branchIds.includes(branch.id)}
-                                                onChange={() => toggleBranch(branch.id)}
-                                            />
-                                            <span className="text-sm">{branch.id} — {branch.name}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </fieldset>
-                        </section>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-36 overflow-y-auto p-1 border border-[var(--border)] rounded-lg bg-[var(--surface)]">
+                                {branches.map((branch) => (
+                                    <label
+                                        key={branch.id}
+                                        className="flex items-center gap-2 p-1.5 text-xs rounded hover:bg-[var(--background)] cursor-pointer"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="w-3.5 h-3.5 accent-[var(--primary)]"
+                                            checked={form.branchIds.includes(branch.id)}
+                                            onChange={() => toggleBranch(branch.id)}
+                                        />
+                                        <span className="truncate">{branch.id} · {branch.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
-                    <section className="card w-full mt-4">
-                        <h3 className="card-title mb-4">Ưu đãi và giới hạn</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Phần 3: Món & Ngân sách */}
+                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                        <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">4. Món áp dụng, Ngân sách & Giới hạn</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <div>
                                 <label className="form-label" htmlFor="promo-product">Món áp dụng *</label>
                                 <select
                                     id="promo-product"
-                                    className="form-input form-select w-full h-11"
+                                    className="form-input form-select w-full h-10 text-xs"
                                     required
                                     value={form.productId}
                                     onChange={(event) => updateForm("productId", event.target.value)}
                                 >
-                                    <option value="">Chọn món</option>
+                                    <option value="">Chọn món trà sữa / đồ uống</option>
                                     {promotionProducts.map((product) => (
                                         <option key={product.id} value={product.id}>{product.name}</option>
                                     ))}
@@ -748,22 +785,24 @@ export default function PromotionsPage() {
                                 value={form.minQuantity}
                                 onChange={(event) => updateForm("minQuantity", event.target.value)}
                             />
+
                             <PromotionInput
                                 id="promo-benefit"
                                 label="Nội dung ưu đãi *"
-                                wrapperClassName="sm:col-span-2"
                                 required
-                                placeholder="Ví dụ: Tặng 1 phần trân châu"
+                                placeholder="Ví dụ: Tặng 1 phần trân châu hoàng kim"
                                 value={form.benefit}
                                 onChange={(event) => updateForm("benefit", event.target.value)}
                             />
+
                             <PromotionInput
                                 id="promo-gift-code"
-                                label="Mã món hoặc món thêm quà tặng"
-                                wrapperClassName="sm:col-span-2"
+                                label="Món quà tặng (nếu có)"
+                                placeholder="Mã topping hoặc món phụ"
                                 value={form.giftProductId}
                                 onChange={(event) => updateForm("giftProductId", event.target.value)}
                             />
+
                             <PromotionInput
                                 id="promo-budget"
                                 label="Ngân sách tối đa (đ) *"
@@ -774,6 +813,7 @@ export default function PromotionsPage() {
                                 value={form.budget}
                                 onChange={(event) => updateForm("budget", event.target.value)}
                             />
+
                             <PromotionInput
                                 id="promo-limit"
                                 label="Giới hạn lượt sử dụng *"
@@ -786,37 +826,18 @@ export default function PromotionsPage() {
                             />
                         </div>
 
-                        <label className="flex items-start gap-3 mt-4 text-sm cursor-pointer">
+                        <label className="flex items-center gap-2.5 mt-3 text-xs font-medium cursor-pointer">
                             <input
                                 type="checkbox"
-                                className="w-4 h-4 mt-1 shrink-0 accent-[var(--info)]"
+                                className="w-4 h-4 accent-[var(--primary)]"
                                 checked={form.stackable}
                                 onChange={(event) => updateForm("stackable", event.target.checked)}
                             />
-                            <span>Cho phép cộng dồn với ưu đãi khác</span>
+                            <span>Cho phép áp dụng cộng dồn với mã giảm giá/voucher khác</span>
                         </label>
-                    </section>
-
-                    <div className="card mt-4">
-                        <div className="flex items-center justify-between flex-wrap gap-3">
-                            
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary h-11"
-                                    onClick={() => setForm(createForm())}
-                                >
-                                    Nhập lại
-                                </button>
-                                <button type="submit" className="btn btn-primary h-11">
-                                    Lưu bản nháp
-                                </button>
-                            </div>
-                        </div>
-                        
                     </div>
                 </form>
-            </section>
+            </Modal>
         </>
     );
 }

@@ -32,15 +32,15 @@ function validPercentage(value: string): number | null {
         : null;
 }
 
-const SAMPLE_MEMBERS: Record<string, { name: string; tier: string; points: number; discount: number }> = {
-    "0903 123 456": { name: "Nguyễn An", tier: "VIP", points: 1250, discount: 10 },
-    "0903123456": { name: "Nguyễn An", tier: "VIP", points: 1250, discount: 10 },
-    "0908 123 456": { name: "Trần Văn An", tier: "Gold", points: 850, discount: 8 },
-    "0908123456": { name: "Trần Văn An", tier: "Gold", points: 850, discount: 8 },
-    "0912 345 678": { name: "Trần Bình", tier: "Silver", points: 420, discount: 5 },
-    "0912345678": { name: "Trần Bình", tier: "Silver", points: 420, discount: 5 },
-    "0988 777 666": { name: "Lê Minh Tuấn", tier: "Member", points: 150, discount: 0 },
-    "0988777666": { name: "Lê Minh Tuấn", tier: "Member", points: 150, discount: 0 },
+const SAMPLE_MEMBERS: Record<string, { name: string; tier: string; points: number; discount: number; nextProgression: string }> = {
+    "0903 123 456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 15, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 15%)" },
+    "0903123456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 15, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 15%)" },
+    "0908 123 456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 10, nextProgression: "Cần 150 điểm nữa lên VIP" },
+    "0908123456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 10, nextProgression: "Cần 150 điểm nữa lên VIP" },
+    "0912 345 678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 5, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
+    "0912345678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 5, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
+    "0988 777 666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
+    "0988777666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
 };
 
 export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }: PosCartProps) {
@@ -78,14 +78,14 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         const found = SAMPLE_MEMBERS[cleanPhone];
         if (found) {
             setMemberName(found.name);
-            setMemberInfo(`${found.name} · Hạng ${found.tier} (Điểm: ${found.points.toLocaleString()}đ)`);
+            setMemberInfo(`${found.name} · ${found.tier} (${found.points.toLocaleString()} điểm · ${found.nextProgression})`);
             if (found.discount > 0) {
                 setDiscountInput(String(found.discount));
-                toast.success(`Đã nhận diện hội viên ${found.name}! Tự động áp dụng giảm ${found.discount}% hạng ${found.tier}.`, {
+                toast.success(`Đã nhận diện hội viên ${found.name}! Tự động áp dụng giảm ${found.discount}% (${found.tier}).`, {
                     title: "Hội Viên Thân Thiết",
                 });
             } else {
-                toast.info(`Đã tìm thấy hội viên ${found.name} (${found.tier}). Chưa có chiết khấu hạng thẻ.`, {
+                toast.info(`Đã tìm thấy hội viên ${found.name} (${found.tier}). ${found.nextProgression}.`, {
                     title: "Hội Viên",
                 });
             }

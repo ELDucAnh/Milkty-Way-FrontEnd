@@ -204,7 +204,7 @@ export default function LoginPage() {
       {/* Demo credentials cho 4 vai trò */}
       <div className="auth-demo-box mt-4 p-3 bg-white/80 dark:bg-zinc-800/80 rounded-xl border border-[var(--border)] text-xs shadow-sm">
         <div className="font-bold text-[var(--text)] mb-1">
-          🔑 Tài Khoản Mẫu Cho 4 Vai Trò Nghiệp Vụ:
+          Tài Khoản Mẫu Cho 4 Vai Trò Nghiệp Vụ:
         </div>
         <div className="text-[var(--muted)] space-y-0.5">
           <div>• <strong>Chủ Doanh Nghiệp:</strong> admin@MilktyWay.vn (Toàn chuỗi)</div>
