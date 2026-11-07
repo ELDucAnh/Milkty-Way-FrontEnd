@@ -1,3 +1,4 @@
+import { isCashier, counterBranch } from "../../utils/auth";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -47,7 +48,7 @@ const channelDisplay: Record<PreparationChannel, StatusDisplay> = {
 };
 
 function getOrdersFromStore(): PreparationOrder[] {
-    const orders = loadOrders();
+    const orders = loadOrders().filter(o => !isCashier() || (o.branchId === counterBranch && o.delivery !== "delivered" && o.payment !== "refunded" && o.onlineDecision !== "rejected" && (o.channel !== "online" || o.preparation)));
     return orders.filter(o => o.items && o.items.length > 0).map(o => {
         const itemSummary = o.items.map(it => `${it.quantity} × ${it.name} (Size ${it.size})`).join(" + ");
         const optionSummary = o.items.map(it => `Đường ${it.sugar} · ${it.ice}${it.toppings.length ? ` · Topping: ${it.toppings.join(", ")}` : ""}`).join(" | ");
@@ -103,7 +104,7 @@ export default function PreparationQueuePage() {
 
     function handleResetFilters() {
         const emptyFilters = {
-            branchId: "",
+            branchId: isCashier() ? counterBranch : "",
             status: "",
         };
 
@@ -251,7 +252,11 @@ export default function PreparationQueuePage() {
                             Món đã sẵn sàng
                         </button>
                     )}
-                    {order.status === "ready" && (
+                    {isCashier() && order.status === "ready" && <button className="btn btn-primary btn-sm" onClick={() => {
+                        saveOrders(loadOrders().map(o => o.id === order.id && o.branchId === counterBranch ? {...o, delivery:"delivered"} : o));
+                        setOrders(getOrdersFromStore());
+                    }}>Bàn giao</button>}
+                    {!isCashier() && order.status === "ready" && (
                         <span className="text-xs text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg">
                             Đã hoàn tất
                         </span>
@@ -280,7 +285,7 @@ export default function PreparationQueuePage() {
             <div className="page-header">
                 <div>
                     <nav className="breadcrumb" aria-label="Đường dẫn trang">
-                        <Link to="/dashboard">Trang chủ</Link>
+                        <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
                         <span className="sep">/</span>
                         <Link to="/sales">Bán hàng</Link>
                         <span className="sep">/</span>
@@ -297,7 +302,7 @@ export default function PreparationQueuePage() {
                         Màn hình điều phối thứ tự pha chế cho Barista quầy bar, cập nhật trạng thái đơn hàng tức thời.
                     </p>
                 </div>
-                <div className="page-header-actions">
+                <div className="page-header-actions" style={{ alignSelf: "center" }}>
                     <button
                         type="button"
                         className="btn btn-secondary"
@@ -329,7 +334,7 @@ export default function PreparationQueuePage() {
                             Chi nhánh
                         </label>
                         <select
-                            id="kds-branch"
+                            id="kds-branch" disabled={isCashier()}
                             className="form-input form-select"
                             value={draftFilters.branchId}
                             onChange={(event) =>

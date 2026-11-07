@@ -1,3 +1,4 @@
+import { checkLogin } from "../../utils/auth";
 import { useState } from "react";
 import ConfirmDialog from "../common/ConfirmDialog";
 import { useToast } from "../common/useToast";
@@ -76,7 +77,12 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         }
 
         const found = SAMPLE_MEMBERS[cleanPhone];
-        if (found) {
+        if (found && checkLogin() === "cashier") {
+            setMemberName(found.name);
+            setMemberInfo(found.name);
+            setDiscountInput(String(found.discount));
+            toast.success("Đã áp dụng ưu đãi hiện có của khách hàng.");
+        } else if (found) {
             setMemberName(found.name);
             setMemberInfo(`${found.name} · ${found.tier} (${found.points.toLocaleString()} điểm · ${found.nextProgression})`);
             if (found.discount > 0) {
@@ -319,7 +325,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                             Giảm giá (%)
                         </label>
                         <input
-                            id="pos-discount-input"
+                            id="pos-discount-input" readOnly={checkLogin() === "cashier"}
                             className="form-input"
                             type="number"
                             min="0"
@@ -333,7 +339,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                             Thuế VAT (%)
                         </label>
                         <input
-                            id="pos-tax-input"
+                            id="pos-tax-input" readOnly={checkLogin() === "cashier"}
                             className="form-input"
                             type="number"
                             min="0"
@@ -456,3 +462,4 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         </div>
     );
 }
+

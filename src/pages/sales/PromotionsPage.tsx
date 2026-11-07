@@ -1,3 +1,4 @@
+import { isCashier, counterBranch } from "../../utils/auth";
 import { useRef, useState } from "react";
 import type { FormEvent, InputHTMLAttributes } from "react";
 import Badge from "../../components/common/Badge";
@@ -273,7 +274,7 @@ export default function PromotionsPage() {
     }
 
     const query = filters.search.trim().toLocaleLowerCase("vi-VN");
-    const visibleRows = rows.filter((row) =>
+    const visibleRows = rows.filter(row => !isCashier() || (row.status === "active" && row.branchIds.includes(counterBranch))).filter((row) =>
         `${row.code} ${row.name}`.toLocaleLowerCase("vi-VN").includes(query) &&
         (!filters.status || row.status === filters.status) &&
         (!filters.channel || row.channel === "all" || row.channel === filters.channel)
@@ -484,7 +485,7 @@ export default function PromotionsPage() {
                 breadcrumb="Marketing"
                 parent={{ label: "", to: "" }}
                 description="Thiết lập các chương trình khuyến mãi, voucher ưu đãi và chính sách quà tặng toàn hệ thống MilktyWay."
-                actions={
+                actions={!isCashier() &&
                     <button
                         type="button"
                         className="btn btn-primary"
@@ -578,7 +579,7 @@ export default function PromotionsPage() {
                 <div className="mt-5">
                     <DataTable<Promotion> pagination={false}
                         key={JSON.stringify(filters)}
-                        columns={columns}
+                        columns={isCashier() ? columns.filter(c => c.id !== "actions" && c.id !== "budget") : columns}
                         data={visibleRows}
                         rowKey={(row) => row.id}
                         caption="Danh sách chương trình khuyến mãi"

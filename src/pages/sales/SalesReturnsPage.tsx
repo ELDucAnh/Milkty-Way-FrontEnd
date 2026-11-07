@@ -1,3 +1,4 @@
+import { checkLogin, isCashier, counterBranch } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Modal from "../../components/common/Modal";
@@ -80,20 +81,22 @@ export default function SalesReturnsPage() {
     const [reviewNote, setReviewNote] = useState("");
 
     // Form tạo khiếu nại mới
-    const availableOrders = useMemo(() => loadOrders(), [open]);
+    const availableOrders = useMemo(() => loadOrders().filter(o => !isCashier() || o.branchId === counterBranch), [open]);
     const [formOrderId, setFormOrderId] = useState("");
     const [formReason, setFormReason] = useState("Sai mức đường / đá");
     const [formResolution, setFormResolution] = useState("Hoàn tiền");
     const [formAmount, setFormAmount] = useState("45000");
     const [formNote, setFormNote] = useState("");
 
+    const canReview = checkLogin() === "manager" || checkLogin() === "owner";
     const selected = reviewState.requests.find(request => request.id === selectedId);
     const visibleRequests = reviewState.requests.filter(request =>
+        (!isCashier() || availableOrders.some(o => o.id === request.orderId)) &&
         (!status || request.status === status) &&
         `${request.id} ${request.orderId} ${request.customer}`.toLocaleLowerCase("vi-VN").includes(query.trim().toLocaleLowerCase("vi-VN")));
 
     function reviewRequest(decision: "Approved" | "Rejected") {
-        if (!selected) return;
+        if (!canReview || !selected) return;
         if (decision === "Rejected" && !reviewNote.trim()) {
             toast.warning("Vui lòng nhập lý do từ chối giải quyết khiếu nại.");
             return;
@@ -102,7 +105,7 @@ export default function SalesReturnsPage() {
         const isRefund = decision === "Approved" && selected.resolution === "Hoàn tiền" && selected.amount > 0;
         const entry: ReviewEntry = {
             requestId: selected.id,
-            reviewer: "Nguyễn Hoàng Long (Quản Trị Viên)",
+            reviewer: checkLogin() === "manager" ? "Quản lý chi nhánh" : "Nguyễn Hoàng Long (Quản Trị Viên)",
             memberId: selected.memberId,
             refundedAmount: isRefund ? selected.amount : 0,
             pointsChange: isRefund && selected.memberId ? selected.points : 0,
@@ -184,7 +187,7 @@ export default function SalesReturnsPage() {
             <div className="page-header">
                 <div>
                     <div className="breadcrumb">
-                        <Link to="/dashboard">Tổng quan</Link>
+                        <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Tổng quan</Link>
                         <span className="sep">/</span>
                         <Link to="/sales">Đơn hàng</Link>
                         <span className="sep">/</span>
@@ -201,7 +204,7 @@ export default function SalesReturnsPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {!isCashier() && (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="card p-4">
                     <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng yêu cầu</div>
                     <div className="text-[26px] font-extrabold text-[var(--text)] mt-1">{reviewState.requests.length}</div>
@@ -228,7 +231,7 @@ export default function SalesReturnsPage() {
                     </div>
                     <div className="text-[11px] text-[var(--muted)] mt-0.5">Cần quản lý xác nhận</div>
                 </div>
-            </div>
+            </div>)}
 
             <div className="card mb-6">
                 <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
@@ -297,7 +300,7 @@ export default function SalesReturnsPage() {
                                             </span>
                                         </td>
                                         <td>
-                                            <button
+                                            {canReview ? <button
                                                 className="btn btn-secondary btn-sm"
                                                 onClick={() => {
                                                     setSelectedId(r.id);
@@ -305,7 +308,7 @@ export default function SalesReturnsPage() {
                                                 }}
                                             >
                                                 Xem xét
-                                            </button>
+                                            </button> : "-"}
                                         </td>
                                     </tr>
                                 ))
@@ -317,7 +320,7 @@ export default function SalesReturnsPage() {
 
             {/* Modal Xem xét & Duyệt */}
             <Modal
-                open={!!selected}
+                open={canReview && !!selected}
                 onClose={() => setSelectedId(null)}
                 title={`Chi Tiết Yêu Cầu ${selected?.id || ""}`}
                 size="lg"

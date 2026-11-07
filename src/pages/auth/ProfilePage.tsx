@@ -1,3 +1,4 @@
+import { isCashier, cashierName } from "../../utils/auth";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -7,9 +8,9 @@ export default function ProfilePage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [fullName, setFullName] = useState("Nguyễn Hoàng Long");
-  const [phone, setPhone] = useState("0903 123 456");
-  const [address, setAddress] = useState("Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM");
+  const [fullName, setFullName] = useState(isCashier() ? cashierName() : "Nguyễn Hoàng Long");
+  const [phone, setPhone] = useState(isCashier() ? localStorage.getItem("milktyway.cashier.phone") || "" : "0903 123 456");
+  const [address, setAddress] = useState(isCashier() ? localStorage.getItem("milktyway.cashier.address") || "" : "Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -31,6 +32,12 @@ export default function ProfilePage() {
       toast.error("Mật khẩu xác nhận không khớp!");
       return;
     }
+    if (isCashier()) {
+      localStorage.setItem("milktyway.cashier.name", fullName.trim());
+      localStorage.setItem("milktyway.cashier.phone", phone);
+      localStorage.setItem("milktyway.cashier.address", address);
+      if (newPassword) localStorage.setItem("milktyway.cashier.password", newPassword);
+    }
     toast.success("Đã cập nhật hồ sơ nhân sự thành công!", {
       title: "Hồ Sơ",
     });
@@ -42,7 +49,7 @@ export default function ProfilePage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Hồ sơ cá nhân</span>
           </nav>
@@ -73,9 +80,9 @@ export default function ProfilePage() {
           </div>
           <h2 className="text-lg font-bold text-[var(--text)]">{fullName}</h2>
           <div className="text-[13px] text-[var(--primary)] font-semibold mt-1">
-            Quản trị viên (Chủ Doanh Nghiệp)
+            {isCashier() ? "Nhân viên POS" : "Quản trị viên (Chủ Doanh Nghiệp)"}
           </div>
-          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: NV-ADMIN-01</div>
+          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: {isCashier() ? "NV-POS-01" : "NV-ADMIN-01"}</div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mt-2 border border-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Đang Trong Ca Trực Chiều
@@ -101,11 +108,11 @@ export default function ProfilePage() {
           <div className="text-left flex flex-col gap-2.5 mt-5 text-xs text-[var(--muted)]">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Chi Nhánh:</span>
-              Trụ Sở Chính &amp; Giám sát CN05
+              {isCashier() ? "CN01 · Quầy 01" : "Trụ Sở Chính & Giám sát CN05"}
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Email:</span>
-              long.nh@MilktyWay.vn
+              {isCashier() ? "anh.lqt@MilktyWay.vn" : "long.nh@MilktyWay.vn"}
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Hotline:</span>
@@ -141,7 +148,7 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="mt-3 flex justify-end gap-2">
-              <button
+              {!isCashier() && (<button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() =>
@@ -151,7 +158,7 @@ export default function ProfilePage() {
                 }
               >
                 Xin Đổi Ca Trực
-              </button>
+              </button>)}
               <button
                 type="button"
                 className="btn btn-primary btn-sm"

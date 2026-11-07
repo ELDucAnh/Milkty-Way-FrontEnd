@@ -1,3 +1,4 @@
+import { login, counterBranch } from "../../utils/auth";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../components/common/useToast";
@@ -28,8 +29,8 @@ export default function LoginPage() {
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!email || !password) {
-      toast.warning("Vui lòng nhập đầy đủ tài khoản và mật khẩu");
+    if (!login(role, email, password, rememberMe)) {
+      toast.warning("Vai trò, email hoặc mật khẩu chưa đúng.");
       return;
     }
 
@@ -37,9 +38,7 @@ export default function LoginPage() {
       title: "Xác Thực Thành Công",
     });
 
-    setTimeout(() => {
-      navigate("/dashboard");
-    }, 800);
+    navigate(role === "cashier" ? "/sales/pos" : "/dashboard", { replace: true });
   }
 
   return (
@@ -101,8 +100,8 @@ export default function LoginPage() {
             <select
               id="login-branch"
               className="form-input form-select"
-              value={branch}
-              disabled={role === "owner"}
+              value={role === "cashier" ? counterBranch : branch}
+              disabled={role === "owner" || role === "cashier"}
               onChange={(e) => setBranch(e.target.value)}
             >
               <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>

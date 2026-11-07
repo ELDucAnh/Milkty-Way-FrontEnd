@@ -1,9 +1,12 @@
+import { checkLogin } from "../../utils/auth";
 import { useToast } from "../../components/common/useToast";
 import "./pos-template.css";
 import { products } from "../../data/sales/products";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { initialShifts, STORAGE_SHIFTS } from "./ShiftsPage";
+import type { CashShift } from "./ShiftsPage";
+import { Navigate, Link } from "react-router-dom";
 import PosCart from "../../components/sales/PosCart";
 import type { PosCartItem } from "../../components/sales/PosCart";
 import { formatCurrency } from "./sales-support";
@@ -44,11 +47,15 @@ export default function PosTerminalPage() {
   if (!Number.isSafeInteger(count) || count < 1 || count > 999) return;
   setItems(current => [...current, { id: crypto.randomUUID(), productId: product.sku, name: product.name, size, sugar, ice, toppings: toppings.filter(t => selected.includes(t.id)).map(t => t.name), note: note.trim(), quantity: count, unitPrice }]);
  }
+ if (checkLogin() === "cashier") {
+  const shifts: CashShift[] = JSON.parse(localStorage.getItem(STORAGE_SHIFTS) || JSON.stringify(initialShifts));
+  if (!shifts.some(s => s.branchId === "CN01" && s.counterId === "POS01" && s.status === "open")) return <Navigate to="/sales/shifts" replace />;
+ }
  return <>
       <div className="page-header mb-5">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={checkLogin() === "cashier" ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/sales">Bán hàng</Link>
             <span className="sep">/</span>
@@ -67,7 +74,7 @@ export default function PosTerminalPage() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
             Danh sách đơn
           </Link>
-          <Link to="/sales/shifts" className="btn btn-secondary">Quản lý ca</Link>
+          <Link to="/sales/shifts" className="btn btn-secondary">{checkLogin() === "cashier" ? "Chốt ca" : "Quản lý ca"}</Link>
           <button className="btn btn-secondary" onClick={() => toast.info("Chưa kết nối thiết bị ngăn kéo tiền.")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="12" x2="18" y2="12"/><circle cx="12" cy="16" r="1"/></svg>
             Mở ngăn kéo tiền
@@ -107,10 +114,11 @@ export default function PosTerminalPage() {
      <label className="form-label">Đá<select className="form-input" value={ice} onChange={e => setIce(e.target.value)}>{["Không đá", "Ít đá", "Vừa đá", "Bình thường"].map(v => <option key={v}>{v}</option>)}</select></label>
      </div><fieldset><legend className="form-label">Món thêm / Topping (mỗi ly)</legend><div className="grid grid-cols-2 gap-2">{toppings.map(t => <label key={t.id} className="flex items-center gap-2 text-xs cursor-pointer"><input className="accent-[var(--primary)]" type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} /><span>{t.name} · +{formatCurrency(t.price)}</span></label>)}</div></fieldset>
      <label className="form-label">Ghi chú pha chế<textarea className="form-input" placeholder="Ví dụ: Ít đá, mang đi ngay..." value={note} onChange={e => setNote(e.target.value)} /></label>
-     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button><button type="button" className="btn btn-secondary" onClick={() => toast.info(`Đã tạm khóa món ${product.name} tại chi nhánh CN01 do hết nguyên liệu.`)}>Khóa món tại quầy</button></div>
+     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button>{checkLogin() === "cashier" ? <button type="button" className="btn btn-secondary" onClick={() => { const key = "milktyway.shortages.CN01"; localStorage.setItem(key, JSON.stringify({...JSON.parse(localStorage.getItem(key) || "{}"), [product.sku]: new Date().toISOString()})); toast.success("Đã ghi nhận báo thiếu nguyên liệu cho quản lý."); }}>Báo hết nguyên liệu</button> : <button type="button" className="btn btn-secondary" onClick={() => toast.info(`Đã tạm khóa món ${product.name} tại chi nhánh CN01 do hết nguyên liệu.`)}>Khóa món tại quầy</button>}</div>
     </form>
    </section></div>
    <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId="CN01" />
   </div>
  </>;
 }
+

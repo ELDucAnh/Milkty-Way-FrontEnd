@@ -1,5 +1,6 @@
+import { isCashier, counterBranch } from "../../utils/auth";
 import { useState, useMemo } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
 import { formatCurrency } from "../../utils/format";
@@ -13,8 +14,8 @@ export default function InvoiceDetailsPage() {
   const toast = useToast();
   const [printFormat, setPrintFormat] = useState<"k80" | "k57">("k80");
 
-  const invoices = useMemo(() => loadInvoices(), []);
-  const orders = useMemo(() => loadOrders(), []);
+  const invoices = useMemo(() => loadInvoices().filter(i => !isCashier() || i.branch.startsWith(counterBranch)), []);
+  const orders = useMemo(() => loadOrders().filter(o => !isCashier() || o.branchId === counterBranch), []);
 
   const effectiveId = id && id !== "invoice-details" ? id : null;
 
@@ -53,8 +54,11 @@ export default function InvoiceDetailsPage() {
       if (byMatchedOrder) return byMatchedOrder;
       return undefined;
     }
+    if (isCashier() && (orderIdParam || effectiveId)) return undefined;
     return invoices[0];
   }, [effectiveId, orderIdParam, invoices, matchedOrder]);
+
+  if (isCashier() && !matchedInvoice && !matchedOrder) return <Navigate to="/invoices" replace />;
 
   const invoiceId = matchedInvoice
     ? matchedInvoice.id
@@ -128,7 +132,7 @@ export default function InvoiceDetailsPage() {
       <div className="page-header no-print">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/invoices">Hóa đơn</Link>
             <span className="sep">/</span>
@@ -146,7 +150,7 @@ export default function InvoiceDetailsPage() {
             </svg>
             Danh sách hóa đơn
           </Link>
-          <div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
+          {!isCashier() && <><div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
             <button
               type="button"
               className={`btn btn-secondary border-none rounded-none text-xs px-3 ${printFormat === "k80" ? "bg-[var(--surface)]" : ""
@@ -191,7 +195,7 @@ export default function InvoiceDetailsPage() {
               <polyline points="22,6 12,13 2,6" />
             </svg>
             Gửi Cho Khách
-          </button>
+          </button></>}
         </div>
       </div>
 

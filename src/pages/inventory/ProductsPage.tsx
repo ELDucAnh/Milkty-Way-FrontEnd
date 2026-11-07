@@ -1,3 +1,4 @@
+import { isCashier, counterBranch } from "../../utils/auth";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -52,6 +53,7 @@ export default function ProductsPage() {
   const filtered = useMemo(
     () =>
       data.products.filter((product) => {
+        if (isCashier() && product.status !== "active" && product.status !== "branch-locked") return false;
         const query = applied.search.trim().toLocaleLowerCase("vi-VN");
         return (
           (!query ||
@@ -110,7 +112,7 @@ export default function ProductsPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
             <span className="sep">/</span>
             <span>Menu &amp; nguyên liệu</span>
             <span className="sep">/</span>
@@ -125,7 +127,7 @@ export default function ProductsPage() {
         <span className="text-xs text-[var(--muted)]">Dữ liệu demo</span>
       </div>
 
-      <section className="page-section mb-6" aria-label="Thống kê menu">
+      {!isCashier() && (<section className="page-section mb-6" aria-label="Thống kê menu">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             label="Món đang bán"
@@ -156,16 +158,16 @@ export default function ProductsPage() {
             icon={<KpiIcon kind="currency" />}
           />
         </div>
-      </section>
+      </section>)}
 
-      <section className="card mb-6 border-l-4 border-[var(--info)]">
+      {!isCashier() && (<section className="card mb-6 border-l-4 border-[var(--info)]">
         <h2 className="text-sm font-bold mb-1">Quy tắc menu chuỗi</h2>
         <p className="text-sm text-[var(--muted)]">
           Giá chuẩn dùng chung toàn chuỗi và chỉ thay đổi qua phiên bản được
           duyệt. Cửa hàng có thể tạm khóa món/topping khi không đủ nguyên liệu,
           không tự sửa giá.
         </p>
-      </section>
+      </section>)}
 
       <section className="card mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
@@ -246,12 +248,12 @@ export default function ProductsPage() {
               Giá niêm yết, COGS theo size và tình trạng kinh doanh.
             </p>
           </div>
-          <button
+          {!isCashier() && (<button
             className="btn btn-primary"
             onClick={() => navigate("/inventory/products/new")}
           >
             Khai báo món mới
-          </button>
+          </button>)}
         </div>
         <DataTable>
           <table className="w-full text-sm text-left">
@@ -262,7 +264,7 @@ export default function ProductsPage() {
                   "Nhóm món",
                   "Size",
                   "Giá bán",
-                  "COGS",
+                  ...(!isCashier() ? ["COGS"] : []),
                   "Trạng thái",
                 ].map((label) => (
                   <th key={label} className="px-4 py-3 font-semibold">
@@ -288,7 +290,7 @@ export default function ProductsPage() {
                     className="border-t border-[var(--border)] hover:bg-[var(--background)]"
                   >
                     <td className="px-4 py-3">
-                      <button
+                      {isCashier() ? <span><strong>{product.code}</strong><br />{product.name}</span> : <button
                         className="text-left"
                         onClick={() =>
                           navigate(`/inventory/products/${product.id}`)
@@ -299,7 +301,7 @@ export default function ProductsPage() {
                         </span>
                         <br />
                         {product.name}
-                      </button>
+                      </button>}
                     </td>
                     <td className="px-4 py-3">
                       {data.categories.find(
@@ -310,7 +312,7 @@ export default function ProductsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       {prices(product)}
                     </td>
-                    <td className="px-4 py-3">
+                    {!isCashier() && <td className="px-4 py-3">
                       {Object.values(product.cogsBySize).some(
                         (value) => value !== null,
                       )
@@ -323,15 +325,15 @@ export default function ProductsPage() {
                             .filter(Boolean)
                             .join(" · ")
                         : "Chưa có định mức"}
-                    </td>
+                    </td>}
                     <td className="px-4 py-3">
-                      <button onClick={() => setSelected(product)}>
+                      {isCashier() ? <Badge variant={STATUS_VARIANT[product.status]}>{STATUS_LABEL[product.status]}</Badge> : <button onClick={() => setSelected(product)}>
                         <Badge variant={STATUS_VARIANT[product.status]}>
                           {product.status === "branch-locked"
                             ? `${product.lockedStoreIds.join(", ")} tạm khóa`
                             : STATUS_LABEL[product.status]}
                         </Badge>
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 ))

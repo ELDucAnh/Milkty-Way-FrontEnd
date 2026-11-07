@@ -1,3 +1,4 @@
+import { isCashier, counterBranch } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -15,7 +16,7 @@ import { loadOrders } from "../shared/sales-orders-store";
 
 type ShiftStatus = "open" | "closing-requested" | "closed";
 
-interface CashShift {
+export interface CashShift {
     id: string;
     branchId: string;
     counterId: string;
@@ -51,7 +52,7 @@ interface CloseShiftRequest {
     note: string;
 }
 
-const initialShifts: readonly CashShift[] = [
+export const initialShifts: readonly CashShift[] = [
     {
         id: "CA-001",
         branchId: "CN01",
@@ -70,7 +71,7 @@ const initialShifts: readonly CashShift[] = [
     },
 ];
 
-const STORAGE_SHIFTS = "miltyway_shifts_v1";
+export const STORAGE_SHIFTS = "miltyway_shifts_v1";
 
 const RECIPIENT_NAMES: Record<string, string> = {
     NV02: "Trần Bình",
@@ -93,7 +94,7 @@ export default function ShiftsPage() {
     const [pageSize, setPageSize] = useState(10);
     const [handoverId, setHandoverId] = useState<string | null>(null);
 
-    const [shifts, setShiftsState] = useState<CashShift[]>(() => {
+    const [allShifts, setShiftsState] = useState<CashShift[]>(() => {
         try {
             const raw = localStorage.getItem(STORAGE_SHIFTS);
             if (raw) {
@@ -106,6 +107,7 @@ export default function ShiftsPage() {
         return [...initialShifts];
     });
 
+    const shifts = isCashier() ? allShifts.filter(s => s.branchId === counterBranch && s.counterId === "POS01" && s.status !== "closed") : allShifts;
     function setShifts(updater: (current: CashShift[]) => CashShift[]) {
         setShiftsState((current) => {
             const next = updater(current);
@@ -117,7 +119,7 @@ export default function ShiftsPage() {
             return next;
         });
     }
-    const [selectedId, setSelectedId] = useState("CA-001");
+    const [selectedId, setSelectedId] = useState(shifts[0]?.id || "");
     const [openingForm, setOpeningForm] = useState<OpenShiftForm>({
         branchId: "CN01",
         counterId: "POS01",
@@ -214,6 +216,18 @@ export default function ShiftsPage() {
             return;
         }
 
+        if (isCashier()) {
+            const closedAt = new Date().toISOString();
+            setShifts(current => current.map(shift =>
+                shift.id === selectedShift.id && shift.status === "open"
+                    ? { ...shift, status: "closed", closedAt, countedCash,
+                        expectedCash: effectiveExpectedCash, recipientId: closingForm.recipientId,
+                        handoverNote: closingForm.note.trim() }
+                    : shift
+            ));
+            toast.success("Đã đóng ca và ghi nhận bàn giao.");
+            return;
+        }
         setPendingRequest({
             shiftId: selectedShift.id,
             countedCash,
@@ -363,7 +377,7 @@ export default function ShiftsPage() {
                 }
             />
 
-            <section className="card mb-6">
+            {!isCashier() && (<section className="card mb-6">
                 <h2 className="card-title mb-4">Thông tin mở ca</h2>
                 <form onSubmit={openShift}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -448,7 +462,7 @@ export default function ShiftsPage() {
                     </div>
                     
                 </form>
-            </section>
+            </section>)}
 
             <section className="card mb-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -573,7 +587,7 @@ export default function ShiftsPage() {
                         className="btn btn-primary mt-4"
                         disabled={selectedShift?.status !== "open"}
                     >
-                        Gửi yêu cầu đóng ca
+                        {isCashier() ? "Đóng ca" : "Gửi yêu cầu đóng ca"}
                     </button>
                 </form>
                 {selectedShift?.status === "closing-requested" && <div className="flex flex-wrap gap-2 mt-4">

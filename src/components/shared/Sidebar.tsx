@@ -1,7 +1,9 @@
+import { cashierCanVisit, cashierName, isCashier } from "../../utils/auth";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 export interface SidebarProps { mobileOpen: boolean; collapsed?: boolean; onNavigate: () => void; }
 export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: SidebarProps) {
+  const cashier = isCashier();
   const { pathname } = useLocation();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ sales: true });
   useEffect(() => {
@@ -9,7 +11,7 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
     setExpanded(current => ({ ...current, [group]: true }));
   }, [pathname]);
   return <aside id="sidebar" className={`${mobileOpen ? "mobile-open" : ""} ${collapsed ? "collapsed" : ""}`} aria-label="Thanh điều hướng chính">
-    <NavLink onClick={onNavigate} end to="/dashboard" id="sidebar-logo" className="flex items-center h-16 px-4 border-b" style={{ "borderColor": "var(--border)", "flexShrink": "0", "textDecoration": "none", "transition": "background 0.15s" }}>
+    <NavLink onClick={onNavigate} end to={cashier ? "/sales/pos" : "/dashboard"} id="sidebar-logo" className="flex items-center h-16 px-4 border-b" style={{ "borderColor": "var(--border)", "flexShrink": "0", "textDecoration": "none", "transition": "background 0.15s" }}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center" style={{ "background": "linear-gradient(135deg,#22B573 0%,#16A34A 100%)", "borderRadius": "12px", "boxShadow": "0 2px 8px rgba(34,181,115,0.3)" }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,12 +31,12 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
 
     <nav id="sidebar-nav" className="flex-1 overflow-y-auto py-3 px-3" style={{ "gap": "2px" }}>
 
-      <div className="sidebar-section-label">CHÍNH</div>
+      {!cashier && (<><div className="sidebar-section-label">CHÍNH</div>
 
       <NavLink onClick={onNavigate} end to="/dashboard" className="nav-item" data-page="dashboard">
         <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
         <span className="sidebar-label flex-1">Bảng điều khiển</span>
-      </NavLink>
+      </NavLink></>)}
 
       <div className="sidebar-section-label">KHO HÀNG & NGUYÊN LIỆU</div>
 
@@ -49,18 +51,18 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
           </span>
         </button>
         <div className={`submenu ${expanded["inventory"] ? "open" : ""}`} id="submenu-inventory" inert={!expanded["inventory"]}>
-          <NavLink onClick={onNavigate} end to="/inventory/products" className="submenu-item" data-page="products">Sản phẩm</NavLink>
-          <NavLink onClick={onNavigate} end to="/inventory/ingredients" className="submenu-item" data-page="ingredients">Nguyên vật liệu</NavLink>
-          <NavLink onClick={onNavigate} end to="/inventory/products/new" className="submenu-item" data-page="add-product">Thêm sản phẩm</NavLink>
-          <NavLink onClick={onNavigate} end to="/inventory/categories" className="submenu-item" data-page="categories">Danh mục</NavLink>
-          <NavLink onClick={onNavigate} end to="/inventory/branches" className="submenu-item" data-page="branches">Chi nhánh</NavLink>
-          <NavLink onClick={onNavigate} end to="/inventory/units" className="submenu-item" data-page="units">Đơn vị tính</NavLink>
-          <NavLink onClick={onNavigate} end to="/inventory/stock-adjustment" className="submenu-item" data-page="stock-adjustment">Điều chỉnh kho</NavLink>
+          {(!cashier || cashierCanVisit("/inventory/products")) && <NavLink onClick={onNavigate} end to="/inventory/products" className="submenu-item" data-page="products">Sản phẩm</NavLink>}
+          {(!cashier || cashierCanVisit("/inventory/ingredients")) && <NavLink onClick={onNavigate} end to="/inventory/ingredients" className="submenu-item" data-page="ingredients">Nguyên vật liệu</NavLink>}
+          {(!cashier || cashierCanVisit("/inventory/products/new")) && <NavLink onClick={onNavigate} end to="/inventory/products/new" className="submenu-item" data-page="add-product">Thêm sản phẩm</NavLink>}
+          {(!cashier || cashierCanVisit("/inventory/categories")) && <NavLink onClick={onNavigate} end to="/inventory/categories" className="submenu-item" data-page="categories">Danh mục</NavLink>}
+          {(!cashier || cashierCanVisit("/inventory/branches")) && <NavLink onClick={onNavigate} end to="/inventory/branches" className="submenu-item" data-page="branches">Chi nhánh</NavLink>}
+          {(!cashier || cashierCanVisit("/inventory/units")) && <NavLink onClick={onNavigate} end to="/inventory/units" className="submenu-item" data-page="units">Đơn vị tính</NavLink>}
+          {(!cashier || cashierCanVisit("/inventory/stock-adjustment")) && <NavLink onClick={onNavigate} end to="/inventory/stock-adjustment" className="submenu-item" data-page="stock-adjustment">Điều chỉnh kho</NavLink>}
         </div>
       </div>
 
 
-      <div className="submenu-group" data-submenu="purchases">
+      {!cashier && (<><div className="submenu-group" data-submenu="purchases">
         <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-purchases" data-page-group="purchases" onClick={() => setExpanded(current => ({ ...current, "purchases": !current["purchases"] }))} aria-expanded={!!expanded["purchases"]}>
           <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
           <span className="sidebar-label flex-1 text-left">Nhập hàng</span>
@@ -100,7 +102,7 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
           <NavLink onClick={onNavigate} end to="/stores/shift-reconciliation" className="submenu-item" data-page="shift-reconciliation">Đối soát ca trực</NavLink>
         </div>
       </div>
-
+</>)}
 
       <div className="submenu-group" data-submenu="sales">
         <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-sales" data-page-group="sales" onClick={() => setExpanded(current => ({ ...current, "sales": !current["sales"] }))} aria-expanded={!!expanded["sales"]}>
@@ -112,11 +114,11 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
           </span>
         </button>
         <div className={`submenu ${expanded["sales"] ? "open" : ""}`} id="submenu-sales" inert={!expanded["sales"]}>
-          <NavLink onClick={onNavigate} end to="/sales" className="submenu-item" data-page="sales">Tất cả đơn bán</NavLink>
-          <NavLink onClick={onNavigate} end to="/sales/pos" className="submenu-item" data-page="add-sale">Điểm bán hàng (POS)</NavLink>
-          <NavLink onClick={onNavigate} end to="/sales/shifts" className="submenu-item" data-page="shifts">Ca làm việc &amp; Bàn giao quỹ</NavLink>
-          <NavLink onClick={onNavigate} end to="/sales/preparation" className="submenu-item" data-page="preparation">Hàng đợi pha chế (KDS)</NavLink>
-          <NavLink onClick={onNavigate} end to="/sales/returns" className="submenu-item" data-page="sales-returns">Trả hàng bán</NavLink>
+          {(!cashier || cashierCanVisit("/sales")) && <NavLink onClick={onNavigate} end to="/sales" className="submenu-item" data-page="sales">Tất cả đơn bán</NavLink>}
+          {(!cashier || cashierCanVisit("/sales/pos")) && <NavLink onClick={onNavigate} end to="/sales/pos" className="submenu-item" data-page="add-sale">Điểm bán hàng (POS)</NavLink>}
+          {(!cashier || cashierCanVisit("/sales/shifts")) && <NavLink onClick={onNavigate} end to="/sales/shifts" className="submenu-item" data-page="shifts">Ca làm việc &amp; Bàn giao quỹ</NavLink>}
+          {(!cashier || cashierCanVisit("/sales/preparation")) && <NavLink onClick={onNavigate} end to="/sales/preparation" className="submenu-item" data-page="preparation">Hàng đợi pha chế (KDS)</NavLink>}
+          {(!cashier || cashierCanVisit("/sales/returns")) && <NavLink onClick={onNavigate} end to="/sales/returns" className="submenu-item" data-page="sales-returns">Trả hàng bán</NavLink>}
         </div>
       </div>
 
@@ -137,12 +139,12 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
           </span>
         </button>
         <div className={`submenu ${expanded["marketing"] ? "open" : ""}`} id="submenu-marketing" inert={!expanded["marketing"]}>
-          <NavLink onClick={onNavigate} end to="/marketing/promotions" className="submenu-item" data-page="promotions">Chương trình khuyến mãi</NavLink>
-          <NavLink onClick={onNavigate} end to="/marketing/branch-promotions" className="submenu-item" data-page="branch-promotions">Áp dụng theo chi nhánh</NavLink>
+          {(!cashier || cashierCanVisit("/marketing/promotions")) && <NavLink onClick={onNavigate} end to="/marketing/promotions" className="submenu-item" data-page="promotions">Chương trình khuyến mãi</NavLink>}
+          {(!cashier || cashierCanVisit("/marketing/branch-promotions")) && <NavLink onClick={onNavigate} end to="/marketing/branch-promotions" className="submenu-item" data-page="branch-promotions">Áp dụng theo chi nhánh</NavLink>}
         </div>
       </div>
 
-      <div className="sidebar-section-label">KHÁCH HÀNG</div>
+      {!cashier && (<><div className="sidebar-section-label">KHÁCH HÀNG</div>
 
       <NavLink onClick={onNavigate} end to="/customers" className="nav-item" data-page="customers">
         <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
@@ -219,7 +221,7 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
           <NavLink onClick={onNavigate} end to="/settings/notifications" className="submenu-item" data-page="settings-notifications">Thông báo</NavLink>
           <NavLink onClick={onNavigate} end to="/settings/offline-sync" className="submenu-item" data-page="settings-offline-sync">Đồng bộ &amp; Offline</NavLink>
         </div>
-      </div>
+      </div></>)}
     </nav>
 
 
@@ -227,8 +229,8 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
       <NavLink onClick={onNavigate} end to="/profile" className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--background)] transition-colors" style={{ "textDecoration": "none" }}>
         <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm" style={{ "background": "var(--primary)" }}>HL</div>
         <div className="sidebar-label min-w-0">
-          <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>Nguyễn Hoàng Long</div>
-          <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>Quản trị viên</div>
+          <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>{cashier ? cashierName() : "Nguyễn Hoàng Long"}</div>
+          <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>{cashier ? "Nhân viên POS" : "Quản trị viên"}</div>
         </div>
       </NavLink>
     </div>

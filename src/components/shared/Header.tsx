@@ -1,3 +1,4 @@
+import { cashierCanVisit, cashierName, isCashier } from "../../utils/auth";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import avatar from "../../../assets/img/avator/1.jpg";
@@ -102,10 +103,11 @@ export default function Header({
   onToggleSidebar,
   onToggleTheme,
 }: HeaderProps) {
+  const cashier = isCashier();
   const [notifications, setNotifications] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "inventory" | "sales" | "shifts">("all");
-  const [notificationsList, setNotificationsList] = useState<NotificationItemData[]>(INITIAL_NOTIFICATIONS);
+  const [notificationsList, setNotificationsList] = useState<NotificationItemData[]>(cashier ? [] : INITIAL_NOTIFICATIONS);
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -190,7 +192,7 @@ export default function Header({
         />
         {query && (
           <div className="global-search-dropdown" style={{ display: "block" }}>
-            {navigationItems
+            {navigationItems.filter(item => !cashier || cashierCanVisit(item.path))
               .filter((item) =>
                 item.label.toLocaleLowerCase("vi-VN").includes(query.toLocaleLowerCase("vi-VN"))
               )
@@ -387,7 +389,7 @@ export default function Header({
           >
             <img
               src={avatar}
-              alt="Nguyễn Hoàng Long"
+              alt={cashier ? cashierName() : "Nguyễn Hoàng Long"}
               className="w-8 h-8 rounded-full flex-shrink-0"
               style={{ objectFit: "cover" }}
             />
@@ -400,9 +402,9 @@ export default function Header({
                   lineHeight: "1.2",
                 }}
               >
-                Nguyễn Hoàng Long
+                {cashier ? cashierName() : "Nguyễn Hoàng Long"}
               </div>
-              <div style={{ fontSize: "11px", color: "var(--muted)" }}>Quản trị viên</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{cashier ? "Nhân viên POS" : "Quản trị viên"}</div>
             </div>
             <svg
               width="14"
@@ -425,9 +427,9 @@ export default function Header({
           >
             <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
-                Nguyễn Hoàng Long
+                {cashier ? cashierName() : "Nguyễn Hoàng Long"}
               </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)" }}>long.nh@MilktyWay.vn</div>
+              <div style={{ fontSize: "12px", color: "var(--muted)" }}>{cashier ? "anh.lqt@MilktyWay.vn" : "long.nh@MilktyWay.vn"}</div>
             </div>
             <Link
               to="/profile"
@@ -449,7 +451,7 @@ export default function Header({
               </svg>
               Hồ sơ cá nhân
             </Link>
-            <Link
+            {!cashier && (<Link
               to="/settings/general"
               onClick={() => setUserOpen(false)}
               className="dropdown-item"
@@ -468,10 +470,10 @@ export default function Header({
                 <path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M2 12h2M20 12h2M6.34 5.34L4.93 4.93M19.07 19.07l-1.41-1.41M12 2v2M12 20v2" />
               </svg>
               Cài đặt hệ thống
-            </Link>
+            </Link>)}
             <div className="dropdown-divider"></div>
             <Link
-              to="/login"
+              to="/logout"
               onClick={() => setUserOpen(false)}
               className="dropdown-item danger"
             >
@@ -503,7 +505,7 @@ export default function Header({
         onClose={() => setShowAllModal(false)}
         footer={
           <div className="flex justify-between items-center w-full flex-wrap gap-3">
-            <Link
+            {!cashier && (<Link
               to="/settings/notifications"
               onClick={() => setShowAllModal(false)}
               className="text-xs text-[var(--muted)] hover:text-[var(--primary)] flex items-center gap-1.5"
@@ -513,7 +515,7 @@ export default function Header({
                 <path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M2 12h2M20 12h2M6.34 5.34L4.93 4.93M19.07 19.07l-1.41-1.41M12 2v2M12 20v2" />
               </svg>
               Cấu hình kịch bản sự cố tự động
-            </Link>
+            </Link>)}
             <button
               type="button"
               className="btn btn-secondary"
@@ -535,14 +537,14 @@ export default function Header({
               >
                 Tất cả ({notificationsList.length})
               </button>
-              <button
+              {!cashier && (<button
                 type="button"
                 className={`btn btn-sm ${activeTab === "inventory" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setActiveTab("inventory")}
               >
                 Kho &amp; Hạn FEFO (
                 {notificationsList.filter((n) => n.category === "inventory").length})
-              </button>
+              </button>)}
               <button
                 type="button"
                 className={`btn btn-sm ${activeTab === "sales" ? "btn-primary" : "btn-secondary"}`}
@@ -551,14 +553,14 @@ export default function Header({
                 Bán hàng &amp; POS (
                 {notificationsList.filter((n) => n.category === "sales").length})
               </button>
-              <button
+              {!cashier && (<button
                 type="button"
                 className={`btn btn-sm ${activeTab === "shifts" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setActiveTab("shifts")}
               >
                 Ca trực &amp; Phê duyệt (
                 {notificationsList.filter((n) => n.category === "shifts").length})
-              </button>
+              </button>)}
             </div>
 
             <div className="flex gap-2">

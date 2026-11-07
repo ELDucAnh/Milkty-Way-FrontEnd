@@ -26,6 +26,7 @@ export interface SalesOrderItem {
 }
 
 export interface SalesOrder {
+  onlineDecision?: "accepted" | "rejected";
   id: string;
   branchId: string;
   shift: SalesShift;
@@ -712,4 +713,3 @@ export function createPosOrder(params: {
 
   return { order: newOrder, invoice: newInvoice };
 }
-
