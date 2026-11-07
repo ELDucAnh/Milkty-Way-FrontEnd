@@ -100,9 +100,9 @@ export default function SalesSettingsPage() {
 
         <div className="flex justify-end gap-3">
           <button
-            type="button"
+            type="reset"
             className="btn btn-secondary"
-            onClick={() => toast.info("Đã hủy thay đổi chưa lưu", { title: "Hủy" })}
+            onClick={() => toast.info("Đã khôi phục về giá trị mặc định", { title: "Hủy Bỏ" })}
           >
             Hủy Bỏ
           </button>

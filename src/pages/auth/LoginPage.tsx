@@ -6,9 +6,9 @@ export default function LoginPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [role, setRole] = useState("manager");
+  const [role, setRole] = useState("owner");
   const [branch, setBranch] = useState("CN05");
-  const [email, setEmail] = useState("ha.tt@MilktyWay.vn");
+  const [email, setEmail] = useState("long.nh@MilktyWay.vn");
   const [password, setPassword] = useState("123456");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -16,7 +16,7 @@ export default function LoginPage() {
   function handleRoleChange(newRole: string) {
     setRole(newRole);
     if (newRole === "owner") {
-      setEmail("admin@MilktyWay.vn");
+      setEmail("long.nh@MilktyWay.vn");
     } else if (newRole === "manager") {
       setEmail("ha.tt@MilktyWay.vn");
     } else if (newRole === "cashier") {
@@ -207,7 +207,7 @@ export default function LoginPage() {
           Tài Khoản Mẫu Cho 4 Vai Trò Nghiệp Vụ:
         </div>
         <div className="text-[var(--muted)] space-y-0.5">
-          <div>• <strong>Chủ Doanh Nghiệp:</strong> admin@MilktyWay.vn (Toàn chuỗi)</div>
+          <div>• <strong>Chủ Doanh Nghiệp:</strong> long.nh@MilktyWay.vn (Toàn chuỗi)</div>
           <div>• <strong>Quản Lý CN:</strong> ha.tt@MilktyWay.vn (CN05 Sư Vạn Hạnh)</div>
           <div>• <strong>Thu Ngân POS:</strong> anh.lqt@MilktyWay.vn (POS Bán Quầy)</div>
           <div>• <strong>Thủ Kho FEFO:</strong> khoa.vm@MilktyWay.vn (Kho Chi Nhánh)</div>

@@ -1,19 +1,32 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
 
 export default function ProfilePage() {
   const toast = useToast();
+  const navigate = useNavigate();
 
-  const [name, setName] = useState("Trần Thu Hà");
-  const [phone, setPhone] = useState("0912 888 999");
-  const [address, setAddress] = useState("384 Sư Vạn Hạnh, Phường 12, Quận 10, TP.HCM");
+  const [fullName, setFullName] = useState("Nguyễn Hoàng Long");
+  const [phone, setPhone] = useState("0903 123 456");
+  const [address, setAddress] = useState("Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const initials =
+    fullName
+      .trim()
+      .split(/\s+/)
+      .slice(-2)
+      .map((w) => w[0]?.toUpperCase() || "")
+      .join("") || "HL";
+
   function handleSaveProfile(e?: React.FormEvent) {
     if (e) e.preventDefault();
+    if (newPassword && newPassword.length < 8) {
+      toast.warning("Mật khẩu mới phải có tối thiểu 8 ký tự!");
+      return;
+    }
     if (newPassword && newPassword !== confirmPassword) {
       toast.error("Mật khẩu xác nhận không khớp!");
       return;
@@ -56,13 +69,13 @@ export default function ProfilePage() {
         {/* Profile Card */}
         <div className="card text-center lg:col-span-1">
           <div className="w-24 h-24 text-[32px] mx-auto mb-4 bg-emerald-600 text-white rounded-full flex items-center justify-center font-bold shadow-md">
-            TH
+            {initials}
           </div>
-          <h2 className="text-lg font-bold text-[var(--text)]">{name}</h2>
+          <h2 className="text-lg font-bold text-[var(--text)]">{fullName}</h2>
           <div className="text-[13px] text-[var(--primary)] font-semibold mt-1">
-            Quản Lý Chi Nhánh (Store Manager)
+            Quản trị viên (Chủ Doanh Nghiệp)
           </div>
-          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: NV-QL-CN05</div>
+          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: NV-ADMIN-01</div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mt-2 border border-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Đang Trong Ca Trực Chiều
@@ -88,11 +101,11 @@ export default function ProfilePage() {
           <div className="text-left flex flex-col gap-2.5 mt-5 text-xs text-[var(--muted)]">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Chi Nhánh:</span>
-              CN05 — Sư Vạn Hạnh (Q.10)
+              Trụ Sở Chính &amp; Giám sát CN05
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Email:</span>
-              ha.tt@MilktyWay.vn
+              long.nh@MilktyWay.vn
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Hotline:</span>
@@ -142,11 +155,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
-                onClick={() =>
-                  toast.info("Bắt đầu quy trình kiểm đếm tiền đóng ca...", {
-                    title: "Đóng Ca",
-                  })
-                }
+                onClick={() => navigate("/sales/shifts")}
               >
                 Đóng Ca &amp; Đối Soát Tiền Mặt
               </button>
@@ -165,8 +174,8 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     className="form-input"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     required
                   />
                 </div>

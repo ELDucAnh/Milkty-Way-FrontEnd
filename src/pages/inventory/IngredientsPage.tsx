@@ -6,7 +6,7 @@ import Modal from "../../components/common/Modal";
 import StatCard from "../../components/common/StatCard";
 import KpiIcon from "../shared/KpiIcon";
 import { getTodayISO, makeId } from "../shared/formatters";
-import { usableLotQuantity } from "../shared/business-demo";
+import { availableLotQuantity } from "../shared/business-demo";
 import type { Ingredient, IngredientDimension, IngredientGroup, IngredientLot } from "../shared/business-demo";
 import { useDemoState } from "../shared/useDemoState";
 
@@ -27,18 +27,19 @@ export default function IngredientsPage() {
     const [form, setForm] = useState({ code: "", name: "", group: "tea" as IngredientGroup, dimension: "mass" as IngredientDimension, baseUnit: "g", minimum: "", storage: "Khô, thoáng", shelfLifeDays: "365" });
 
     function lotsOf(ingredientId: string): IngredientLot[] {
-        return data.lots.filter((lot) => lot.ingredientId === ingredientId && lot.location === "central");
+        return data.lots.filter((lot) => lot.ingredientId === ingredientId && (lot.location === "central" || lot.location === "kitchen"));
     }
     function availableOf(ingredientId: string): number {
-        return Math.max(0, lotsOf(ingredientId).reduce((sum, lot) => sum + usableLotQuantity(lot) - (lot.reservedQuantity ?? 0) - (lot.lockedQuantity ?? 0), 0));
+        const lots = lotsOf(ingredientId);
+        return lots.reduce((sum, lot) => sum + availableLotQuantity(lot), 0);
     }
     function statusOf(ingredient: Ingredient): Status {
         const lots = lotsOf(ingredient.id);
-        const usable = Math.max(0, lots.reduce((sum, lot) => sum + usableLotQuantity(lot) - (lot.reservedQuantity ?? 0) - (lot.lockedQuantity ?? 0), 0));
+        const available = lots.reduce((sum, lot) => sum + availableLotQuantity(lot), 0);
         if (lots.some((lot) => lot.quality === "quarantine")) return "quarantine";
         if (lots.some((lot) => lot.expiryDate && lot.expiryDate >= getTodayISO() && lot.expiryDate <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10))) return "expiring";
-        if (usable === 0) return "empty";
-        if (usable < ingredient.minimum) return "low";
+        if (available === 0) return "empty";
+        if (available < ingredient.minimum) return "low";
         return "active";
     }
     const filtered = useMemo(() => data.ingredients.filter((ingredient) => {

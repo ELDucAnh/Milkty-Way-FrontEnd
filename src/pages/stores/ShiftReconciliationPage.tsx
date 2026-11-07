@@ -389,20 +389,22 @@ export default function ShiftReconciliationPage() {
         record.shift === shift,
     );
 
-    if (existingRecord) {
+    if (
+      existingRecord &&
+      (existingRecord.status === "pending" ||
+        existingRecord.status === "approved")
+    ) {
       setError(
         `Ca này đã có biên bản ${
           existingRecord.status === "approved"
             ? "đã duyệt"
-            : existingRecord.status === "pending"
-              ? "đang chờ duyệt"
-              : "bản nháp"
+            : "đang chờ duyệt"
         }. Vui lòng kiểm tra lịch sử trước khi tạo thêm.`,
       );
       return;
     }
     const record: ShiftReconciliation = {
-      id: makeId("reconcile"),
+      id: existingRecord?.id ?? makeId("reconcile"),
       date,
       storeId,
       shift,
@@ -426,7 +428,11 @@ export default function ShiftReconciliationPage() {
     };
     setData((current) => ({
       ...current,
-      reconciliations: [record, ...current.reconciliations],
+      reconciliations: existingRecord
+        ? current.reconciliations.map((item) =>
+            item.id === existingRecord.id ? record : item,
+          )
+        : [record, ...current.reconciliations],
     }));
     setError("");
   }
@@ -886,6 +892,25 @@ export default function ShiftReconciliationPage() {
                       >
                         Chi tiết
                       </button>
+                      {record.status === "draft" && (
+                        <button
+                          className="btn btn-primary"
+                          onClick={() =>
+                            setData((current) => ({
+                              ...current,
+                              reconciliations: current.reconciliations.map(
+                                (item) =>
+                                  item.id === record.id &&
+                                  item.status === "draft"
+                                    ? { ...item, status: "pending" }
+                                    : item,
+                              ),
+                            }))
+                          }
+                        >
+                          Gửi đối soát
+                        </button>
+                      )}
                       {record.status === "pending" && (
                         <button
                           className="btn btn-primary"

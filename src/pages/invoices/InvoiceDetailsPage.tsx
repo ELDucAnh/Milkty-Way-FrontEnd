@@ -16,37 +16,60 @@ export default function InvoiceDetailsPage() {
   const invoices = useMemo(() => loadInvoices(), []);
   const orders = useMemo(() => loadOrders(), []);
 
+  const effectiveId = id && id !== "invoice-details" ? id : null;
+
   // Tìm hóa đơn hoặc đơn hàng tương ứng
+  const matchedOrder = useMemo(() => {
+    if (orderIdParam) {
+      const byOrder = orders.find(o => o.id === orderIdParam);
+      if (byOrder) return byOrder;
+    }
+    if (effectiveId) {
+      const byId = orders.find(o => o.id === effectiveId);
+      if (byId) return byId;
+      const inv = invoices.find(i => i.id === effectiveId || i.orderId === effectiveId);
+      if (inv?.orderId) {
+        const byInv = orders.find(o => o.id === inv.orderId);
+        if (byInv) return byInv;
+      }
+    }
+    if (!effectiveId && !orderIdParam) {
+      return orders[0];
+    }
+    return undefined;
+  }, [effectiveId, orderIdParam, orders, invoices]);
+
   const matchedInvoice = useMemo(() => {
-    if (id) {
-      const byId = invoices.find(inv => inv.id === id || inv.orderId === id);
+    if (effectiveId) {
+      const byId = invoices.find(inv => inv.id === effectiveId || inv.orderId === effectiveId);
       if (byId) return byId;
     }
     if (orderIdParam) {
       const byOrder = invoices.find(inv => inv.orderId === orderIdParam || inv.id === orderIdParam);
       if (byOrder) return byOrder;
     }
+    if (matchedOrder) {
+      const byMatchedOrder = invoices.find(inv => inv.orderId === matchedOrder.id);
+      if (byMatchedOrder) return byMatchedOrder;
+      return undefined;
+    }
     return invoices[0];
-  }, [id, orderIdParam, invoices]);
+  }, [effectiveId, orderIdParam, invoices, matchedOrder]);
 
-  const matchedOrder = useMemo(() => {
-    if (orderIdParam) {
-      const byOrder = orders.find(o => o.id === orderIdParam);
-      if (byOrder) return byOrder;
-    }
-    if (matchedInvoice?.orderId) {
-      const byInv = orders.find(o => o.id === matchedInvoice.orderId);
-      if (byInv) return byInv;
-    }
-    return orders[0];
-  }, [orderIdParam, matchedInvoice, orders]);
-
-  const invoiceId = matchedInvoice ? matchedInvoice.id : (id || "HD-CN01-000125");
-  const orderId = matchedOrder ? matchedOrder.id : (orderIdParam || "DH-00125");
+  const invoiceId = matchedInvoice
+    ? matchedInvoice.id
+    : (effectiveId || `HD-${matchedOrder?.branchId || "CN01"}-${(matchedOrder?.id || "000125").replace(/\D/g, "").padStart(6, "0")}`);
+  const orderId = matchedInvoice?.orderId || matchedOrder?.id || orderIdParam || "DH-00125";
   const customerName = matchedInvoice?.customerName || matchedOrder?.customer || "Trần Văn An";
   const customerPhone = matchedInvoice?.customerPhone || matchedOrder?.phone || "0908 123 456";
   const branchName = matchedInvoice?.branch || `${matchedOrder?.branchId || "CN01"} - Bến Nghé (Quận 1)`;
-  const branchAddress = matchedInvoice?.branchAddress || "12 Pasteur, P. Bến Nghé, Quận 1, TP.HCM";
+  const branchAddress = matchedInvoice?.branchAddress || "12 Nguyễn Huệ, Quận 1, TP.HCM";
+  const invoiceStatus = matchedInvoice?.status || (matchedOrder?.payment === "refunded" ? "Đã Hoàn Tiền" : matchedOrder?.payment === "unpaid" ? "Chờ Thanh Toán" : "Đã Thanh Toán");
+  const invoiceStatusVariant = matchedInvoice?.statusVariant || (invoiceStatus === "Đã Hoàn Tiền" ? "danger" : invoiceStatus === "Đã Thanh Toán" ? "success" : "warning");
+  const memberTier = matchedInvoice?.tier || "Member";
+  const invoiceDate = matchedInvoice?.date || (matchedOrder?.createdAt
+    ? new Date(matchedOrder.createdAt).toLocaleDateString("vi-VN") + " — " + new Date(matchedOrder.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+    : new Date().toLocaleDateString("vi-VN") + " — " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
 
   const items = matchedInvoice?.items && matchedInvoice.items.length > 0
     ? matchedInvoice.items
@@ -75,11 +98,13 @@ export default function InvoiceDetailsPage() {
       }
     ]);
 
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  const total = matchedInvoice?.total ?? matchedOrder?.total ?? subtotal;
-  const discount = Math.max(0, subtotal - total);
-  const paid = matchedInvoice?.paid ?? (total + 11000);
-  const change = Math.max(0, paid - total);
+  const computedSubtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const subtotal = matchedInvoice?.subtotal ?? matchedOrder?.subtotal ?? computedSubtotal;
+  const discount = matchedInvoice?.discount ?? matchedOrder?.discount ?? 0;
+  const tax = matchedInvoice?.tax ?? matchedOrder?.tax ?? 0;
+  const total = matchedInvoice?.total ?? matchedOrder?.total ?? (subtotal - discount + tax);
+  const paid = matchedInvoice?.paid ?? total;
+  const change = matchedInvoice?.change ?? Math.max(0, paid - total);
   const paymentMethod = matchedInvoice?.paymentMethod || (matchedOrder?.paymentMethod === "cash" ? "Tiền mặt" : "Chuyển khoản QR");
 
   const handlePrint = (format: "k80" | "k57") => {
@@ -111,7 +136,7 @@ export default function InvoiceDetailsPage() {
           </nav>
           <div className="flex items-center gap-3 mt-1">
             <h1 className="page-title mb-0">Hóa Đơn {invoiceId}</h1>
-            <Badge variant="success">ĐÃ THANH TOÁN</Badge>
+            <Badge variant={invoiceStatusVariant}>{invoiceStatus.toUpperCase()}</Badge>
           </div>
         </div>
         <div className="flex gap-2.5 flex-wrap">
@@ -203,9 +228,9 @@ export default function InvoiceDetailsPage() {
 
       {/* Hóa đơn có thể in */}
       <div className="card printable-card max-w-4xl mx-auto p-6 md:p-10 relative shadow-md">
-        {/* Dấu đã thanh toán */}
+        {/* Dấu trạng thái thanh toán */}
         <div className="absolute top-[30px] right-[40px] border-[3px] border-[var(--primary)] text-[var(--primary)] font-black text-xl px-[18px] py-1 rounded-lg rotate-[8deg] tracking-[2px] uppercase opacity-[0.85] no-print">
-          ĐÃ THANH TOÁN
+          {invoiceStatus.toUpperCase()}
         </div>
 
         {/* Header hóa đơn */}
@@ -241,7 +266,16 @@ export default function InvoiceDetailsPage() {
             <div className="text-[16px] font-bold text-[var(--text)]">{customerName}</div>
             <div className="text-[13px] text-[var(--muted)] mt-0.5">SĐT: {customerPhone}</div>
             <div className="text-[13px] text-[var(--muted)]">
-              Hạng thành viên: <span className="font-semibold text-emerald-600">Hội viên thân thiết</span>
+              Hạng thành viên:{" "}
+              <span className="font-semibold text-emerald-600">
+                {memberTier === "VIP"
+                  ? "VIP (Chiết khấu 15%)"
+                  : memberTier === "Gold"
+                  ? "Gold (Chiết khấu 10%)"
+                  : memberTier === "Silver"
+                  ? "Silver (Chiết khấu 5%)"
+                  : "Member (Hội viên thân thiết)"}
+              </span>
             </div>
             <div className="text-[13px] text-[var(--muted)] mt-1">
               Điểm tích lũy đơn này: <span className="font-bold text-[var(--primary)]">+{Math.round(total / 10000)} điểm</span>
@@ -258,7 +292,7 @@ export default function InvoiceDetailsPage() {
             </div>
             <div className="flex justify-between text-[13px]">
               <span className="text-[var(--muted)]">Thời gian:</span>
-              <span className="font-semibold text-[var(--text)]">{new Date().toLocaleDateString("vi-VN")} — {new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="font-semibold text-[var(--text)]">{invoiceDate}</span>
             </div>
             <div className="flex justify-between text-[13px]">
               <span className="text-[var(--muted)]">Hình thức thanh toán:</span>
@@ -318,8 +352,8 @@ export default function InvoiceDetailsPage() {
               </div>
             )}
             <div className="flex justify-between text-[13px]">
-              <span className="text-[var(--muted)]">Thuế VAT (10%):</span>
-              <span className="font-semibold text-[var(--text)]">Đã bao gồm</span>
+              <span className="text-[var(--muted)]">Thuế VAT:</span>
+              <span className="font-semibold text-[var(--text)]">{tax > 0 ? formatCurrency(tax) : "0 ₫ (Đã bao gồm)"}</span>
             </div>
             <div className="flex justify-between text-lg font-extrabold border-t-2 border-[var(--border)] pt-2.5 mt-1">
               <span className="text-[var(--text)]">Tổng Thanh Toán:</span>

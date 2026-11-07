@@ -180,8 +180,8 @@ const initialCustomers: readonly Customer[] = [
         lastPurchase: "28/10/2026",
         history: [
             { id: "GD01", invoiceId: "HD-CN01-003814", createdAt: "28/10/2026 09:15", action: "Tích điểm mua hàng", amount: 450000, points: 45, balance: 1250 },
-            { id: "GD02", invoiceId: "HD-CN01-003780", createdAt: "27/10/2026 15:20", action: "Điều chỉnh khiếu nại hoàn tiền", amount: 45000, points: -45, balance: 1205 },
-            { id: "GD03", invoiceId: "HD-CN05-001200", createdAt: "20/10/2026 18:30", action: "Tích điểm mua hàng", amount: 280000, points: 28, balance: 1250 }
+            { id: "GD02", invoiceId: "HD-CN01-003780", createdAt: "27/10/2026 15:20", action: "Điều chỉnh khiếu nại hoàn tiền", amount: 45000, points: -5, balance: 1205 },
+            { id: "GD03", invoiceId: "HD-CN05-001200", createdAt: "20/10/2026 18:30", action: "Tích điểm mua hàng", amount: 280000, points: 28, balance: 1210 }
         ]
     },
     {
@@ -395,7 +395,7 @@ export default function CustomersPage() {
                         <div className="flex justify-between items-baseline mb-1">
                             <span className="font-bold text-sm text-[var(--primary)]">{customer.points.toLocaleString("vi-VN")} điểm</span>
                             {customer.tier !== "vip" && (
-                                <span className="text-[10px] text-[var(--muted)] font-medium">Cần {prog.neededPoints}đ</span>
+                                <span className="text-[10px] text-[var(--muted)] font-medium">Cần +{prog.neededPoints} điểm</span>
                             )}
                         </div>
                         <div className="w-full h-1.5 bg-gray-100 dark:bg-zinc-700 rounded-full overflow-hidden mb-1">
@@ -740,10 +740,10 @@ export default function CustomersPage() {
                                 />
                             </div>
                             <div className="flex justify-between text-[11px] text-[var(--muted)] font-mono">
-                                <span className={selectedCustomer.points >= 0 ? "font-bold text-[var(--text)]" : ""}>Thành Viên (0đ)</span>
-                                <span className={selectedCustomer.points >= 200 ? "font-bold text-blue-600" : ""}>Hạng Bạc (200đ)</span>
-                                <span className={selectedCustomer.points >= 500 ? "font-bold text-amber-600" : ""}>Hạng Vàng (500đ)</span>
-                                <span className={selectedCustomer.points >= 1000 ? "font-bold text-purple-600" : ""}>Hạng VIP (1.000đ)</span>
+                                <span className={selectedCustomer.points >= 0 ? "font-bold text-[var(--text)]" : ""}>Thành Viên (0 điểm)</span>
+                                <span className={selectedCustomer.points >= 200 ? "font-bold text-blue-600" : ""}>Hạng Bạc (200 điểm)</span>
+                                <span className={selectedCustomer.points >= 500 ? "font-bold text-amber-600" : ""}>Hạng Vàng (500 điểm)</span>
+                                <span className={selectedCustomer.points >= 1000 ? "font-bold text-purple-600" : ""}>Hạng VIP (1.000 điểm)</span>
                             </div>
                         </div>
                     );

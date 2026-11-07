@@ -5,6 +5,7 @@
 
 import type { BadgeVariant } from "../../components/common/Badge";
 import type { PosCartItem } from "../../components/sales/PosCart";
+import { DEMO_STORAGE_KEY, INITIAL_DEMO_STATE, INITIAL_STORES } from "./business-demo";
 
 export type SalesChannel = "counter" | "takeaway" | "online";
 export type SalesShift = "morning" | "afternoon" | "evening";
@@ -70,6 +71,9 @@ export interface InvoiceRecord {
   type: "Bán Lẻ" | "Đơn Sỉ B2B" | "Giao Hàng" | "Hoàn Tiền";
   typeVariant: BadgeVariant;
   date: string;
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
   total: number;
   paid: number;
   change: number;
@@ -124,7 +128,7 @@ export const INITIAL_ORDERS: SalesOrder[] = [
         toppings: ["Pudding trứng", "Trân châu hoàng kim"],
         note: "Để topping riêng",
         quantity: 5,
-        unitPrice: 51000,
+        unitPrice: 50000,
       },
       {
         id: "item-2",
@@ -135,7 +139,7 @@ export const INITIAL_ORDERS: SalesOrder[] = [
         toppings: ["Kem phô mai macchiato"],
         note: "Ít ngọt",
         quantity: 4,
-        unitPrice: 49000,
+        unitPrice: 50000,
       }
     ],
   },
@@ -255,10 +259,13 @@ export const INITIAL_INVOICES: InvoiceRecord[] = [
     initials: "TA",
     avatarBg: "var(--primary)",
     branch: "CN05 - Hàng Xanh (Bình Thạnh)",
-    branchAddress: "247 Xô Viết Nghệ Tĩnh, P.17, Q. Bình Thạnh, TP.HCM",
+    branchAddress: "20 Xô Viết Nghệ Tĩnh, Bình Thạnh, TP.HCM",
     type: "Bán Lẻ",
     typeVariant: "info",
     date: "28/10/2026 14:32",
+    subtotal: 89000,
+    discount: 0,
+    tax: 0,
     total: 89000,
     paid: 100000,
     change: 11000,
@@ -299,10 +306,13 @@ export const INITIAL_INVOICES: InvoiceRecord[] = [
     initials: "NA",
     avatarBg: "var(--info)",
     branch: "CN01 - Bến Nghé (Quận 1)",
-    branchAddress: "12 Pasteur, P. Bến Nghé, Quận 1, TP.HCM",
+    branchAddress: "12 Nguyễn Huệ, Quận 1, TP.HCM",
     type: "Giao Hàng",
     typeVariant: "purple",
     date: "28/10/2026 09:15",
+    subtotal: 450000,
+    discount: 0,
+    tax: 0,
     total: 450000,
     paid: 450000,
     change: 0,
@@ -310,6 +320,126 @@ export const INITIAL_INVOICES: InvoiceRecord[] = [
     status: "Đã Thanh Toán",
     statusVariant: "success",
     items: INITIAL_ORDERS[0].items
+  },
+  {
+    id: "HD-CN01-001248",
+    orderId: "DH-00124",
+    customerName: "Trần Bình",
+    customerPhone: "0912 345 678",
+    tier: "Silver",
+    initials: "TB",
+    avatarBg: "var(--info)",
+    branch: "CN01 - Bến Nghé (Quận 1)",
+    branchAddress: "12 Nguyễn Huệ, Quận 1, TP.HCM",
+    type: "Bán Lẻ",
+    typeVariant: "info",
+    date: "28/10/2026 09:12",
+    subtotal: 35000,
+    discount: 0,
+    tax: 0,
+    total: 35000,
+    paid: 35000,
+    change: 0,
+    paymentMethod: "Tiền mặt",
+    status: "Đã Thanh Toán",
+    statusVariant: "success",
+    items: INITIAL_ORDERS[1].items
+  },
+  {
+    id: "HD-CN02-001249",
+    orderId: "DH-00123",
+    customerName: "Lê Minh Tuấn",
+    customerPhone: "0988 777 666",
+    tier: "Member",
+    initials: "LT",
+    avatarBg: "var(--primary)",
+    branch: "CN02 - Bàn Cờ (Quận 3)",
+    branchAddress: "45 Nguyễn Đình Chiểu, Quận 3, TP.HCM",
+    type: "Bán Lẻ",
+    typeVariant: "info",
+    date: "28/10/2026 09:05",
+    subtotal: 78000,
+    discount: 0,
+    tax: 0,
+    total: 78000,
+    paid: 78000,
+    change: 0,
+    paymentMethod: "Tiền mặt",
+    status: "Đã Thanh Toán",
+    statusVariant: "success",
+    items: INITIAL_ORDERS[2].items
+  },
+  {
+    id: "SI-CN08-000042",
+    orderId: "DH-00120",
+    customerName: "Cty TNHH Tech Valley",
+    customerPhone: "0987 654 321",
+    tier: "VIP",
+    initials: "CT",
+    avatarBg: "var(--warning)",
+    branch: "CN08 - Cityland (Gò Vấp)",
+    branchAddress: "Khu Cityland, Gò Vấp, TP.HCM",
+    type: "Đơn Sỉ B2B",
+    typeVariant: "warning",
+    date: "27/10/2026 09:00",
+    subtotal: 12600000,
+    discount: 0,
+    tax: 0,
+    total: 12600000,
+    paid: 6300000,
+    change: 0,
+    paymentMethod: "Chuyển khoản QR",
+    status: "Thanh Toán 50%",
+    statusVariant: "warning",
+    items: [
+      {
+        id: "item-b2b-1",
+        name: "Combo Trà sữa sự kiện doanh nghiệp (Size L)",
+        size: "L",
+        sugar: "70%",
+        ice: "Vừa đá",
+        toppings: ["Trân châu hoàng kim"],
+        note: "Giao tận nơi",
+        quantity: 280,
+        unitPrice: 45000,
+      }
+    ]
+  },
+  {
+    id: "RT-CN03-000089",
+    orderId: "DH-00119",
+    customerName: "Phạm Quốc Hùng",
+    customerPhone: "0971 234 567",
+    tier: "Member",
+    initials: "PH",
+    avatarBg: "var(--danger)",
+    branch: "CN03 - Chợ Lớn (Quận 5)",
+    branchAddress: "18 Trần Hưng Đạo, Quận 5, TP.HCM",
+    type: "Hoàn Tiền",
+    typeVariant: "danger",
+    date: "26/10/2026 16:45",
+    subtotal: 45000,
+    discount: 0,
+    tax: 0,
+    total: 45000,
+    paid: 45000,
+    change: 0,
+    paymentMethod: "Tiền mặt",
+    status: "Đã Hoàn Tiền",
+    statusVariant: "danger",
+    items: [
+      {
+        id: "item-rt-1",
+        name: "Trà sữa ô long",
+        size: "L",
+        sugar: "50%",
+        ice: "Ít đá",
+        toppings: [],
+        note: "Hoàn tiền cho khách",
+        quantity: 1,
+        unitPrice: 45000,
+      }
+    ]
   }
 ];
 
@@ -418,8 +548,12 @@ export function createPosOrder(params: {
   taxRate: number;
 }): { order: SalesOrder; invoice: InvoiceRecord } {
   const currentOrders = loadOrders();
-  const nextNum = currentOrders.length + 126;
-  const orderId = `DH-00${nextNum}`;
+  const maxNum = currentOrders.reduce((max, o) => {
+    const m = o.id.match(/DH-0*(\d+)/);
+    return m ? Math.max(max, Number(m[1])) : max;
+  }, 125);
+  const nextNum = maxNum + 1;
+  const orderId = `DH-${String(nextNum).padStart(5, "0")}`;
   const invoiceId = `HD-${params.branchId}-${String(nextNum).padStart(6, "0")}`;
 
   const subtotal = params.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
@@ -441,6 +575,14 @@ export function createPosOrder(params: {
 
   const customerName = params.customerName?.trim() || (params.customerPhone ? "Khách Hội Viên" : "Khách Vãng Lai");
   const customerPhone = params.customerPhone?.trim() || "0900 000 000";
+
+  const matchedStore = INITIAL_STORES.find(s => s.id === params.branchId || s.code === params.branchId);
+  const branchTitle = matchedStore
+    ? `${matchedStore.code} - ${matchedStore.name} (${matchedStore.area})`
+    : `${params.branchId} - Bến Nghé (Quận 1)`;
+  const branchAddress = matchedStore
+    ? `${matchedStore.address}, ${matchedStore.area}, TP.HCM`
+    : "12 Nguyễn Huệ, Quận 1, TP.HCM";
 
   const newOrder: SalesOrder = {
     id: orderId,
@@ -470,11 +612,14 @@ export function createPosOrder(params: {
     tier: params.tier || (params.customerPhone ? "Gold" : "Member"),
     initials: customerName.split(" ").slice(-2).map(w => w[0]).join("").toUpperCase() || "KH",
     avatarBg: "var(--primary)",
-    branch: `${params.branchId} - Bến Nghé (Quận 1)`,
-    branchAddress: "12 Pasteur, P. Bến Nghé, Quận 1, TP.HCM",
+    branch: branchTitle,
+    branchAddress,
     type: "Bán Lẻ",
     typeVariant: "info",
     date: new Date().toLocaleDateString("vi-VN") + " " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+    subtotal,
+    discount,
+    tax,
     total,
     paid: params.paidAmount || total,
     change: Math.max(0, (params.paidAmount || total) - total),
@@ -489,31 +634,69 @@ export function createPosOrder(params: {
   const currentInvoices = loadInvoices();
   saveInvoices([newInvoice, ...currentInvoices]);
 
-  // Trừ tồn kho nguyên liệu quầy trong useDemoState (business_demo_state_v1)
+  const totalCups = params.items.reduce((s, it) => s + it.quantity, 0);
+  const pearlCount = params.items
+    .filter(it => it.toppings.some(t => t.toLowerCase().includes("trân châu")))
+    .reduce((s, it) => s + it.quantity, 0);
+
+  // 1) Trừ tồn kho trên DEMO_STORAGE_KEY ("miltyway.user2.demo.v1")
+  try {
+    const rawUser2 = localStorage.getItem(DEMO_STORAGE_KEY);
+    const demoState = rawUser2 ? JSON.parse(rawUser2) : structuredClone(INITIAL_DEMO_STATE);
+    if (demoState && Array.isArray(demoState.lots)) {
+      const deductions: Record<string, number> = {
+        "ing-tea-base": totalCups * 120,
+        "ing-milk": totalCups * 30,
+        "ing-syrup": totalCups * 25,
+        "ing-cup": totalCups * 1,
+        "ing-seal": totalCups * 1,
+        ...(pearlCount > 0 ? { "ing-pearl": pearlCount * 30 } : {}),
+      };
+      const deductedIngredients = new Set<string>();
+      demoState.lots = demoState.lots.map((lot: any) => {
+        if (
+          lot.location === "counter" &&
+          lot.locationId === params.branchId &&
+          lot.quality === "pass" &&
+          lot.quantity > 0 &&
+          deductions[lot.ingredientId] &&
+          !deductedIngredients.has(lot.ingredientId)
+        ) {
+          deductedIngredients.add(lot.ingredientId);
+          return {
+            ...lot,
+            quantity: Math.max(0, lot.quantity - deductions[lot.ingredientId]),
+          };
+        }
+        return lot;
+      });
+      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoState));
+    }
+  } catch (err) {
+    console.warn("Could not auto-deduct counter lots in DEMO_STORAGE_KEY", err);
+  }
+
+  // 2) Trừ tồn kho nguyên liệu quầy trong business_demo_state_v1 (tương thích bộ test)
   try {
     const rawDemo = localStorage.getItem("business_demo_state_v1");
     if (rawDemo) {
       const demo = JSON.parse(rawDemo);
       if (demo && Array.isArray(demo.lots)) {
-        // Mỗi ly bán ra tiêu hao khoảng:
-        // Cốt trà: 150ml, Sữa/bột béo: 30g, Trân châu (nếu có topping): 30g, Ly/nắp: 1 cái
-        const totalCups = params.items.reduce((s, it) => s + it.quantity, 0);
         demo.lots = demo.lots.map((lot: any) => {
           if (lot.location === "counter") {
-            if (lot.ingredientId === "ing-black-tea" || lot.ingredientId === "ing-olong-tea") {
-              const deduction = totalCups * 150; // ml
+            if (lot.ingredientId === "ing-black-tea" || lot.ingredientId === "ing-olong-tea" || lot.ingredientId === "ing-tea-base") {
+              const deduction = totalCups * 150;
               return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
             }
-            if (lot.ingredientId === "ing-fresh-milk" || lot.ingredientId === "ing-condensed-milk") {
-              const deduction = totalCups * 30; // g
+            if (lot.ingredientId === "ing-fresh-milk" || lot.ingredientId === "ing-condensed-milk" || lot.ingredientId === "ing-milk") {
+              const deduction = totalCups * 30;
               return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
             }
-            if (lot.ingredientId === "ing-cup-m" || lot.ingredientId === "ing-cup-l") {
+            if (lot.ingredientId === "ing-cup-m" || lot.ingredientId === "ing-cup-l" || lot.ingredientId === "ing-cup") {
               const deduction = totalCups;
               return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
             }
-            if (lot.ingredientId === "ing-tapioca-pearl") {
-              const pearlCount = params.items.filter(it => it.toppings.some(t => t.toLowerCase().includes("trân châu"))).reduce((s, it) => s + it.quantity, 0);
+            if (lot.ingredientId === "ing-tapioca-pearl" || lot.ingredientId === "ing-pearl") {
               const deduction = pearlCount * 30;
               return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
             }

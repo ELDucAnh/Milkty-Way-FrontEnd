@@ -697,9 +697,9 @@ export default function InvoicesPage() {
                 onChange={(e) =>
                   setCreatePaymentStatus(
                     e.target.value as
-                      | "Đã Thanh Toán"
-                      | "Thanh Toán 50%"
-                      | "Chờ Thanh Toán"
+                    | "Đã Thanh Toán"
+                    | "Thanh Toán 50%"
+                    | "Chờ Thanh Toán"
                   )
                 }
               >

@@ -279,101 +279,101 @@ export default function BatchesPage() {
       setCompleteError("Ghi lượng đầu vào thực tế lớn hơn 0 cho từng lô.");
       return;
     }
-if (completeBatch.status !== "processing") {
-    setCompleteError("Mẻ này không còn ở trạng thái đang chế biến.");
-    return;
-}
+    if (completeBatch.status !== "processing") {
+      setCompleteError("Mẻ này không còn ở trạng thái đang chế biến.");
+      return;
+    }
 
-const requiredByLot = new Map<string, number>();
-const reservedByLot = new Map<string, number>();
+    const requiredByLot = new Map<string, number>();
+    const reservedByLot = new Map<string, number>();
 
-for (const item of consumption) {
-    requiredByLot.set(
+    for (const item of consumption) {
+      requiredByLot.set(
         item.input.lotId,
         (requiredByLot.get(item.input.lotId) ?? 0) + item.quantity
-    );
+      );
 
-    reservedByLot.set(
+      reservedByLot.set(
         item.input.lotId,
         (reservedByLot.get(item.input.lotId) ?? 0) +
-            item.input.plannedQuantity
-    );
-}
+        item.input.plannedQuantity
+      );
+    }
 
-// Kiểm tra lượng thực tế có thể tiêu thụ,
-// bao gồm phần đã giữ cho chính mẻ hiện tại.
-const insufficient = [...requiredByLot].some(([lotId, required]) => {
-    const lot = data.lots.find((item) => item.id === lotId);
+    // Kiểm tra lượng thực tế có thể tiêu thụ,
+    // bao gồm phần đã giữ cho chính mẻ hiện tại.
+    const insufficient = [...requiredByLot].some(([lotId, required]) => {
+      const lot = data.lots.find((item) => item.id === lotId);
 
-    if (!lot || lot.location !== "central") return true;
+      if (!lot || lot.location !== "central") return true;
 
-    const ownReserved = reservedByLot.get(lotId) ?? 0;
+      const ownReserved = reservedByLot.get(lotId) ?? 0;
 
-    const otherReserved = Math.max(
+      const otherReserved = Math.max(
         0,
         (lot.reservedQuantity ?? 0) - ownReserved
-    );
+      );
 
-    const availableForThisBatch = Math.max(
+      const availableForThisBatch = Math.max(
         0,
         usableLotQuantity(lot)
-            - otherReserved
-            - (lot.lockedQuantity ?? 0)
-    );
+        - otherReserved
+        - (lot.lockedQuantity ?? 0)
+      );
 
-    return required > availableForThisBatch;
-});
+      return required > availableForThisBatch;
+    });
 
-if (insufficient) {
-    setCompleteError("Lô đầu vào không còn đủ khả dụng; không thể chốt mẻ.");
-    return;
-}
+    if (insufficient) {
+      setCompleteError("Lô đầu vào không còn đủ khả dụng; không thể chốt mẻ.");
+      return;
+    }
 
-// Trừ lượng thực tế đã dùng và giải phóng lượng đã giữ.
-let lots = data.lots.map((lot) => {
-    const consumed = requiredByLot.get(lot.id);
-    const reserved = reservedByLot.get(lot.id);
+    // Trừ lượng thực tế đã dùng và giải phóng lượng đã giữ.
+    let lots = data.lots.map((lot) => {
+      const consumed = requiredByLot.get(lot.id);
+      const reserved = reservedByLot.get(lot.id);
 
-    if (consumed === undefined && reserved === undefined) return lot;
+      if (consumed === undefined && reserved === undefined) return lot;
 
-    return {
+      return {
         ...lot,
         quantity: lot.quantity - (consumed ?? 0),
         reservedQuantity: Math.max(
-            0,
-            (lot.reservedQuantity ?? 0) - (reserved ?? 0)
+          0,
+          (lot.reservedQuantity ?? 0) - (reserved ?? 0)
         )
-    };
-});
+      };
+    });
 
-const completed = completeForm.quality === "pass";
+    const completed = completeForm.quality === "pass";
 
-const updated: ProductionBatch = {
-    ...completeBatch,
-    inputs: completeBatch.inputs.map((input) => ({
+    const updated: ProductionBatch = {
+      ...completeBatch,
+      inputs: completeBatch.inputs.map((input) => ({
         ...input,
         actualQuantity: Number(completeInputs[input.id])
-    })),
-    actualQuantity: actual,
-    wasteQuantity: waste,
-    expiryDate: completeForm.expiry,
-    quality: completeForm.quality,
-    approver: completeForm.approver.trim(),
-    status: completed ? "completed" : "held"
-};
+      })),
+      actualQuantity: actual,
+      wasteQuantity: waste,
+      expiryDate: completeForm.expiry,
+      quality: completeForm.quality,
+      approver: completeForm.approver.trim(),
+      status: completed ? "completed" : "held"
+    };
 
-// Dù đạt hay không đạt, vẫn lưu lô đầu ra để truy xuất.
-// Nếu không đạt, lô được đưa vào trạng thái cách ly.
-const outputCost = consumption.reduce((sum, item) => {
-    const sourceLot = data.lots.find(
+    // Dù đạt hay không đạt, vẫn lưu lô đầu ra để truy xuất.
+    // Nếu không đạt, lô được đưa vào trạng thái cách ly.
+    const outputCost = consumption.reduce((sum, item) => {
+      const sourceLot = data.lots.find(
         (lot) => lot.id === item.input.lotId
-    );
+      );
 
-    return sum + item.quantity * (sourceLot?.unitCost ?? 0);
-}, 0) / actual;
+      return sum + item.quantity * (sourceLot?.unitCost ?? 0);
+    }, 0) / actual;
 
-lots = [
-    {
+    lots = [
+      {
         id: makeId("lot"),
         ingredientId: output.id,
         lotCode: completeBatch.code,
@@ -385,9 +385,9 @@ lots = [
         location: "kitchen",
         locationId: "kitchen",
         batchId: completeBatch.id
-    },
-    ...lots
-];
+      },
+      ...lots
+    ];
     setData((current) => ({
       ...current,
       lots,
@@ -868,7 +868,7 @@ lots = [
                             step="0.001"
                             max={usableLotQuantity(
                               data.lots.find((lot) => lot.id === input.lotId) ??
-                                data.lots[0],
+                              data.lots[0],
                             )}
                             className="form-input w-32"
                             value={completeInputs[input.id] ?? ""}

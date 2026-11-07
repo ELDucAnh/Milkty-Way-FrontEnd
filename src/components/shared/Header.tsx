@@ -25,7 +25,7 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   {
     id: "notif-1",
     title: "Cảnh Báo Tồn Kho Thấp & Cận Date FEFO",
-    message: "Trà Sữa Oolong Nướng chỉ còn lại 3 ly tại CN05 (cận date xuất trong ngày).",
+    message: "Cốt hồng trà đặc tại CN05 chỉ còn 1,2 lít (dưới ngưỡng an toàn ca chiều)",
     time: "5 phút trước",
     category: "inventory",
     unread: true,
@@ -226,6 +226,7 @@ export default function Header({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            style={{ display: isDark ? "none" : "block" }}
           >
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
           </svg>
@@ -239,7 +240,7 @@ export default function Header({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ display: "none" }}
+            style={{ display: isDark ? "block" : "none" }}
           >
             <circle cx="12" cy="12" r="5" />
             <line x1="12" y1="1" x2="12" y2="3" />
@@ -256,7 +257,10 @@ export default function Header({
         {/* Dropdown Chuông Thông Báo */}
         <div className="relative" id="notification-dropdown-wrapper">
           <button
-            onClick={() => setNotifications((v) => !v)}
+            onClick={() => {
+              setNotifications((v) => !v);
+              setUserOpen(false);
+            }}
             id="notification-btn"
             className="p-2 rounded-lg hover:bg-[var(--background)] transition-colors relative"
             style={{ color: "var(--muted)", border: "none", background: "none", cursor: "pointer" }}
@@ -373,7 +377,10 @@ export default function Header({
         {/* User Profile Dropdown */}
         <div className="relative" id="user-dropdown-wrapper">
           <button
-            onClick={() => setUserOpen((v) => !v)}
+            onClick={() => {
+              setUserOpen((v) => !v);
+              setNotifications(false);
+            }}
             id="user-menu-btn"
             className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-[var(--background)] transition-colors"
             style={{ border: "none", background: "none", cursor: "pointer" }}

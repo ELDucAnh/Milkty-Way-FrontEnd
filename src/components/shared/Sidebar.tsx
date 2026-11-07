@@ -149,8 +149,10 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
         <span className="sidebar-label flex-1">Khách hàng</span>
       </NavLink>
 
+      <div className="sidebar-section-label">ĐỐI TÁC &amp; TÀI CHÍNH</div>
+
       <NavLink onClick={onNavigate} end to="/suppliers" className="nav-item" data-page="suppliers">
-        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>
+        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>
         <span className="sidebar-label flex-1">Nhà cung cấp</span>
       </NavLink>
 

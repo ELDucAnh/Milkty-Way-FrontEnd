@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
@@ -11,6 +11,7 @@ interface BranchBreakEven {
   opex: number;
   netProfit: number;
   breakEven: number;
+  breakEvenPercent: number;
   achievementRate: number;
   statusText: string;
   statusBadge: "success" | "warning" | "danger";
@@ -24,6 +25,7 @@ const mockBranchData: BranchBreakEven[] = [
     opex: 62500000,
     netProfit: 166975000,
     breakEven: 95000000,
+    breakEvenPercent: 360.5,
     achievementRate: 360.5,
     statusText: "Vượt ngưỡng an toàn",
     statusBadge: "success",
@@ -35,6 +37,7 @@ const mockBranchData: BranchBreakEven[] = [
     opex: 48200000,
     netProfit: 111528000,
     breakEven: 75000000,
+    breakEvenPercent: 317.8,
     achievementRate: 317.8,
     statusText: "Vượt ngưỡng an toàn",
     statusBadge: "success",
@@ -46,6 +49,7 @@ const mockBranchData: BranchBreakEven[] = [
     opex: 43600000,
     netProfit: 100986000,
     breakEven: 68000000,
+    breakEvenPercent: 317.3,
     achievementRate: 317.3,
     statusText: "Vượt ngưỡng an toàn",
     statusBadge: "success",
@@ -57,28 +61,31 @@ const mockBranchData: BranchBreakEven[] = [
     opex: 41500000,
     netProfit: 91562000,
     breakEven: 65000000,
+    breakEvenPercent: 305.5,
     achievementRate: 305.5,
     statusText: "Vượt ngưỡng an toàn",
     statusBadge: "success",
   },
   {
-    branch: "CN12 — Quận 6 (Hậu Giang)",
+    branch: "CN12 — Kênh Nước Đen (Tân Phú)",
     revenue: 76200000,
-    cogs: 25146000,
-    opex: 28400000,
-    netProfit: 22654000,
+    cogs: 26670000,
+    opex: 51330000,
+    netProfit: -1800000,
     breakEven: 78000000,
+    breakEvenPercent: 97.7,
     achievementRate: 97.7,
     statusText: "Cảnh báo hòa vốn (Cận mức)",
     statusBadge: "warning",
   },
   {
-    branch: "CN11 — Tân Phú (Tân Sơn Nhì)",
+    branch: "CN11 — Lãnh Binh Thăng (Quận 11)",
     revenue: 68400000,
-    cogs: 22572000,
-    opex: 31200000,
-    netProfit: 14628000,
+    cogs: 23940000,
+    opex: 61060000,
+    netProfit: -16600000,
     breakEven: 85000000,
+    breakEvenPercent: 80.5,
     achievementRate: 80.5,
     statusText: "3 tuần dưới hòa vốn",
     statusBadge: "danger",
@@ -87,7 +94,46 @@ const mockBranchData: BranchBreakEven[] = [
 
 export default function ProfitLossPage() {
   const toast = useToast();
-  const [period, setPeriod] = useState("oct26");
+  const [selectedPeriod, setSelectedPeriod] = useState<"oct26" | "q3" | "q4">("oct26");
+
+  const periodFactor = selectedPeriod === "q3" ? 2.85 : selectedPeriod === "q4" ? 3.15 : 1;
+
+  const periodBranches = useMemo(() => {
+    return mockBranchData.map((b) => {
+      const revenue = Math.round(b.revenue * periodFactor);
+      const cogs = Math.round(b.cogs * periodFactor);
+      const opex = Math.round(b.opex * periodFactor);
+      const netProfit = revenue - cogs - opex;
+      const breakEven = Math.round(b.breakEven * periodFactor);
+      return {
+        ...b,
+        revenue,
+        cogs,
+        opex,
+        netProfit,
+        breakEven,
+      };
+    });
+  }, [periodFactor]);
+
+  const summary = useMemo(() => {
+    const totalRevenue = periodBranches.reduce((sum, b) => sum + b.revenue, 0);
+    const totalCogs = periodBranches.reduce((sum, b) => sum + b.cogs, 0);
+    const grossProfit = totalRevenue - totalCogs;
+    const totalNetProfit = periodBranches.reduce((sum, b) => sum + b.netProfit, 0);
+    const cogsRate = totalRevenue > 0 ? ((totalCogs / totalRevenue) * 100).toFixed(1) : "0.0";
+    const grossRate = totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(1) : "0.0";
+    const netRate = totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : "0.0";
+    return {
+      totalRevenue,
+      totalCogs,
+      grossProfit,
+      totalNetProfit,
+      cogsRate,
+      grossRate,
+      netRate,
+    };
+  }, [periodBranches]);
 
   return (
     <div className="space-y-6">
@@ -109,22 +155,22 @@ export default function ProfitLossPage() {
         <div className="flex gap-2.5 flex-wrap items-center">
           <button
             type="button"
-            className={`btn btn-sm ${period === "q3" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setPeriod("q3")}
+            className={`btn btn-sm ${selectedPeriod === "q3" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSelectedPeriod("q3")}
           >
             Quý 3/2026
           </button>
           <button
             type="button"
-            className={`btn btn-sm ${period === "q4" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setPeriod("q4")}
+            className={`btn btn-sm ${selectedPeriod === "q4" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSelectedPeriod("q4")}
           >
             Quý 4/2026
           </button>
           <button
             type="button"
-            className={`btn btn-sm ${period === "oct26" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setPeriod("oct26")}
+            className={`btn btn-sm ${selectedPeriod === "oct26" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSelectedPeriod("oct26")}
           >
             Tháng 10/2026 (Hiện tại)
           </button>
@@ -152,8 +198,8 @@ export default function ProfitLossPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Doanh Thu Thuần"
-            value="1.842.600.000 đ"
-            subLabel="● +14.8% toàn chuỗi"
+            value={`${summary.totalRevenue.toLocaleString("vi-VN")} đ`}
+            subLabel="+14.8% toàn chuỗi"
             tone="info"
             trend="up"
             icon={
@@ -165,9 +211,9 @@ export default function ProfitLossPage() {
           />
           <StatCard
             label="Giá Vốn Nguyên Liệu (COGS)"
-            value="608.058.000 đ"
+            value={`${summary.totalCogs.toLocaleString("vi-VN")} đ`}
             valueClassName="text-[var(--danger)]"
-            subLabel="33.0% DT (Chuẩn F&B <35%)"
+            subLabel={`${summary.cogsRate}% DT (Chuẩn F&B <35%)`}
             tone="danger"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -179,9 +225,9 @@ export default function ProfitLossPage() {
           />
           <StatCard
             label="Lợi Nhuận Gộp (Gross Profit)"
-            value="1.234.542.000 đ"
+            value={`${summary.grossProfit.toLocaleString("vi-VN")} đ`}
             valueClassName="text-[var(--primary)]"
-            subLabel="Biên lợi nhuận gộp đạt 67.0%"
+            subLabel={`Biên lợi nhuận gộp đạt ${summary.grossRate}%`}
             tone="primary"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -193,9 +239,9 @@ export default function ProfitLossPage() {
           />
           <StatCard
             label="Lợi Nhuận Thuần Sau CP"
-            value="421.692.000 đ"
+            value={`${summary.totalNetProfit.toLocaleString("vi-VN")} đ`}
             valueClassName="text-[var(--primary)]"
-            subLabel="● Tỷ suất sinh lời ròng 22.9%"
+            subLabel={`Tỷ suất sinh lời ròng ${summary.netRate}%`}
             tone="success"
             trend="up"
             icon={
@@ -233,12 +279,12 @@ export default function ProfitLossPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 rounded-lg bg-white border border-red-200">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-red-700">CN11 — Tân Phú (Tân Sơn Nhì)</span>
+                    <span className="font-bold text-red-700">CN11 — Lãnh Binh Thăng (Quận 11)</span>
                     <Badge variant="danger">Báo Động Đỏ</Badge>
                   </div>
                   <div className="text-[var(--text)]">
                     Doanh thu T10: <strong>68.400.000 ₫</strong> / Điểm hòa vốn:{" "}
-                    <strong>85.000.000 ₫</strong> (Đạt 80.5%)
+                    <strong>85.000.000 ₫</strong> (Đạt 80.5% · Lỗ -16.600.000 ₫)
                   </div>
                   <div className="text-red-600 font-semibold mt-1">
                     Cảnh báo: 3 tuần liên tiếp dưới điểm hòa vốn — Cần tái cơ cấu menu &amp; chạy Flash Sale
@@ -247,12 +293,12 @@ export default function ProfitLossPage() {
 
                 <div className="p-3 rounded-lg bg-white border border-amber-200">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-amber-700">CN12 — Quận 6 (Hậu Giang)</span>
+                    <span className="font-bold text-amber-700">CN12 — Kênh Nước Đen (Tân Phú)</span>
                     <Badge variant="warning">Cảnh Báo Vàng</Badge>
                   </div>
                   <div className="text-[var(--text)]">
                     Doanh thu T10: <strong>76.200.000 ₫</strong> / Điểm hòa vốn:{" "}
-                    <strong>78.000.000 ₫</strong> (Đạt 97.7%)
+                    <strong>78.000.000 ₫</strong> (Đạt 97.7% · Lỗ -1.800.000 ₫)
                   </div>
                   <div className="text-amber-700 font-semibold mt-1">
                     Lưu ý: Cận ngưỡng hòa vốn (Trung bình trượt 4 tuần tiệm cận) — Đang theo dõi
@@ -272,7 +318,7 @@ export default function ProfitLossPage() {
               Bảng So Sánh Hiệu Quả &amp; Điểm Hòa Vốn 12 Chi Nhánh TP.HCM
             </h3>
             <div className="text-xs text-[var(--muted)] mt-0.5">
-              Dữ liệu tài chính tháng 10/2026 · Đơn vị: VNĐ
+              Dữ liệu tài chính {selectedPeriod === "q3" ? "Quý 3/2026" : selectedPeriod === "q4" ? "Quý 4/2026" : "tháng 10/2026"} · Đơn vị: VNĐ
             </div>
           </div>
           <button
@@ -302,15 +348,15 @@ export default function ProfitLossPage() {
               </tr>
             </thead>
             <tbody>
-              {mockBranchData.map((b) => (
+              {periodBranches.map((b) => (
                 <tr
                   key={b.branch}
                   className={
                     b.statusBadge === "danger"
                       ? "bg-red-50/60"
                       : b.statusBadge === "warning"
-                      ? "bg-amber-50/40"
-                      : ""
+                        ? "bg-amber-50/40"
+                        : ""
                   }
                 >
                   <td className="font-bold text-[var(--text)]">{b.branch}</td>
@@ -325,24 +371,26 @@ export default function ProfitLossPage() {
                   </td>
                   <td
                     className={`text-right font-bold ${
-                      b.statusBadge === "danger"
+                      b.netProfit < 0
                         ? "text-red-600"
                         : b.statusBadge === "warning"
-                        ? "text-amber-700"
-                        : "text-emerald-600"
+                          ? "text-amber-700"
+                          : "text-emerald-600"
                     }`}
                   >
-                    {b.netProfit.toLocaleString("vi-VN")} ₫
+                    {b.netProfit < 0
+                      ? `-${Math.abs(b.netProfit).toLocaleString("vi-VN")} ₫`
+                      : `${b.netProfit.toLocaleString("vi-VN")} ₫`}
                   </td>
                   <td className="text-right font-medium">
                     {b.breakEven.toLocaleString("vi-VN")} ₫
                   </td>
                   <td
                     className={`text-center font-bold ${
-                      b.achievementRate < 100 ? "text-red-600" : "text-emerald-600"
+                      b.breakEvenPercent < 100 ? "text-red-600" : "text-emerald-600"
                     }`}
                   >
-                    {b.achievementRate}%
+                    {b.breakEvenPercent}%
                   </td>
                   <td className="text-center">
                     <Badge variant={b.statusBadge}>{b.statusText}</Badge>

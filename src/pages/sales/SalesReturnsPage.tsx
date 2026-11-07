@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 import { formatCurrency } from "../../utils/format";
-import { loadOrders, loadReturns, saveReturns } from "../shared/sales-orders-store";
+import { loadInvoices, loadOrders, loadReturns, saveInvoices, saveOrders, saveReturns } from "../shared/sales-orders-store";
 import type { ReturnRequest } from "../shared/sales-orders-store";
+
+const STORAGE_RETURN_HISTORY = "miltyway_sales_return_history_v1";
 
 type RequestStatus = "Pending" | "Approved" | "Rejected";
 
@@ -44,9 +46,8 @@ export default function SalesReturnsPage() {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [status, setStatus] = useState("");
-    const [reviewState, setReviewState] = useState<{ requests: ReturnRequest[]; history: ReviewEntry[] }>(() => ({
-        requests: loadReturns(),
-        history: [
+    const [reviewState, setReviewState] = useState<{ requests: ReturnRequest[]; history: ReviewEntry[] }>(() => {
+        const defaultHistory: ReviewEntry[] = [
             {
                 requestId: "HT-0000",
                 reviewer: "Nguyễn Hoàng Long",
@@ -57,8 +58,24 @@ export default function SalesReturnsPage() {
                 decision: "Approved",
                 note: "Đã hoàn tiền vào tài khoản hội viên do giao nhầm vị trà sữa.",
             }
-        ]
-    }));
+        ];
+        let loadedHistory = defaultHistory;
+        try {
+            const raw = localStorage.getItem(STORAGE_RETURN_HISTORY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    loadedHistory = parsed;
+                }
+            }
+        } catch {
+            loadedHistory = defaultHistory;
+        }
+        return {
+            requests: loadReturns(),
+            history: loadedHistory,
+        };
+    });
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [reviewNote, setReviewNote] = useState("");
 
@@ -97,13 +114,33 @@ export default function SalesReturnsPage() {
         const updatedRequests = reviewState.requests.map(request =>
             request.id === entry.requestId ? { ...request, status: decision as RequestStatus } : request
         );
+        const updatedHistory = [entry, ...reviewState.history];
 
-        setReviewState(current => ({
+        setReviewState({
             requests: updatedRequests,
-            history: [entry, ...current.history],
-        }));
+            history: updatedHistory,
+        });
 
         saveReturns(updatedRequests);
+        try {
+            localStorage.setItem(STORAGE_RETURN_HISTORY, JSON.stringify(updatedHistory));
+            if (decision === "Approved" && selected.resolution === "Hoàn tiền") {
+                saveOrders(
+                    loadOrders().map(o =>
+                        o.id === selected.orderId ? { ...o, payment: "refunded" } : o
+                    )
+                );
+                saveInvoices(
+                    loadInvoices().map(inv =>
+                        inv.orderId === selected.orderId
+                            ? { ...inv, status: "Đã Hoàn Tiền", statusVariant: "danger" }
+                            : inv
+                    )
+                );
+            }
+        } catch (err) {
+            console.warn(err);
+        }
         toast.success(`Đã ${decision === "Approved" ? "phê duyệt" : "từ chối"} yêu cầu ${selected.id}!`);
         setSelectedId(null);
         setReviewNote("");
@@ -118,6 +155,7 @@ export default function SalesReturnsPage() {
         const order = availableOrders.find(o => o.id === formOrderId);
         const amount = Number(formAmount) || 0;
         const nextId = `HT-${String(reviewState.requests.length + 1).padStart(4, "0")}`;
+        const combinedReason = formNote.trim() ? `${formReason} — ${formNote.trim()}` : formReason;
 
         const newReq: ReturnRequest = {
             id: nextId,
@@ -125,9 +163,9 @@ export default function SalesReturnsPage() {
             customer: order?.customer || "Khách Hàng",
             createdAt: new Date().toISOString(),
             resolution: formResolution,
-            reason: formReason,
+            reason: combinedReason,
             amount,
-            points: -Math.round(amount / 1000),
+            points: -Math.round(amount / 10000),
             memberId: order?.phone ? "HV-0001" : null,
             status: "Pending",
         };

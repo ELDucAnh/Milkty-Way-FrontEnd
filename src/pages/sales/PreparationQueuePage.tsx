@@ -52,17 +52,19 @@ function getOrdersFromStore(): PreparationOrder[] {
         const itemSummary = o.items.map(it => `${it.quantity} × ${it.name} (Size ${it.size})`).join(" + ");
         const optionSummary = o.items.map(it => `Đường ${it.sugar} · ${it.ice}${it.toppings.length ? ` · Topping: ${it.toppings.join(", ")}` : ""}`).join(" | ");
         const note = o.items.map(it => it.note).filter(Boolean).join("; ") || "Không có";
-        const waitingMinutes = Math.max(1, Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000)) || 3;
+        const status = o.preparation || "waiting";
+        const elapsedMinutes = Math.max(1, Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000)) || 3;
+        const waitingMinutes = status === "ready" ? 0 : elapsedMinutes;
         return {
             id: o.id,
             branchId: o.branchId || "CN01",
             channel: o.channel || "counter",
             receivedAt: o.createdAt,
-            waitingMinutes: waitingMinutes > 60 ? 5 : waitingMinutes,
+            waitingMinutes,
             itemSummary,
             optionSummary,
             note,
-            status: o.preparation || "waiting",
+            status,
         };
     });
 }
@@ -122,7 +124,7 @@ export default function PreparationQueuePage() {
         setOrders((current) =>
             current.map((item) =>
                 item.id === orderId
-                    ? { ...item, status: nextStatus }
+                    ? { ...item, status: nextStatus, waitingMinutes: nextStatus === "ready" ? 0 : item.waitingMinutes }
                     : item,
             ),
         );
