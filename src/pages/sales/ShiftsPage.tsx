@@ -1,4 +1,4 @@
-import { isCashier, counterBranch } from "../../utils/auth";
+import { can, isCashier, counterBranch, scopedBranch, sessionUser } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -69,6 +69,22 @@ export const initialShifts: readonly CashShift[] = [
         pendingOrders: ["DH-00125 · Đang pha chế"],
         status: "open",
     },
+    {
+        id: "CA-005",
+        branchId: "CN05",
+        counterId: "POS01",
+        counterName: "Quầy 01",
+        staffName: "Lê Quốc Tuấn Anh",
+        openedAt: "2026-10-28T14:00:00+07:00",
+        closedAt: null,
+        openingCash: 1500000,
+        expectedCash: null,
+        countedCash: null,
+        recipientId: null,
+        handoverNote: "",
+        pendingOrders: [],
+        status: "open",
+    },
 ];
 
 export const STORAGE_SHIFTS = "miltyway_shifts_v1";
@@ -99,7 +115,10 @@ export default function ShiftsPage() {
             const raw = localStorage.getItem(STORAGE_SHIFTS);
             if (raw) {
                 const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const saved = parsed as CashShift[];
+                    return [...saved, ...initialShifts.filter(seed => !saved.some(shift => shift.id === seed.id))];
+                }
             }
         } catch {
             // ignore
@@ -107,7 +126,9 @@ export default function ShiftsPage() {
         return [...initialShifts];
     });
 
-    const shifts = isCashier() ? allShifts.filter(s => s.branchId === counterBranch && s.counterId === "POS01" && s.status !== "closed") : allShifts;
+    const shifts = isCashier()
+        ? allShifts.filter(s => s.branchId === counterBranch && s.counterId === "POS01" && s.status !== "closed")
+        : scopedBranch() ? allShifts.filter(s => s.branchId === scopedBranch()) : allShifts;
     function setShifts(updater: (current: CashShift[]) => CashShift[]) {
         setShiftsState((current) => {
             const next = updater(current);
@@ -120,8 +141,9 @@ export default function ShiftsPage() {
         });
     }
     const [selectedId, setSelectedId] = useState(shifts[0]?.id || "");
+    const [disabledCounters, setDisabledCounters] = useState<string[]>([]);
     const [openingForm, setOpeningForm] = useState<OpenShiftForm>({
-        branchId: "CN01",
+        branchId: scopedBranch() ?? "CN01",
         counterId: "POS01",
         openingCash: "",
     });
@@ -154,11 +176,19 @@ export default function ShiftsPage() {
         event.preventDefault();
 
         const openingCash = parseCash(openingForm.openingCash);
+        if (scopedBranch() && openingForm.branchId !== scopedBranch()) {
+            toast.warning(`Bạn chỉ được mở ca tại chi nhánh ${scopedBranch()}.`);
+            return;
+        }
         if (openingCash === null) {
             toast.warning("Tiền đầu ca phải là số nguyên không âm.");
             return;
         }
 
+        if (disabledCounters.includes(openingForm.counterId)) {
+            toast.warning("Quầy POS này đang tạm ngưng hoạt động. Vui lòng kích hoạt lại trước khi mở ca.");
+            return;
+        }
         const occupied = shifts.some(
             (shift) =>
                 shift.branchId === openingForm.branchId &&
@@ -176,7 +206,7 @@ export default function ShiftsPage() {
             branchId: openingForm.branchId,
             counterId: openingForm.counterId,
             counterName: openingForm.counterId === "POS02" ? "Quầy 02" : openingForm.counterId === "POS03" ? "Quầy 03" : "Quầy 01",
-            staffName: "Nguyễn An",
+            staffName: sessionUser().name,
             openedAt: new Date().toISOString(),
             closedAt: null,
             openingCash,
@@ -371,11 +401,94 @@ export default function ShiftsPage() {
                 parent={{ label: "Bán hàng", to: "/sales" }}
                 description="Theo dõi quầy, nhân viên, tiền mặt và các nội dung cần bàn giao."
                 actions={
-                    <Link to="/sales/pos" className="btn btn-secondary">
+                    can("pos.use") && <Link to="/sales/pos" className="btn btn-secondary">
                         Về POS
                     </Link>
                 }
             />
+
+            {!isCashier() && (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng tiền đầu ca ({scopedBranch() || "Chuỗi"})</div>
+                            <div className="text-[22px] font-extrabold text-[var(--text)] mt-1">
+                                {formatCurrency(shifts.reduce((sum, s) => sum + s.openingCash, 0))}
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">{shifts.filter(s => s.status === "open").length} ca đang mở</div>
+                        </div>
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Doanh thu tiền mặt ca chọn</div>
+                            <div className="text-[22px] font-extrabold text-[var(--primary)] mt-1">
+                                {formatCurrency(cashFromSales)}
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">Ca {selectedShift?.id || "—"}</div>
+                        </div>
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tiền chốt ca dự kiến</div>
+                            <div className="text-[22px] font-extrabold text-[var(--info)] mt-1">
+                                {formatCurrency(effectiveExpectedCash)}
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">Đầu ca + thu tiền mặt</div>
+                        </div>
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Quầy POS hoạt động</div>
+                            <div className="text-[22px] font-extrabold text-[var(--text)] mt-1">
+                                {3 - disabledCounters.length} / 3 quầy
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">Tại {scopedBranch() || openingForm.branchId}</div>
+                        </div>
+                    </div>
+
+                    <section className="card mb-6">
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                            <div>
+                                <h2 className="card-title">Quản lý quầy POS tại chi nhánh ({scopedBranch() || openingForm.branchId})</h2>
+                                <p className="text-xs text-[var(--muted)]">Bật/tắt trạng thái vận hành các quầy thu ngân thuộc chi nhánh quản lý.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {[
+                                { id: "POS01", name: "Quầy 01 (Chính)", desc: "Quầy thu ngân & nhận đơn tại chỗ" },
+                                { id: "POS02", name: "Quầy 02 (Phụ)", desc: "Quầy tăng cường giờ cao điểm" },
+                                { id: "POS03", name: "Quầy 03 (Take-away)", desc: "Quầy ưu tiên khách mang đi" },
+                            ].map((counter) => {
+                                const isDisabled = disabledCounters.includes(counter.id);
+                                const activeShift = shifts.find(s => s.counterId === counter.id && s.status !== "closed");
+                                return (
+                                    <div key={counter.id} className="p-3.5 rounded-lg border border-[var(--border)] flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="font-bold text-sm flex items-center gap-2">
+                                                {counter.name}
+                                                <Badge variant={isDisabled ? "gray" : activeShift ? "success" : "info"}>
+                                                    {isDisabled ? "Tạm ngưng" : activeShift ? `Đang mở (${activeShift.id})` : "Sẵn sàng"}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xs text-[var(--muted)] mt-0.5">{counter.desc}</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className={`btn btn-sm ${isDisabled ? "btn-primary" : "btn-secondary"}`}
+                                            onClick={() => {
+                                                if (!isDisabled && activeShift) {
+                                                    toast.warning(`Không thể tạm ngưng ${counter.name} khi đang có ca mở (${activeShift.id}).`);
+                                                    return;
+                                                }
+                                                setDisabledCounters(prev =>
+                                                    prev.includes(counter.id) ? prev.filter(id => id !== counter.id) : [...prev, counter.id]
+                                                );
+                                                toast.success(`Đã ${isDisabled ? "kích hoạt lại" : "tạm ngưng"} ${counter.name}.`);
+                                            }}
+                                        >
+                                            {isDisabled ? "Kích hoạt" : "Tạm ngưng"}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                </>
+            )}
 
             {!isCashier() && (<section className="card mb-6">
                 <h2 className="card-title mb-4">Thông tin mở ca</h2>
@@ -387,6 +500,7 @@ export default function ShiftsPage() {
                             </label>
                             <select
                                 id="shift-branch"
+                                disabled={!!scopedBranch()}
                                 className="form-input form-select"
                                 value={openingForm.branchId}
                                 onChange={(event) => setOpeningForm((current) => ({
@@ -431,7 +545,7 @@ export default function ShiftsPage() {
                             <input
                                 id="shift-staff"
                                 className="form-input"
-                                value="Nguyễn An"
+                                value={sessionUser().name}
                                 readOnly
                             />
                         </div>

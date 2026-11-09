@@ -1,6 +1,8 @@
 import { useState, Fragment } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../../components/common/useToast";
+import { can, canVisit, isManager } from "../../utils/auth";
+import type { Action, Role } from "../../utils/auth";
 
 interface PermissionRow {
   id: string;
@@ -12,120 +14,96 @@ interface PermissionRow {
   managerNote?: string;
 }
 
-const defaultPermissions: { section: string; rows: PermissionRow[] }[] = [
+type PermissionCheck = { route?: string; action?: Action };
+interface PermissionSource { id: string; name: string; check: PermissionCheck; managerNote?: string; }
+
+/** Mỗi dòng được dẫn xuất từ canVisit()/can() trong utils/auth.ts nên bảng luôn khớp quyền thực tế. */
+const permissionSources: { section: string; rows: PermissionSource[] }[] = [
   {
-    section: "1. Phân Hệ Bán Hàng POS & Thu Ngân",
+    section: "1. Tài Khoản & Nhân Sự",
     rows: [
-      {
-        id: "pos_shift",
-        name: "Mở ca / Đóng ca bán hàng & Khởi tạo quỹ tiền mặt",
-        owner: true,
-        manager: true,
-        cashier: true,
-        warehouse: false,
-      },
-      {
-        id: "pos_order",
-        name: "Thực hiện bán hàng POS, chọn món, chọn Đường/Đá/Topping",
-        owner: true,
-        manager: true,
-        cashier: true,
-        warehouse: false,
-      },
-      {
-        id: "pos_offline",
-        name: "Chế độ bán Offline khi mất mạng (Lưu LocalStorage)",
-        owner: true,
-        manager: true,
-        cashier: true,
-        warehouse: false,
-      },
-      {
-        id: "pos_discount",
-        name: "Áp dụng chiết khấu đặc biệt > 15% hoặc hủy đơn sau in bill",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: false,
-      },
-      {
-        id: "pos_lock_item",
-        name: "Tạm khóa món trên Menu khi chi nhánh hết nguyên liệu",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: false,
-      },
+      { id: "user_manage", name: "Quản lý tài khoản & phân công nhân viên tại chi nhánh", check: { action: "user.manageBranch" }, managerNote: "(Chỉ CN mình)" },
+      { id: "role_assign", name: "Phân quyền nhân viên", check: { action: "role.assign" }, managerNote: "(Chỉ Thu ngân / Kho)" },
+      { id: "profile", name: "Xem, cập nhật hồ sơ cá nhân", check: { route: "/profile" } },
     ],
   },
   {
-    section: "2. Quản Lý Kho & Nguyên Vật Liệu (FEFO)",
+    section: "2. Chi Nhánh, Quầy POS & Ca Bán Hàng",
     rows: [
-      {
-        id: "wh_batch",
-        name: "Nhập nguyên liệu theo Lô & Hạn sử dụng (Batch / EXP)",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: true,
-      },
-      {
-        id: "wh_blind_audit",
-        name: "Thực hiện kiểm kê mù (Blind Count) định kỳ",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: true,
-      },
-      {
-        id: "wh_damage_approval",
-        name: "Duyệt biên bản hủy hỏng, hao hụt nguyên liệu cận date",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: false,
-      },
-      {
-        id: "wh_transfer",
-        name: "Đề xuất và xác nhận nhận điều chuyển kho cấp cứu giữa các CN",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: true,
-      },
+      { id: "pos_use", name: "Sử dụng quầy POS được phân công, thu tiền tại POS", check: { action: "pos.use" } },
+      { id: "pos_shift", name: "Mở ca, đóng ca, chốt tiền & xem thống kê tiền đóng ca", check: { route: "/sales/shifts" } },
+      { id: "branch_manage", name: "Thêm, sửa, ngừng hoạt động chi nhánh", check: { route: "/inventory/branches" } },
     ],
   },
   {
-    section: "3. Báo Cáo Tài Chính & Cấu Hình Hệ Thống",
+    section: "3. Thực Đơn",
     rows: [
-      {
-        id: "report_revenue",
-        name: "Xem Báo cáo Doanh thu & Báo cáo Hòa vốn 12 Chi nhánh",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: false,
-        managerNote: "(Chỉ xem CN mình)",
-      },
-      {
-        id: "report_pnl",
-        name: "Xem Báo cáo P&L tổng thể toàn chuỗi & Cảnh báo trượt 4 tuần",
-        owner: true,
-        manager: false,
-        cashier: false,
-        warehouse: false,
-      },
-      {
-        id: "sys_config",
-        name: "Cấu hình tham số hệ thống, máy in K80, kết nối mạng & đồng bộ",
-        owner: true,
-        manager: true,
-        cashier: false,
-        warehouse: false,
-      },
+      { id: "menu_view", name: "Xem thực đơn, sản phẩm, giá bán", check: { route: "/inventory/products" } },
+      { id: "menu_edit", name: "Tạo, chỉnh sửa sản phẩm, size, topping, công thức", check: { action: "product.manage" } },
+      { id: "menu_lock", name: "Khóa / mở bán món tại chi nhánh", check: { action: "product.lockAtBranch" }, managerNote: "(Chỉ CN mình)" },
+      { id: "menu_shortage", name: "Báo món hết nguyên liệu cho quản lý", check: { action: "order.reportShortage" } },
+    ],
+  },
+  {
+    section: "4. Kho & Nguyên Liệu",
+    rows: [
+      { id: "wh_view", name: "Xem tồn kho, lô hàng, hạn sử dụng & cảnh báo hết hàng / cận hạn", check: { route: "/inventory/ingredients" } },
+      { id: "wh_catalog", name: "Quản lý danh mục nguyên liệu & ngưỡng tồn an toàn", check: { action: "ingredient.manage" } },
+      { id: "wh_po", name: "Lập phiếu mua nguyên liệu", check: { action: "purchase.create" } },
+      { id: "wh_receive", name: "Nhận nguyên liệu theo phiếu nhập", check: { action: "purchase.receive" } },
+      { id: "wh_batch", name: "Tạo mẻ sơ chế, ghi nhận thành phẩm", check: { action: "batch.manage" } },
+      { id: "wh_transfer", name: "Xuất / nhận nguyên liệu kho → chi nhánh", check: { action: "transfer.manage" } },
+      { id: "wh_count", name: "Kiểm kê, ghi nhận chênh lệch", check: { action: "stock.count" } },
+      { id: "wh_approve", name: "Phê duyệt điều chỉnh tồn kho", check: { action: "stock.approveAdjustment" }, managerNote: "(Chỉ CN mình)" },
+      { id: "wh_shift_supply", name: "Lập & phê duyệt yêu cầu cấp nguyên liệu đầu ca", check: { route: "/distribution/planning" } },
+    ],
+  },
+  {
+    section: "5. Đơn Hàng & Thanh Toán",
+    rows: [
+      { id: "order_create", name: "Tạo đơn hàng tại quầy POS", check: { action: "order.create" } },
+      { id: "order_list", name: "Xem danh sách đơn hàng", check: { route: "/sales" }, managerNote: "(Chỉ CN mình)" },
+      { id: "order_queue", name: "Xem hàng đợi pha chế, cập nhật trạng thái & bàn giao", check: { route: "/sales/preparation" } },
+      { id: "order_complaint", name: "Tiếp nhận, xử lý khiếu nại", check: { action: "complaint.handle" } },
+      { id: "pay_refund", name: "Duyệt, xử lý hoàn tiền", check: { action: "payment.refundReview" } },
+      { id: "pay_view", name: "Xem giao dịch, đối soát thanh toán", check: { route: "/invoices" }, managerNote: "(Chỉ CN mình)" },
+    ],
+  },
+  {
+    section: "6. Ưu Đãi",
+    rows: [
+      { id: "promo_view", name: "Xem khuyến mãi đang áp dụng", check: { route: "/marketing/promotions" } },
+      { id: "promo_manage", name: "Quản lý chương trình khuyến mãi", check: { action: "promotion.manage" } },
+    ],
+  },
+  {
+    section: "7. Báo Cáo & Cấu Hình",
+    rows: [
+      { id: "report_revenue", name: "Xem báo cáo doanh thu", check: { route: "/reports/sales-report" }, managerNote: "(Chỉ CN mình)" },
+      { id: "report_inventory", name: "Xem báo cáo tồn kho, hao hụt", check: { route: "/reports/inventory-report" } },
+      { id: "report_pnl", name: "Xem báo cáo hiệu quả sản phẩm / chi nhánh (P&L)", check: { route: "/reports/profit-loss" }, managerNote: "(Chỉ CN mình)" },
+      { id: "sys_config", name: "Cấu hình tham số hệ thống, đồng bộ & offline", check: { route: "/settings/general" } },
     ],
   },
 ];
+
+function allowed(check: PermissionCheck, role: Role): boolean {
+  if (check.action) return can(check.action, role);
+  return check.route ? canVisit(check.route, role) : false;
+}
+
+const defaultPermissions: { section: string; rows: PermissionRow[] }[] = permissionSources.map((sec) => ({
+  section: sec.section,
+  rows: sec.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    owner: allowed(row.check, "owner"),
+    manager: allowed(row.check, "manager"),
+    cashier: allowed(row.check, "cashier"),
+    warehouse: allowed(row.check, "warehouse"),
+    managerNote: allowed(row.check, "manager") ? row.managerNote : undefined,
+  })),
+}));
 
 export default function RolesPage() {
   const toast = useToast();
@@ -136,6 +114,10 @@ export default function RolesPage() {
     rowIdx: number,
     role: "manager" | "cashier" | "warehouse"
   ) {
+    if (isManager() && (role === "manager" || !permissions[sectionIdx].rows[rowIdx].manager)) {
+      toast.warning("Quản lý chi nhánh chỉ phân quyền cho Thu ngân / Nhân viên kho trong phạm vi quyền của mình.");
+      return;
+    }
     setPermissions((prev) => {
       const cloned = JSON.parse(JSON.stringify(prev));
       cloned[sectionIdx].rows[rowIdx][role] = !cloned[sectionIdx].rows[rowIdx][role];
@@ -305,8 +287,9 @@ export default function RolesPage() {
                           <input
                             type="checkbox"
                             checked={row.manager}
+                            disabled={isManager()}
                             onChange={() => togglePermission(secIdx, rowIdx, "manager")}
-                            className="accent-[#22B573] cursor-pointer"
+                            className="accent-[#22B573] cursor-pointer disabled:cursor-not-allowed"
                             aria-label={`Quyền ${row.name} cho Quản lý chi nhánh`}
                           />
                           {row.managerNote && (
@@ -319,8 +302,9 @@ export default function RolesPage() {
                           <input
                             type="checkbox"
                             checked={row.cashier}
+                            disabled={isManager() && !row.manager}
                             onChange={() => togglePermission(secIdx, rowIdx, "cashier")}
-                            className="accent-[#22B573] cursor-pointer"
+                            className="accent-[#22B573] cursor-pointer disabled:cursor-not-allowed"
                             aria-label={`Quyền ${row.name} cho Thu ngân`}
                           />
                         </td>
@@ -328,8 +312,9 @@ export default function RolesPage() {
                           <input
                             type="checkbox"
                             checked={row.warehouse}
+                            disabled={isManager() && !row.manager}
                             onChange={() => togglePermission(secIdx, rowIdx, "warehouse")}
-                            className="accent-[#22B573] cursor-pointer"
+                            className="accent-[#22B573] cursor-pointer disabled:cursor-not-allowed"
                             aria-label={`Quyền ${row.name} cho Nhân viên kho`}
                           />
                         </td>

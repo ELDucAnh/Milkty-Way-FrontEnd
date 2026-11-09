@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { can, homePath } from "../../utils/auth";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
@@ -65,9 +66,9 @@ function ReasonMultiSelect({
 
   const selectedList = selected
     ? selected
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
     : [];
 
   useEffect(() => {
@@ -110,11 +111,10 @@ function ReasonMultiSelect({
       <button
         type="button"
         aria-label={`Chọn nguyên nhân hao hụt ${ingredientName ?? ""}`}
-        className={`form-input flex items-center justify-between gap-1.5 w-full text-left cursor-pointer min-h-[38px] py-1 px-2.5 bg-[var(--surface)] transition-all ${
-          isOpen
+        className={`form-input flex items-center justify-between gap-1.5 w-full text-left cursor-pointer min-h-[38px] py-1 px-2.5 bg-[var(--surface)] transition-all ${isOpen
             ? "border-[var(--primary)] ring-1 ring-[var(--primary)]"
             : "hover:border-[var(--primary)]"
-        }`}
+          }`}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <div className="flex items-center gap-1 flex-1 overflow-hidden">
@@ -148,9 +148,8 @@ function ReasonMultiSelect({
           fill="none"
           stroke="currentColor"
           strokeWidth="2.5"
-          className={`shrink-0 text-[var(--muted)] transition-transform duration-150 ${
-            isOpen ? "rotate-180 text-[var(--primary)]" : ""
-          }`}
+          className={`shrink-0 text-[var(--muted)] transition-transform duration-150 ${isOpen ? "rotate-180 text-[var(--primary)]" : ""
+            }`}
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -159,9 +158,8 @@ function ReasonMultiSelect({
       {/* Popover Dropdown Checkboxes */}
       {isOpen && (
         <div
-          className={`absolute right-0 w-64 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl z-50 p-2.5 animate-fadeIn ${
-            openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
-          }`}
+          className={`absolute right-0 w-64 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl z-50 p-2.5 animate-fadeIn ${openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
+            }`}
         >
           {/* Header */}
           <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-[var(--border)] text-xs">
@@ -186,11 +184,10 @@ function ReasonMultiSelect({
               return (
                 <label
                   key={option}
-                  className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
-                    isChecked
+                  className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${isChecked
                       ? "bg-[rgba(34,181,115,0.08)] text-[var(--text)] font-semibold"
                       : "hover:bg-[var(--background)] text-[var(--text)]"
-                  }`}
+                    }`}
                 >
                   <input
                     type="checkbox"
@@ -330,7 +327,7 @@ export default function ShiftReconciliationPage() {
             line.waste,
           ) - line.counted,
         ) *
-          line.unitCost,
+        line.unitCost,
       0,
     );
 
@@ -395,10 +392,9 @@ export default function ShiftReconciliationPage() {
         existingRecord.status === "approved")
     ) {
       setError(
-        `Ca này đã có biên bản ${
-          existingRecord.status === "approved"
-            ? "đã duyệt"
-            : "đang chờ duyệt"
+        `Ca này đã có biên bản ${existingRecord.status === "approved"
+          ? "đã duyệt"
+          : "đang chờ duyệt"
         }. Vui lòng kiểm tra lịch sử trước khi tạo thêm.`,
       );
       return;
@@ -430,8 +426,8 @@ export default function ShiftReconciliationPage() {
       ...current,
       reconciliations: existingRecord
         ? current.reconciliations.map((item) =>
-            item.id === existingRecord.id ? record : item,
-          )
+          item.id === existingRecord.id ? record : item,
+        )
         : [record, ...current.reconciliations],
     }));
     setError("");
@@ -491,10 +487,10 @@ export default function ShiftReconciliationPage() {
         reconciliations: current.reconciliations.map((item) =>
           item.id === record.id
             ? {
-                ...item,
-                status: "approved",
-                approver: approver.trim() || "Quản lý cửa hàng",
-              }
+              ...item,
+              status: "approved",
+              approver: approver.trim() || "Quản lý cửa hàng",
+            }
             : item,
         ),
 
@@ -514,7 +510,7 @@ export default function ShiftReconciliationPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/stores/ingredients">Vận hành tại quầy</Link>
             <span className="sep">/</span>
@@ -901,7 +897,7 @@ export default function ShiftReconciliationPage() {
                               reconciliations: current.reconciliations.map(
                                 (item) =>
                                   item.id === record.id &&
-                                  item.status === "draft"
+                                    item.status === "draft"
                                     ? { ...item, status: "pending" }
                                     : item,
                               ),
@@ -911,7 +907,7 @@ export default function ShiftReconciliationPage() {
                           Gửi đối soát
                         </button>
                       )}
-                      {record.status === "pending" && (
+                      {record.status === "pending" && can("stock.approveAdjustment") && (
                         <button
                           className="btn btn-primary"
                           onClick={() => approve(record)}

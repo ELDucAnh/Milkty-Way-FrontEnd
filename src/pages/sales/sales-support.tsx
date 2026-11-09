@@ -1,4 +1,4 @@
-import { isCashier, cashierCanVisit } from "../../utils/auth";
+import { canVisit, homePath } from "../../utils/auth";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { BadgeVariant } from "../../components/common/Badge";
@@ -146,12 +146,12 @@ export function SalesPageHeader({
         <div className="page-header">
             <div>
                 <nav className="breadcrumb" aria-label="Đường dẫn trang">
-                    <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
+                    <Link to={homePath()}>Trang chủ</Link>
                     <span className="sep" aria-hidden="true">/</span>
 
                     {parent && parent.label && (
                         <>
-                            {isCashier() && !cashierCanVisit(parent.to) ? <span>{parent.label}</span> : <Link to={parent.to}>{parent.label}</Link>}
+                            {!canVisit(parent.to) ? <span>{parent.label}</span> : <Link to={parent.to}>{parent.label}</Link>}
                             <span className="sep" aria-hidden="true">/</span>
                         </>
                     )}

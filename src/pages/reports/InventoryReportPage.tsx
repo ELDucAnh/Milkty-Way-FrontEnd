@@ -3,167 +3,23 @@ import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
-
-interface ExpiringLot {
-  batchId: string;
-  name: string;
-  warehouse: string;
-  quantity: string;
-  expDate: string;
-  remainingText: string;
-  remainingTone: "danger" | "warning";
-  actionNote: string;
-  actionButtonText: string;
-}
-
-const mockExpiringLots: ExpiringLot[] = [
-  {
-    batchId: "LOT-ST-20261025",
-    name: "Sữa tươi thanh trùng 100% Vinamilk (Hộp 1L)",
-    warehouse: "CN01 — Q.1",
-    quantity: "24 Hộp",
-    expDate: "30/10/2026",
-    remainingText: "Còn 2 ngày",
-    remainingTone: "danger",
-    actionNote: "Ưu tiên pha chế các món Sữa tươi / Chuyển kho bán chạy",
-    actionButtonText: "Xuất Ngay",
-  },
-  {
-    batchId: "LOT-TC-2810-CA1",
-    name: "Trân châu đen nấu đường nâu (Nồi 5kg)",
-    warehouse: "CN05 — Q.10",
-    quantity: "3.5 kg",
-    expDate: "28/10/2026 22:00",
-    remainingText: "Còn 3 tiếng (Nấu quá 4h)",
-    remainingTone: "danger",
-    actionNote: "Nếu quá 22:00 phải hủy ghi nhận hao hụt quầy bar",
-    actionButtonText: "Kiểm Tra",
-  },
-  {
-    batchId: "LOT-KP-20261022",
-    name: "Kem phô mai Cheese Foam đóng hộp 2kg",
-    warehouse: "CN06 — Bình Thạnh",
-    quantity: "6 Hộp",
-    expDate: "02/11/2026",
-    remainingText: "Còn 5 ngày",
-    remainingTone: "warning",
-    actionNote: "Bảo quản lạnh 2-4°C, đánh bông dùng trong tuần",
-    actionButtonText: "Đạt Nhiệt Độ",
-  },
-  {
-    batchId: "LOT-CD-20261024",
-    name: "Chanh dây tươi Đà Lạt GAP (Thùng 10kg)",
-    warehouse: "CN02 — Q.3",
-    quantity: "2 Thùng",
-    expDate: "03/11/2026",
-    remainingText: "Còn 6 ngày",
-    remainingTone: "warning",
-    actionNote: "Vắt lấy cốt chanh cấp đông bảo quản dài ngày",
-    actionButtonText: "Sơ Chế",
-  },
-];
-
-interface StockItem {
-  sku: string;
-  name: string;
-  warehouse: string;
-  category: string;
-  categoryTone: "success" | "info" | "warning";
-  unit: string;
-  stockActual: number;
-  stockMin: number;
-  costPrice: number;
-  totalValue: number;
-  status: string;
-  statusTone: "success" | "warning" | "danger";
-}
-
-const mockStockItems: StockItem[] = [
-  {
-    sku: "NL-TRA-01",
-    name: "Trà Đen Lộc Phát Thượng Hạng",
-    warehouse: "Kho Tổng — Bình Tân",
-    category: "Trà lá",
-    categoryTone: "success",
-    unit: "Kg",
-    stockActual: 145.0,
-    stockMin: 50.0,
-    costPrice: 180000,
-    totalValue: 26100000,
-    status: "Dồi dào",
-    statusTone: "success",
-  },
-  {
-    sku: "NL-BOT-02",
-    name: "Bột Béo Pha Trà Sữa Indo B-One (Bao 25kg)",
-    warehouse: "CN01 — Q.1",
-    category: "Bột sữa",
-    categoryTone: "info",
-    unit: "Bao",
-    stockActual: 38,
-    stockMin: 15,
-    costPrice: 1450000,
-    totalValue: 55100000,
-    status: "Dồi dào",
-    statusTone: "success",
-  },
-  {
-    sku: "NL-TOP-03",
-    name: "Trân Châu Đen Gia Thịnh Phát (Thùng 18kg)",
-    warehouse: "CN05 — Q.10",
-    category: "Topping",
-    categoryTone: "warning",
-    unit: "Thùng",
-    stockActual: 8,
-    stockMin: 12,
-    costPrice: 580000,
-    totalValue: 4640000,
-    status: "Sắp hết",
-    statusTone: "warning",
-  },
-  {
-    sku: "NL-SUA-04",
-    name: "Sữa Tươi Thanh Trùng Vinamilk 100% (Thùng 12L)",
-    warehouse: "CN06 — Bình Thạnh",
-    category: "Bột sữa",
-    categoryTone: "info",
-    unit: "Thùng",
-    stockActual: 6,
-    stockMin: 10,
-    costPrice: 420000,
-    totalValue: 2520000,
-    status: "Sắp hết",
-    statusTone: "warning",
-  },
-];
+import { canVisit, homePath, scopedBranch } from "../../utils/auth";
+import { useDemoState } from "../shared/useDemoState";
+import { buildStockSummary } from "../shared/stock-summary";
 
 export default function InventoryReportPage() {
   const toast = useToast();
-  const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const [data] = useDemoState();
+  const branchScope = scopedBranch();
+  const [selectedWarehouse, setSelectedWarehouse] = useState(branchScope ?? "");
 
-  const filteredExpiringLots = useMemo(() => {
-    return mockExpiringLots.filter(
-      (lot) => !selectedWarehouse || lot.warehouse.includes(selectedWarehouse)
-    );
-  }, [selectedWarehouse]);
-
-  const filteredStockItems = useMemo(() => {
-    return mockStockItems.filter(
-      (item) => !selectedWarehouse || item.warehouse.includes(selectedWarehouse)
-    );
-  }, [selectedWarehouse]);
-
-  const totalValuation = useMemo(() => {
-    return filteredStockItems.reduce((sum, item) => sum + item.totalValue, 0);
-  }, [filteredStockItems]);
-
-  const estimatedRevenue = useMemo(() => {
-    return Math.round(totalValuation * 2.65);
-  }, [totalValuation]);
-
-  const lowStockCount = useMemo(() => {
-    return filteredStockItems.filter((item) => item.stockActual < item.stockMin).length;
-  }, [filteredStockItems]);
+  // Nguồn dữ liệu duy nhất: DemoState (cùng kho với trang kiểm kê, nhập kho, cấp phát, POS).
+  const summary = useMemo(() => buildStockSummary(data, selectedWarehouse), [data, selectedWarehouse]);
+  const filteredExpiringLots = summary.expiringLots;
+  const filteredStockItems = summary.stockItems;
+  const totalValuation = summary.totalValue;
+  const estimatedRevenue = Math.round(totalValuation * 2.65);
+  const lowStockCount = summary.lowStockCount;
 
   return (
     <div className="space-y-6">
@@ -171,9 +27,9 @@ export default function InventoryReportPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/reports">Báo cáo</Link>
+            {canVisit("/reports/sales-report") ? <Link to="/reports">Báo cáo</Link> : <span>Báo cáo</span>}
             <span className="sep">/</span>
             <span className="current">Báo cáo tồn kho</span>
           </nav>
@@ -185,16 +41,18 @@ export default function InventoryReportPage() {
         <div className="flex gap-2.5 flex-wrap items-center">
           <select
             className="form-input form-select text-xs w-auto"
+            disabled={!!branchScope}
             value={selectedWarehouse}
             onChange={(e) => setSelectedWarehouse(e.target.value)}
           >
-            <option value="">Tất cả 12 Kho Chi Nhánh &amp; Kho Tổng</option>
-            <option value="Kho Tổng">Kho Tổng Trung Tâm (Bình Tân)</option>
-            <option value="CN01">Kho CN01 — Q.1 (Nguyễn Huệ)</option>
-            <option value="CN02">Kho CN02 — Q.3 (Võ Văn Tần)</option>
-            <option value="CN05">Kho CN05 — Q.10 (Sư Vạn Hạnh)</option>
-            <option value="CN06">Kho CN06 — Bình Thạnh (D2)</option>
-            <option value="CN07">Kho CN07 — Gò Vấp (Phan Văn Trị)</option>
+            <option value="">Tất cả kho &amp; chi nhánh</option>
+            <option value="Kho Tổng">Kho Tổng Trung Tâm</option>
+            <option value="Khu chế biến">Khu chế biến tập trung</option>
+            {data.stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                Quầy {store.code} — {store.name}
+              </option>
+            ))}
           </select>
           <button
             type="button"
@@ -262,7 +120,7 @@ export default function InventoryReportPage() {
             label="Lô Cận Date 7 Ngày (FEFO)"
             value={`${filteredExpiringLots.length} Lô hàng`}
             valueClassName="text-[var(--danger)]"
-            subLabel="Sữa tươi, trân châu, trái cây"
+            subLabel="Gồm cả lô đã quá hạn cần cách ly"
             tone="danger"
             icon={
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -310,7 +168,7 @@ export default function InventoryReportPage() {
                 ) : (
                   filteredExpiringLots.map((lot) => (
                     <tr
-                      key={lot.batchId}
+                      key={lot.id}
                       className={lot.remainingTone === "danger" ? "bg-red-50/50" : ""}
                     >
                       <td className="font-bold text-red-600">{lot.batchId}</td>
@@ -327,9 +185,8 @@ export default function InventoryReportPage() {
                       <td>
                         <button
                           type="button"
-                          className={`btn btn-sm ${
-                            lot.remainingTone === "danger" ? "btn-primary" : "btn-secondary"
-                          }`}
+                          className={`btn btn-sm ${lot.remainingTone === "danger" ? "btn-primary" : "btn-secondary"
+                            }`}
                           onClick={() =>
                             toast.info(`Thực hiện: ${lot.actionButtonText} cho lô ${lot.batchId}`, {
                               title: "FEFO",
@@ -384,7 +241,7 @@ export default function InventoryReportPage() {
                   </tr>
                 ) : (
                   filteredStockItems.map((item) => (
-                    <tr key={item.sku}>
+                    <tr key={item.id}>
                       <td className="font-bold">{item.sku}</td>
                       <td className="font-semibold text-[var(--text)]">{item.name}</td>
                       <td>

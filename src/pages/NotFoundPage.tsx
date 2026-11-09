@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { homePath } from "../utils/auth";
 
 export default function NotFoundPage() {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ export default function NotFoundPage() {
             Đường dẫn bạn yêu cầu không tồn tại hoặc đã được thay đổi trong hệ thống điều hành.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
-            <Link to="/dashboard" className="btn btn-primary btn-lg">
+            <Link to={homePath()} className="btn btn-primary btn-lg">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7" />
                 <rect x="14" y="3" width="7" height="7" />

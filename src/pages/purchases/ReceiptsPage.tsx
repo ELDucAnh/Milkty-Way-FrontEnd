@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { canVisit, homePath } from "../../utils/auth";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
@@ -86,7 +87,7 @@ export default function ReceiptsPage() {
 
     return (
         <div>
-            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to="/dashboard">Trang chủ</Link><span className="sep">/</span><Link to="/purchases">Mua hàng</Link><span className="sep">/</span><span className="current">Phiếu nhận hàng</span></nav><h1 className="page-title">Phiếu nhận hàng / nhập kho</h1><p className="page-subtitle">Kiểm nhận đơn giao tại kho tổng theo lượng thực nhận, lô, hạn dùng và chất lượng.</p></div><span className="text-xs text-[var(--muted)]">Không cộng tồn trước khi xác nhận</span></div>
+            <div className="page-header"><div><nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to={homePath()}>Trang chủ</Link><span className="sep">/</span>{canVisit("/purchases") ? <Link to="/purchases">Mua hàng</Link> : <span>Mua hàng</span>}<span className="sep">/</span><span className="current">Phiếu nhận hàng</span></nav><h1 className="page-title">Phiếu nhận hàng / nhập kho</h1><p className="page-subtitle">Kiểm nhận đơn giao tại kho tổng theo lượng thực nhận, lô, hạn dùng và chất lượng.</p></div><span className="text-xs text-[var(--muted)]">Không cộng tồn trước khi xác nhận</span></div>
             <section className="mb-6"><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><StatCard label="Đơn còn hàng chờ nhận" value={String(pendingReceipts)} subLabel="Nhận tập trung tại kho tổng" tone="info" icon={<KpiIcon kind="receipt" />} /><StatCard label="Đơn nhận một phần" value={String(partialOrders)} subLabel="Còn lượng chưa giao" tone="warning" icon={<KpiIcon kind="clock" />} /><StatCard label="Lô cách ly" value={String(quarantineLots)} subLabel="Không cộng tồn khả dụng" tone="danger" icon={<KpiIcon kind="warning" />} /><StatCard label="Lô đã xác nhận" value={String(data.lots.filter((lot) => lot.location === "central" && lot.quality === "pass").length)} subLabel="Tại kho tổng" tone="success" icon={<KpiIcon kind="box" />} /></div></section>
             <section className="card mb-6 border-l-4 border-[var(--warning)]"><h2 className="text-sm font-bold mb-1">Kiểm nhận trước khi nhập khả dụng</h2><p className="text-sm text-[var(--muted)]">Hàng đạt mới được thêm vào lô khả dụng tại kho tổng. Hàng không đạt được ghi nhận nhưng cách ly; thiếu/0 nhận cần lý do.</p></section>
 

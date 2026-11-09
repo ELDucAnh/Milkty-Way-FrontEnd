@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { canVisit, homePath } from "../../utils/auth";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
@@ -414,9 +415,13 @@ export default function BatchesPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/production/recipes">Sản xuất tập trung</Link>
+            {canVisit("/production/recipes") ? (
+              <Link to="/production/recipes">Sản xuất tập trung</Link>
+            ) : (
+              <span>Sản xuất tập trung</span>
+            )}
             <span className="sep">/</span>
             <span className="current">Mẻ chế biến</span>
           </nav>

@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { canVisit, homePath } from "../../utils/auth";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
@@ -365,9 +366,13 @@ export default function StockTransfersPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/distribution/planning">Kế hoạch cấp phát</Link>
+            {canVisit("/distribution/planning") ? (
+              <Link to="/distribution/planning">Kế hoạch cấp phát</Link>
+            ) : (
+              <span>Kế hoạch cấp phát</span>
+            )}
             <span className="sep">/</span>
             <span className="current">Phiếu cấp phát</span>
           </nav>

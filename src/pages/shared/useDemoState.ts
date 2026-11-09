@@ -42,6 +42,13 @@ function loadDemoState(): DemoState {
     for (const field of fields) {
       if (!Array.isArray(saved[field])) {
         saved[field] = INITIAL_DEMO_STATE[field];
+      } else if (field === "lots" || field === "counts") {
+        const existing = saved[field] as { id: string }[];
+        const seeds = INITIAL_DEMO_STATE[field] as { id: string }[];
+        const missing = seeds.filter((seed) => !existing.some((item) => item.id === seed.id));
+        if (missing.length > 0) {
+          saved[field] = [...existing, ...missing];
+        }
       }
     }
 

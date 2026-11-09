@@ -1,10 +1,11 @@
-import { isCashier, counterBranch } from "../../utils/auth";
+import { can, homePath, isCashier, isManager, isWarehouse, managerBranch, sessionUser } from "../../utils/auth";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import StatCard from "../../components/common/StatCard";
+import { useToast } from "../../components/common/useToast";
 import KpiIcon from "../shared/KpiIcon";
 import { formatCurrency } from "../shared/formatters";
 import { getIngredient } from "../shared/business-demo";
@@ -37,7 +38,8 @@ const STATUS_VARIANT = {
 
 export default function ProductsPage() {
   const navigate = useNavigate();
-  const [data] = useDemoState();
+  const toast = useToast();
+  const [data, setData] = useDemoState();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all");
@@ -106,13 +108,52 @@ export default function ProductsPage() {
       .map((variant) => `${variant.size} ${formatCurrency(variant.price)}`)
       .join(" · ");
   }
+  const canManageProducts = !isCashier() && !isWarehouse() && can("product.manage");
+  const canLockAtBranch = isManager() && can("product.lockAtBranch");
+  const canReportShortage = (isCashier() || isWarehouse()) && can("order.reportShortage");
+  function isLockable(product: Product) {
+    return product.status === "active" || product.status === "branch-locked";
+  }
+  /** Quản lý chi nhánh chỉ thấy trạng thái bán tại chi nhánh của mình. */
+  function branchLabel(product: Product) {
+    if (!isManager()) {
+      return product.status === "branch-locked"
+        ? `${product.lockedStoreIds.join(", ")} tạm khóa`
+        : STATUS_LABEL[product.status];
+    }
+    if (product.lockedStoreIds.includes(managerBranch)) return `${managerBranch} tạm khóa`;
+    return product.status === "branch-locked" ? STATUS_LABEL.active : STATUS_LABEL[product.status];
+  }
+  function branchVariant(product: Product) {
+    if (isManager() && product.status === "branch-locked" && !product.lockedStoreIds.includes(managerBranch)) {
+      return STATUS_VARIANT.active;
+    }
+    return STATUS_VARIANT[product.status];
+  }
+  function toggleBranchLock(product: Product) {
+    if (!canLockAtBranch || !isLockable(product)) return;
+    const locked = product.lockedStoreIds.includes(managerBranch);
+    const lockedStoreIds = locked
+      ? product.lockedStoreIds.filter((id) => id !== managerBranch)
+      : [...product.lockedStoreIds, managerBranch];
+    const updated: Product = {
+      ...product,
+      lockedStoreIds,
+      status: lockedStoreIds.length ? "branch-locked" : "active",
+    };
+    setData((current) => ({
+      ...current,
+      products: current.products.map((item) => (item.id === product.id ? updated : item)),
+    }));
+    setSelected(updated);
+  }
 
   return (
     <div>
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span>Menu &amp; nguyên liệu</span>
             <span className="sep">/</span>
@@ -248,7 +289,7 @@ export default function ProductsPage() {
               Giá niêm yết, COGS theo size và tình trạng kinh doanh.
             </p>
           </div>
-          {!isCashier() && (<button
+          {canManageProducts && (<button
             className="btn btn-primary"
             onClick={() => navigate("/inventory/products/new")}
           >
@@ -290,7 +331,7 @@ export default function ProductsPage() {
                     className="border-t border-[var(--border)] hover:bg-[var(--background)]"
                   >
                     <td className="px-4 py-3">
-                      {isCashier() ? <span><strong>{product.code}</strong><br />{product.name}</span> : <button
+                      {!canManageProducts ? <span><strong>{product.code}</strong><br />{product.name}</span> : <button
                         className="text-left"
                         onClick={() =>
                           navigate(`/inventory/products/${product.id}`)
@@ -317,23 +358,21 @@ export default function ProductsPage() {
                         (value) => value !== null,
                       )
                         ? Object.entries(product.cogsBySize)
-                            .map(([size, value]) =>
-                              value === null
-                                ? null
-                                : `${size} ${formatCurrency(value)}`,
-                            )
-                            .filter(Boolean)
-                            .join(" · ")
+                          .map(([size, value]) =>
+                            value === null
+                              ? null
+                              : `${size} ${formatCurrency(value)}`,
+                          )
+                          .filter(Boolean)
+                          .join(" · ")
                         : "Chưa có định mức"}
                     </td>}
                     <td className="px-4 py-3">
-                      {isCashier() ? <Badge variant={STATUS_VARIANT[product.status]}>{STATUS_LABEL[product.status]}</Badge> : <button onClick={() => setSelected(product)}>
-                        <Badge variant={STATUS_VARIANT[product.status]}>
-                          {product.status === "branch-locked"
-                            ? `${product.lockedStoreIds.join(", ")} tạm khóa`
-                            : STATUS_LABEL[product.status]}
+                      <button onClick={() => setSelected(product)}>
+                        <Badge variant={branchVariant(product)}>
+                          {branchLabel(product)}
                         </Badge>
-                      </button>}
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -413,7 +452,31 @@ export default function ProductsPage() {
               )}
             </div>
             <p className="text-sm text-[var(--muted)]">{selected.note}</p>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {canReportShortage && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    toast.warning(
+                      `Đã gửi cảnh báo món "${selected.name}" hết nguyên liệu cho Quản lý!`,
+                      { title: "Báo Hết Nguyên Liệu" }
+                    );
+                    setSelected(null);
+                  }}
+                >
+                  Báo món hết nguyên liệu cho quản lý
+                </button>
+              )}
+              {canLockAtBranch && isLockable(selected) && (
+                <button
+                  className={selected.lockedStoreIds.includes(managerBranch) ? "btn btn-primary" : "btn btn-secondary"}
+                  onClick={() => toggleBranchLock(selected)}
+                >
+                  {selected.lockedStoreIds.includes(managerBranch)
+                    ? `Mở bán lại tại ${managerBranch}`
+                    : `Khóa bán tại ${managerBranch}`}
+                </button>
+              )}
               <button
                 className="btn btn-secondary"
                 onClick={() => setSelected(null)}

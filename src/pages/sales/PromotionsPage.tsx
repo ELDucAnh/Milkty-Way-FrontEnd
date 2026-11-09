@@ -1,4 +1,4 @@
-import { isCashier, counterBranch } from "../../utils/auth";
+import { can, scopedBranch } from "../../utils/auth";
 import { useRef, useState } from "react";
 import type { FormEvent, InputHTMLAttributes } from "react";
 import Badge from "../../components/common/Badge";
@@ -113,7 +113,7 @@ export const initialPromotions: readonly Promotion[] = [
         code: "KM-001",
         name: "Mua 2 ly tặng trân châu",
         version: 1,
-        branchIds: ["CN01", "CN02"],
+        branchIds: ["CN01", "CN02", "CN05"],
         branchMode: "include",
         channel: "online",
         shift: "afternoon",
@@ -274,7 +274,15 @@ export default function PromotionsPage() {
     }
 
     const query = filters.search.trim().toLocaleLowerCase("vi-VN");
-    const visibleRows = rows.filter(row => !isCashier() || (row.status === "active" && row.branchIds.includes(counterBranch))).filter((row) =>
+    const visibleRows = rows.filter(row => {
+        if (!can("promotion.manage")) {
+            const branch = scopedBranch();
+            if (!branch) return row.status === "active";
+            const applies = row.branchMode === "exclude" ? !row.branchIds.includes(branch) : row.branchIds.includes(branch);
+            return row.status === "active" && applies;
+        }
+        return true;
+    }).filter((row) =>
         `${row.code} ${row.name}`.toLocaleLowerCase("vi-VN").includes(query) &&
         (!filters.status || row.status === filters.status) &&
         (!filters.channel || row.channel === "all" || row.channel === filters.channel)
@@ -485,7 +493,7 @@ export default function PromotionsPage() {
                 breadcrumb="Marketing"
                 parent={{ label: "", to: "" }}
                 description="Thiết lập các chương trình khuyến mãi, voucher ưu đãi và chính sách quà tặng toàn hệ thống MilktyWay."
-                actions={!isCashier() &&
+                actions={can("promotion.manage") &&
                     <button
                         type="button"
                         className="btn btn-primary"
@@ -579,7 +587,7 @@ export default function PromotionsPage() {
                 <div className="mt-5">
                     <DataTable<Promotion> pagination={false}
                         key={JSON.stringify(filters)}
-                        columns={isCashier() ? columns.filter(c => c.id !== "actions" && c.id !== "budget") : columns}
+                        columns={can("promotion.manage") ? columns : columns.filter(c => c.id !== "actions" && c.id !== "budget")}
                         data={visibleRows}
                         rowKey={(row) => row.id}
                         caption="Danh sách chương trình khuyến mãi"

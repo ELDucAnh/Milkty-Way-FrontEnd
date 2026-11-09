@@ -4,6 +4,7 @@ import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
+import { can, homePath, scopedBranch } from "../../utils/auth";
 
 interface UserEmployee {
   id: string;
@@ -59,10 +60,10 @@ const mockEmployees: UserEmployee[] = [
     id: "EMP-03",
     name: "Lê Quốc Tuấn Anh",
     email: "anh.lqt@MilktyWay.vn",
-    code: "NV-TN-0501",
+    code: "NV-POS-01",
     role: "Thu Ngân Quầy POS",
     roleTone: "warning",
-    branch: "CN05 — Máy POS 1",
+    branch: "CN01 — Máy POS 1 (Nguyễn Huệ)",
     branchBadge: "info",
     phone: "0938 111 222",
     shiftStatus: "Đang Mở Ca Bán",
@@ -75,16 +76,48 @@ const mockEmployees: UserEmployee[] = [
     id: "EMP-04",
     name: "Vũ Minh Khoa",
     email: "khoa.vm@MilktyWay.vn",
-    code: "NV-KHO-0501",
+    code: "NV-KHO-01",
     role: "Nhân Viên Kho Chi Nhánh",
     roleTone: "gray",
-    branch: "Kho CN05 — Sư Vạn Hạnh",
+    branch: "Kho Tổng Trung Tâm (Bình Tân) — Điều phối CN",
     branchBadge: "info",
     phone: "0977 333 444",
     shiftStatus: "Nghỉ Giữa Ca",
     shiftTone: "gray",
     lastLogin: "28/10/2026 17:30 (Máy quét mã vạch)",
     initials: "VK",
+    avatarBg: "bg-slate-600",
+  },
+  {
+    id: "EMP-05",
+    name: "Phạm Gia Bảo",
+    email: "bao.pg@MilktyWay.vn",
+    code: "NV-TN-0501",
+    role: "Thu Ngân Quầy POS",
+    roleTone: "warning",
+    branch: "CN05 — Máy POS 1 (Sư Vạn Hạnh)",
+    branchBadge: "info",
+    phone: "0938 555 666",
+    shiftStatus: "Đang Mở Ca Bán",
+    shiftTone: "success",
+    lastLogin: "28/10/2026 14:00 (POS Cảm ứng)",
+    initials: "PB",
+    avatarBg: "bg-amber-600",
+  },
+  {
+    id: "EMP-06",
+    name: "Ngô Thị Mai",
+    email: "mai.nt@MilktyWay.vn",
+    code: "NV-KHO-0501",
+    role: "Nhân Viên Kho Chi Nhánh",
+    roleTone: "gray",
+    branch: "CN05 — Kho quầy Sư Vạn Hạnh",
+    branchBadge: "info",
+    phone: "0977 777 888",
+    shiftStatus: "Đang Trực Ca 2",
+    shiftTone: "success",
+    lastLogin: "28/10/2026 13:45 (Máy quét mã vạch)",
+    initials: "NM",
     avatarBg: "bg-slate-600",
   },
 ];
@@ -107,9 +140,15 @@ export default function UsersPage() {
   const [formPhone, setFormPhone] = useState("");
   const [formRole, setFormRole] = useState("Thu Ngân Quầy POS");
   const [formBranch, setFormBranch] = useState("CN05 — Quận 10 (Sư Vạn Hạnh)");
+  const branchScope = scopedBranch();
+  const canAddEmployee = can("user.manageBranch");
+  const assignableRoles = branchScope
+    ? ["Thu Ngân Quầy POS", "Nhân Viên Kho Chi Nhánh"]
+    : ["Quản Lý Chi Nhánh", "Thu Ngân Quầy POS", "Nhân Viên Kho Chi Nhánh", "Chủ Doanh Nghiệp (Admin)"];
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
+      if (branchScope && !emp.branch.includes(branchScope)) return false;
       const q = search.toLowerCase();
       const matchSearch =
         !q ||
@@ -128,10 +167,19 @@ export default function UsersPage() {
 
       return matchSearch && matchBranch && matchRole && matchShift;
     });
-  }, [employees, search, selectedBranch, selectedRole, selectedShift]);
+  }, [employees, search, selectedBranch, selectedRole, selectedShift, branchScope]);
 
   function handleAddUser(e: React.FormEvent) {
     e.preventDefault();
+    if (!canAddEmployee) return;
+    if (!assignableRoles.includes(formRole)) {
+      toast.warning("Quản lý chi nhánh chỉ được tạo tài khoản Thu ngân hoặc Nhân viên kho.");
+      return;
+    }
+    if (branchScope && !formBranch.includes(branchScope)) {
+      toast.warning(`Chỉ được phân công nhân viên vào chi nhánh ${branchScope}.`);
+      return;
+    }
     if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
       toast.warning("Vui lòng điền đầy đủ các thông tin bắt buộc!");
       return;
@@ -184,7 +232,7 @@ export default function UsersPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/users">Người dùng</Link>
             <span className="sep">/</span>
@@ -202,7 +250,7 @@ export default function UsersPage() {
             </svg>
             Phân Quyền Vai Trò
           </Link>
-          <button
+          {canAddEmployee && (<button
             type="button"
             className="btn btn-primary"
             onClick={() => setShowAddModal(true)}
@@ -212,12 +260,12 @@ export default function UsersPage() {
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             Thêm Nhân Viên
-          </button>
+          </button>)}
         </div>
       </div>
 
       {/* Stats Grid */}
-      <section aria-label="Thống kê nhân sự">
+      {!branchScope && (<section aria-label="Thống kê nhân sự">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Nhân Sự Chuỗi"
@@ -274,7 +322,7 @@ export default function UsersPage() {
             }
           />
         </div>
-      </section>
+      </section>)}
 
       {/* Filter Bar */}
       <section aria-label="Bộ lọc nhân viên">
@@ -292,7 +340,7 @@ export default function UsersPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select
+          {!branchScope && (<select
             className="form-input form-select w-auto"
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
@@ -307,7 +355,7 @@ export default function UsersPage() {
             <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
             <option value="Kho Tổng">Kho Tổng Trung Tâm (Bình Tân)</option>
             <option value="Trụ Sở">Trụ Sở Chính (Văn Phòng Điều Hành)</option>
-          </select>
+          </select>)}
           <select
             className="form-input form-select w-auto"
             value={selectedRole}
@@ -410,7 +458,7 @@ export default function UsersPage() {
           {/* Pagination */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] text-xs text-[var(--muted)]">
             <div>
-              Hiển thị 1 - {filteredEmployees.length} trong tổng số 64 nhân viên chuỗi 12 chi nhánh
+              Hiển thị 1 - {filteredEmployees.length} trong tổng số {branchScope ? `${filteredEmployees.length} nhân viên chi nhánh ${branchScope}` : "64 nhân viên chuỗi 12 chi nhánh"}
             </div>
             <div className="flex gap-1">
               <button type="button" className="btn btn-secondary btn-sm" disabled>
@@ -504,10 +552,9 @@ export default function UsersPage() {
                 onChange={(e) => setFormRole(e.target.value)}
                 required
               >
-                <option>Quản Lý Chi Nhánh</option>
-                <option>Thu Ngân Quầy POS</option>
-                <option>Nhân Viên Kho Chi Nhánh</option>
-                <option>Chủ Doanh Nghiệp (Admin)</option>
+                {assignableRoles.map((role) => (
+                  <option key={role}>{role}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -517,6 +564,7 @@ export default function UsersPage() {
               <select
                 className="form-input form-select"
                 value={formBranch}
+                disabled={!!branchScope}
                 onChange={(e) => setFormBranch(e.target.value)}
                 required
               >

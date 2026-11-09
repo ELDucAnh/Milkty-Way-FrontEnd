@@ -1,4 +1,4 @@
-import { isCashier, counterBranch } from "../../utils/auth";
+import { can, homePath, isBranchScoped, scopedBranch } from "../../utils/auth";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -48,7 +48,7 @@ const channelDisplay: Record<PreparationChannel, StatusDisplay> = {
 };
 
 function getOrdersFromStore(): PreparationOrder[] {
-    const orders = loadOrders().filter(o => !isCashier() || (o.branchId === counterBranch && o.delivery !== "delivered" && o.payment !== "refunded" && o.onlineDecision !== "rejected" && (o.channel !== "online" || o.preparation)));
+    const orders = loadOrders().filter(o => !isBranchScoped() || (o.branchId === scopedBranch() && o.delivery !== "delivered" && o.payment !== "refunded" && o.onlineDecision !== "rejected" && (o.channel !== "online" || o.preparation)));
     return orders.filter(o => o.items && o.items.length > 0).map(o => {
         const itemSummary = o.items.map(it => `${it.quantity} × ${it.name} (Size ${it.size})`).join(" + ");
         const optionSummary = o.items.map(it => `Đường ${it.sugar} · ${it.ice}${it.toppings.length ? ` · Topping: ${it.toppings.join(", ")}` : ""}`).join(" | ");
@@ -76,12 +76,12 @@ export default function PreparationQueuePage() {
     const [orders, setOrders] = useState<PreparationOrder[]>(() => getOrdersFromStore());
 
     const [draftFilters, setDraftFilters] = useState<{ branchId: string; status: string }>({
-        branchId: "CN01",
+        branchId: scopedBranch() ?? "CN01",
         status: "",
     });
 
     const [appliedFilters, setAppliedFilters] = useState<{ branchId: string; status: string }>({
-        branchId: "CN01",
+        branchId: scopedBranch() ?? "CN01",
         status: "",
     });
 
@@ -104,7 +104,7 @@ export default function PreparationQueuePage() {
 
     function handleResetFilters() {
         const emptyFilters = {
-            branchId: isCashier() ? counterBranch : "",
+            branchId: scopedBranch() ?? "",
             status: "",
         };
 
@@ -252,16 +252,16 @@ export default function PreparationQueuePage() {
                             Món đã sẵn sàng
                         </button>
                     )}
-                    {isCashier() && order.status === "ready" && <button className="btn btn-primary btn-sm" onClick={() => {
-                        saveOrders(loadOrders().map(o => o.id === order.id && o.branchId === counterBranch ? {...o, delivery:"delivered"} : o));
+                    {isBranchScoped() && order.status === "ready" && <button className="btn btn-primary btn-sm" onClick={() => {
+                        saveOrders(loadOrders().map(o => o.id === order.id && o.branchId === scopedBranch() ? {...o, delivery:"delivered"} : o));
                         setOrders(getOrdersFromStore());
                     }}>Bàn giao</button>}
-                    {!isCashier() && order.status === "ready" && (
+                    {!isBranchScoped() && order.status === "ready" && (
                         <span className="text-xs text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg">
                             Đã hoàn tất
                         </span>
                     )}
-                    {order.status !== "ready" && (
+                    {can("order.reportShortage") && order.status !== "ready" && (
                         <button
                             type="button"
                             className="btn btn-secondary btn-sm !text-rose-600"
@@ -285,7 +285,7 @@ export default function PreparationQueuePage() {
             <div className="page-header">
                 <div>
                     <nav className="breadcrumb" aria-label="Đường dẫn trang">
-                        <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
+                        <Link to={homePath()}>Trang chủ</Link>
                         <span className="sep">/</span>
                         <Link to="/sales">Bán hàng</Link>
                         <span className="sep">/</span>
@@ -317,9 +317,9 @@ export default function PreparationQueuePage() {
                         </svg>
                         Làm mới hàng đợi
                     </button>
-                    <Link to="/sales/pos" className="btn btn-primary">
+                    {can("pos.use") && <Link to="/sales/pos" className="btn btn-primary">
                         Về quầy POS
-                    </Link>
+                    </Link>}
                 </div>
             </div>
 
@@ -334,7 +334,7 @@ export default function PreparationQueuePage() {
                             Chi nhánh
                         </label>
                         <select
-                            id="kds-branch" disabled={isCashier()}
+                            id="kds-branch" disabled={isBranchScoped()}
                             className="form-input form-select"
                             value={draftFilters.branchId}
                             onChange={(event) =>

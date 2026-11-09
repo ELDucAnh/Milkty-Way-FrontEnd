@@ -1,4 +1,4 @@
-import { cashierCanVisit, cashierName, isCashier } from "../../utils/auth";
+import { canVisit, scopedBranch, sessionUser } from "../../utils/auth";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import avatar from "../../../assets/img/avator/1.jpg";
@@ -19,12 +19,18 @@ interface NotificationItemData {
   time: string;
   category: "all" | "inventory" | "sales" | "shifts";
   unread: boolean;
+  /** Trang liên quan: chỉ role vào được trang này mới nhận thông báo. */
+  path: string;
+  /** Chi nhánh phát sinh: role bị ràng buộc chi nhánh chỉ thấy thông báo của chi nhánh mình. */
+  branch?: string;
   tone: "warning" | "success" | "info" | "danger" | "primary";
 }
 
 const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   {
     id: "notif-1",
+    path: "/inventory/ingredients",
+    branch: "CN05",
     title: "Cảnh Báo Tồn Kho Thấp & Cận Date FEFO",
     message: "Cốt hồng trà đặc tại CN05 chỉ còn 1,2 lít (dưới ngưỡng an toàn ca chiều)",
     time: "5 phút trước",
@@ -34,6 +40,8 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-2",
+    path: "/sales",
+    branch: "CN01",
     title: "Đơn Hàng Mới Tại Quầy",
     message: "HD-CN01-003815 vừa lập thành công: 285.000 ₫ (Khách VIP Diamond).",
     time: "18 phút trước",
@@ -43,6 +51,8 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-3",
+    path: "/invoices",
+    branch: "CN01",
     title: "Thanh Toán Thành Công",
     message: "Đã nhận 450.000 ₫ qua Chuyển khoản QR tại Quầy POS 01.",
     time: "1 giờ trước",
@@ -52,6 +62,7 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-4",
+    path: "/purchases/receipts",
     title: "Phiếu Nhập Kho Chờ Phê Duyệt",
     message: "PNK-202610-008 chờ thủ kho xác nhận kiểm nhận 50kg Trân châu hoàng kim.",
     time: "2 giờ trước",
@@ -61,6 +72,8 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-5",
+    path: "/purchases/transfers",
+    branch: "CN10",
     title: "Điều Chuyển Nguyên Liệu Khẩn Cấp",
     message: "Đã cấp phát 20kg Trân châu hoàng kim từ Khu chế biến sang CN10.",
     time: "Hôm qua",
@@ -70,6 +83,8 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-6",
+    path: "/sales/shifts",
+    branch: "CN01",
     title: "Bàn Giao Ca Thành Công",
     message: "Ca sáng CN01 đã bàn giao két 2.098.000 ₫ cho ca chiều, tiền mặt khớp 100%.",
     time: "Hôm qua",
@@ -79,6 +94,8 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-7",
+    path: "/sales/returns",
+    branch: "CN01",
     title: "Phê Duyệt Đổi Trả / Hoàn Tiền",
     message: "Yêu cầu hoàn tiền HT-0002 (45.000 ₫) đã được Quản lý duyệt hoàn tiền mặt.",
     time: "2 ngày trước",
@@ -88,6 +105,8 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
   },
   {
     id: "notif-8",
+    path: "/stores/shift-reconciliation",
+    branch: "CN06",
     title: "Đối Soát Tiêu Hao Ca Trực",
     message: "Biên bản đối soát ca tối CN06 ghi nhận khớp 100% định mức BOM.",
     time: "3 ngày trước",
@@ -95,7 +114,34 @@ const INITIAL_NOTIFICATIONS: NotificationItemData[] = [
     unread: false,
     tone: "primary",
   },
+  {
+    id: "notif-9",
+    path: "/inventory/stock-adjustment",
+    branch: "CN05",
+    title: "Phiếu Kiểm Kê Chờ Duyệt Điều Chỉnh",
+    message: "KK-261105-05 (Trân châu CN05) lệch 100g, chờ quản lý duyệt điều chỉnh tồn kho.",
+    time: "30 phút trước",
+    category: "inventory",
+    unread: true,
+    tone: "warning",
+  },
+  {
+    id: "notif-10",
+    path: "/sales/returns",
+    branch: "CN05",
+    title: "Yêu Cầu Hoàn Tiền Mới",
+    message: "HT-0003 (44.000 ₫, đơn DH-00122) tại CN05 đang chờ xử lý.",
+    time: "45 phút trước",
+    category: "sales",
+    unread: true,
+    tone: "danger",
+  },
 ];
+
+const visibleNotifications = (): NotificationItemData[] => {
+  const branch = scopedBranch();
+  return INITIAL_NOTIFICATIONS.filter((n) => canVisit(n.path) && (!branch || !n.branch || n.branch === branch));
+};
 
 export default function Header({
   mobileOpen,
@@ -103,11 +149,11 @@ export default function Header({
   onToggleSidebar,
   onToggleTheme,
 }: HeaderProps) {
-  const cashier = isCashier();
+  const user = sessionUser();
   const [notifications, setNotifications] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "inventory" | "sales" | "shifts">("all");
-  const [notificationsList, setNotificationsList] = useState<NotificationItemData[]>(cashier ? [] : INITIAL_NOTIFICATIONS);
+  const [notificationsList, setNotificationsList] = useState<NotificationItemData[]>(visibleNotifications);
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -192,7 +238,7 @@ export default function Header({
         />
         {query && (
           <div className="global-search-dropdown" style={{ display: "block" }}>
-            {navigationItems.filter(item => !cashier || cashierCanVisit(item.path))
+            {navigationItems.filter(item => canVisit(item.path))
               .filter((item) =>
                 item.label.toLocaleLowerCase("vi-VN").includes(query.toLocaleLowerCase("vi-VN"))
               )
@@ -389,7 +435,7 @@ export default function Header({
           >
             <img
               src={avatar}
-              alt={cashier ? cashierName() : "Nguyễn Hoàng Long"}
+              alt={user.name}
               className="w-8 h-8 rounded-full flex-shrink-0"
               style={{ objectFit: "cover" }}
             />
@@ -402,9 +448,9 @@ export default function Header({
                   lineHeight: "1.2",
                 }}
               >
-                {cashier ? cashierName() : "Nguyễn Hoàng Long"}
+                {user.name}
               </div>
-              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{cashier ? "Nhân viên POS" : "Quản trị viên"}</div>
+              <div style={{ fontSize: "11px", color: "var(--muted)" }}>{user.roleLabel}</div>
             </div>
             <svg
               width="14"
@@ -427,9 +473,9 @@ export default function Header({
           >
             <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text)" }}>
-                {cashier ? cashierName() : "Nguyễn Hoàng Long"}
+                {user.name}
               </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)" }}>{cashier ? "anh.lqt@MilktyWay.vn" : "long.nh@MilktyWay.vn"}</div>
+              <div style={{ fontSize: "12px", color: "var(--muted)" }}>{user.email}</div>
             </div>
             <Link
               to="/profile"
@@ -451,7 +497,7 @@ export default function Header({
               </svg>
               Hồ sơ cá nhân
             </Link>
-            {!cashier && (<Link
+            {canVisit("/settings/general") && (<Link
               to="/settings/general"
               onClick={() => setUserOpen(false)}
               className="dropdown-item"
@@ -505,7 +551,7 @@ export default function Header({
         onClose={() => setShowAllModal(false)}
         footer={
           <div className="flex justify-between items-center w-full flex-wrap gap-3">
-            {!cashier && (<Link
+            {canVisit("/settings/notifications") && (<Link
               to="/settings/notifications"
               onClick={() => setShowAllModal(false)}
               className="text-xs text-[var(--muted)] hover:text-[var(--primary)] flex items-center gap-1.5"
@@ -537,7 +583,7 @@ export default function Header({
               >
                 Tất cả ({notificationsList.length})
               </button>
-              {!cashier && (<button
+              {notificationsList.some((n) => n.category === "inventory") && (<button
                 type="button"
                 className={`btn btn-sm ${activeTab === "inventory" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setActiveTab("inventory")}
@@ -553,7 +599,7 @@ export default function Header({
                 Bán hàng &amp; POS (
                 {notificationsList.filter((n) => n.category === "sales").length})
               </button>
-              {!cashier && (<button
+              {notificationsList.some((n) => n.category === "shifts") && (<button
                 type="button"
                 className={`btn btn-sm ${activeTab === "shifts" ? "btn-primary" : "btn-secondary"}`}
                 onClick={() => setActiveTab("shifts")}
@@ -594,11 +640,10 @@ export default function Header({
                 <div
                   key={item.id}
                   onClick={() => handleToggleRead(item.id)}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 ${
-                    item.unread
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 ${item.unread
                       ? "bg-[rgba(34,181,115,0.04)] border-[var(--primary)] shadow-sm"
                       : "bg-[var(--surface)] border-[var(--border)] hover:bg-[var(--background)]"
-                  }`}
+                    }`}
                 >
                   <div
                     className={`stat-icon icon-bg-${item.tone} flex-shrink-0 mt-0.5`}

@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 /**
  * MilktyWay POS & Chain Operations - Comprehensive E2E Business Flow Test Suite
  * Luồng kiểm thử nghiệp vụ toàn diện từ POS -> KDS -> Hóa Đơn -> Đổi Trả -> Bàn Giao Ca -> FEFO -> Điều Chuyển Kho
@@ -698,6 +700,15 @@ try {
   // Quản lý cửa hàng kiểm tra & duyệt biên bản đối soát ca
   reconciliationTicket.status = "approved";
   assert(reconciliationTicket.status === "approved", "Quản lý cửa hàng đã duyệt thành công biên bản đối soát nguyên liệu ca trực");
+
+  // ----------------------------------------------------
+  // KỊCH BẢN 15: Phân quyền 4 role chạy trên CODE THẬT (src/utils/auth.ts + AppRoutes.tsx)
+  // ----------------------------------------------------
+  console.log("\n📌 KỊCH BẢN 15: Ma trận phân quyền owner/manager/cashier/warehouse chạy trên auth.ts thật");
+  const authRun = spawnSync(process.execPath, [fileURLToPath(new URL("./auth-matrix.test.mjs", import.meta.url))], { encoding: "utf8" });
+  const authSummary = (authRun.stdout.match(/auth-matrix: .*/) || ["auth-matrix: không có kết quả"])[0];
+  assert(authRun.status === 0, "canVisit/can/loginByEmail/redirect khớp ma trận cho cả 4 role (" + authSummary + ")");
+  if (authRun.status !== 0) console.error(authRun.stdout + authRun.stderr);
 
   console.log("\n================================================================================");
   console.log(`🎉 TỔNG KẾT: TOÀN BỘ ${passedTests}/${totalTests} BƯỚC KIỂM THỬ ĐÃ THÀNH CÔNG VỚI TỶ LỆ 100%!`);

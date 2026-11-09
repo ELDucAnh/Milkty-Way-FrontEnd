@@ -201,6 +201,8 @@ export const INITIAL_LOTS: IngredientLot[] = [
     { id: "lot-counter-cn01-milk", ingredientId: "ing-milk", lotCode: "SUA-260915", manufactureDate: "2026-09-15", expiryDate: "2027-06-15", quantity: 2100, unitCost: 120, quality: "pass", location: "counter", locationId: "CN01", batchId: null, reservedQuantity: 200, lockedQuantity: 0 },
     { id: "lot-counter-cn01-cup", ingredientId: "ing-cup", lotCode: "LY-261001", manufactureDate: null, expiryDate: null, quantity: 500, unitCost: 250, quality: "pass", location: "counter", locationId: "CN01", batchId: null },
     { id: "lot-counter-cn05-pearl", ingredientId: "ing-pearl", lotCode: "ME-261105-02", manufactureDate: "2026-11-05", expiryDate: "2026-11-10", quantity: 1200, unitCost: 160, quality: "pass", location: "counter", locationId: "CN05", batchId: "batch-seed-2" },
+    { id: "lot-counter-cn05-tea", ingredientId: "ing-tea-base", lotCode: "ME-261105-01", manufactureDate: "2026-11-05", expiryDate: "2026-11-12", quantity: 7500, unitCost: 65, quality: "pass", location: "counter", locationId: "CN05", batchId: "batch-seed-1" },
+    { id: "lot-counter-cn05-milk", ingredientId: "ing-milk", lotCode: "SUA-260915", manufactureDate: "2026-09-15", expiryDate: "2027-06-15", quantity: 2400, unitCost: 120, quality: "pass", location: "counter", locationId: "CN05", batchId: null },
 ];
 
 export type BatchStatus = "planned" | "processing" | "completed" | "held";
@@ -444,6 +446,7 @@ export const INITIAL_DEMO_STATE: DemoState = {
     ],
     counts: [
         { id: "count-seed-01", code: "KK-261104-01", date: "2026-11-04", position: "counter", locationId: "CN01", shift: "Ca tối", ingredientId: "ing-tea-base", lotId: "lot-counter-cn01-tea", opening: 15000, received: 3000, actualUse: 8500, waste: 200, theoretical: 9300, counted: 9100, variance: 200, varianceValue: 13000, reason: "Sai lệch kiểm đếm", note: "Cần kiểm tra chứng từ cuối ca.", counter: "Nhân viên kho ca tối", approver: "Quản lý CN01", status: "pending" },
+        { id: "count-seed-02", code: "KK-261105-05", date: "2026-11-05", position: "counter", locationId: "CN05", shift: "Ca chiều", ingredientId: "ing-pearl", lotId: "lot-counter-cn05-pearl", opening: 2000, received: 1200, actualUse: 1850, waste: 50, theoretical: 1300, counted: 1200, variance: 100, varianceValue: 16000, reason: "Hao hụt bán thành phẩm cuối ca", note: "Chờ quản lý chi nhánh CN05 phê duyệt điều chỉnh tồn kho.", counter: "Nhân viên kho CN05", approver: "Trần Thu Hà", status: "pending" },
     ],
     reconciliations: [
         { id: "rec-seed-01", date: "2026-11-04", storeId: "CN01", shift: "Ca tối", opener: "Thu ngân ca tối", counter: "Nhân viên kho ca tối", approver: "Quản lý CN01", status: "pending", note: "Có chênh lệch cần xác minh.", lines: [

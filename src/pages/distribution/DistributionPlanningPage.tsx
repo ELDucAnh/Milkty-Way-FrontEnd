@@ -18,6 +18,7 @@ import type {
   Shift,
 } from "../shared/business-demo";
 import { useDemoState } from "../shared/useDemoState";
+import { canVisit, scopedBranch } from "../../utils/auth";
 
 interface DraftPlanLine {
   id: string;
@@ -45,6 +46,7 @@ const DIRECT_COUNTER_INGREDIENT_IDS = new Set([
 
 export default function DistributionPlanningPage() {
   const [data, setData] = useDemoState();
+  const branchScope = scopedBranch();
   const [date, setDate] = useState("all");
   const [status, setStatus] = useState("all");
   const [applied, setApplied] = useState({ date: "all", status: "all" });
@@ -54,7 +56,7 @@ export default function DistributionPlanningPage() {
   const [approvalError, setApprovalError] = useState("");
   const [form, setForm] = useState({
     date: getTodayISO(),
-    storeId: data.stores[0]?.id ?? "",
+    storeId: branchScope ?? (data.stores[0]?.id ?? ""),
     shift: "Ca sáng" as Shift,
     expectedCups: "",
     note: "",
@@ -67,10 +69,11 @@ export default function DistributionPlanningPage() {
     () =>
       data.plans.filter(
         (plan) =>
+          (!branchScope || plan.storeId === branchScope) &&
           (applied.date === "all" || plan.date === applied.date) &&
           (applied.status === "all" || plan.status === applied.status),
       ),
-    [data.plans, applied],
+    [data.plans, applied, branchScope],
   );
   const preparedLots = data.lots.filter(
     (lot) =>
@@ -274,7 +277,11 @@ export default function DistributionPlanningPage() {
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
             <Link to="/dashboard">Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/production/batches">Sản xuất tập trung</Link>
+            {canVisit("/production/batches") ? (
+              <Link to="/production/batches">Sản xuất tập trung</Link>
+            ) : (
+              <span>Phân phối nguyên liệu</span>
+            )}
             <span className="sep">/</span>
             <span className="current">Kế hoạch cấp phát</span>
           </nav>
@@ -577,6 +584,7 @@ export default function DistributionPlanningPage() {
               <select
                 id="plan-store"
                 className="form-input form-select"
+                disabled={!!branchScope}
                 value={form.storeId}
                 onChange={(event) =>
                   setForm((current) => ({

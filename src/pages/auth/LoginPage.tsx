@@ -1,4 +1,4 @@
-import { login, counterBranch } from "../../utils/auth";
+import { loginByEmail, homePath } from "../../utils/auth";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../components/common/useToast";
@@ -7,30 +7,21 @@ export default function LoginPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [role, setRole] = useState("owner");
-  const [branch, setBranch] = useState("CN05");
-  const [email, setEmail] = useState("long.nh@MilktyWay.vn");
+  const [email, setEmail] = useState("long.nh@milktyway.vn");
   const [password, setPassword] = useState("123456");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  function handleRoleChange(newRole: string) {
-    setRole(newRole);
-    if (newRole === "owner") {
-      setEmail("long.nh@MilktyWay.vn");
-    } else if (newRole === "manager") {
-      setEmail("ha.tt@MilktyWay.vn");
-    } else if (newRole === "cashier") {
-      setEmail("anh.lqt@MilktyWay.vn");
-    } else if (newRole === "warehouse") {
-      setEmail("khoa.vm@MilktyWay.vn");
-    }
+  function handleQuickSelect(targetEmail: string) {
+    setEmail(targetEmail);
+    setPassword("123456");
   }
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (!login(role, email, password, rememberMe)) {
-      toast.warning("Vai trò, email hoặc mật khẩu chưa đúng.");
+    const matchedRole = loginByEmail(email, password, rememberMe);
+    if (!matchedRole) {
+      toast.warning("Tài khoản email hoặc mật khẩu chưa đúng.");
       return;
     }
 
@@ -38,7 +29,7 @@ export default function LoginPage() {
       title: "Xác Thực Thành Công",
     });
 
-    navigate(role === "cashier" ? "/sales/pos" : "/dashboard", { replace: true });
+    navigate(homePath(matchedRole), { replace: true });
   }
 
   return (
@@ -70,56 +61,10 @@ export default function LoginPage() {
       <div className="auth-card shadow-xl">
         <div className="text-center mb-6">
           <h1 className="auth-title">Đăng Nhập Hệ Thống</h1>
-          <p className="auth-subtitle">Đăng nhập để bắt đầu phiên làm việc.</p>
+          <p className="auth-subtitle">Nhập tài khoản nội bộ để bắt đầu phiên làm việc.</p>
         </div>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          {/* Vai Trò Nghiệp Vụ */}
-          <div>
-            <label className="form-label" htmlFor="login-role">
-              Vai Trò Đăng Nhập <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="login-role"
-              className="form-input form-select"
-              value={role}
-              onChange={(e) => handleRoleChange(e.target.value)}
-            >
-              <option value="owner">Chủ Doanh Nghiệp (Ban Giám Đốc — Toàn Chuỗi)</option>
-              <option value="manager">Quản Lý Chi Nhánh (Store Manager)</option>
-              <option value="cashier">Thu Ngân Bán Hàng (Counter POS)</option>
-              <option value="warehouse">Nhân Viên Kho Chi Nhánh (Thủ Kho FEFO)</option>
-            </select>
-          </div>
-
-          {/* Chi Nhánh Làm Việc */}
-          <div style={{ opacity: role === "owner" ? 0.5 : 1 }}>
-            <label className="form-label" htmlFor="login-branch">
-              Chi Nhánh Công Tác <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="login-branch"
-              className="form-input form-select"
-              value={role === "cashier" ? counterBranch : branch}
-              disabled={role === "owner" || role === "cashier"}
-              onChange={(e) => setBranch(e.target.value)}
-            >
-              <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>
-              <option value="CN02">CN02 — Quận 3 (Võ Văn Tần)</option>
-              <option value="CN03">CN03 — Quận 5 (Trần Hưng Đạo)</option>
-              <option value="CN04">CN04 — Quận 7 (Phú Mỹ Hưng)</option>
-              <option value="CN05">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-              <option value="CN06">CN06 — Bình Thạnh (D2 / Nguyễn Gia Trí)</option>
-              <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
-              <option value="CN08">CN08 — Tân Bình (Lê Văn Sỹ)</option>
-              <option value="CN09">CN09 — TP. Thủ Đức (Võ Văn Ngân)</option>
-              <option value="CN10">CN10 — Phú Nhuận (Phan Xích Long)</option>
-              <option value="CN11">CN11 — Tân Phú (Tân Sơn Nhì)</option>
-              <option value="CN12">CN12 — Quận 6 (Hậu Giang)</option>
-              <option value="KHO_TONG">Kho Tổng Trung Tâm (Bình Tân)</option>
-            </select>
-          </div>
-
           <div>
             <label className="form-label" htmlFor="login-email">
               Tài Khoản / Email Nội Bộ <span className="text-red-500">*</span>
@@ -130,6 +75,7 @@ export default function LoginPage() {
               className="form-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="ten.nv@milktyway.vn"
               required
             />
           </div>
@@ -200,19 +146,47 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Demo credentials cho 4 vai trò */}
+      {/* Demo credentials cho các vai trò */}
       <div className="auth-demo-box mt-4 p-3 bg-white/80 dark:bg-zinc-800/80 rounded-xl border border-[var(--border)] text-xs shadow-sm">
-        <div className="font-bold text-[var(--text)] mb-1">
-          Tài Khoản Mẫu Cho 4 Vai Trò Nghiệp Vụ:
+        <div className="font-bold text-[var(--text)] mb-1.5">
+          Chọn nhanh tài khoản mẫu (Tự động nhận diện vai trò &amp; chi nhánh):
         </div>
-        <div className="text-[var(--muted)] space-y-0.5">
-          <div>• <strong>Chủ Doanh Nghiệp:</strong> long.nh@MilktyWay.vn (Toàn chuỗi)</div>
-          <div>• <strong>Quản Lý CN:</strong> ha.tt@MilktyWay.vn (CN05 Sư Vạn Hạnh)</div>
-          <div>• <strong>Thu Ngân POS:</strong> anh.lqt@MilktyWay.vn (POS Bán Quầy)</div>
-          <div>• <strong>Thủ Kho FEFO:</strong> khoa.vm@MilktyWay.vn (Kho Chi Nhánh)</div>
-          <div className="text-emerald-600 font-semibold mt-1">
-            Mật khẩu thử nghiệm: <strong>123456</strong>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[var(--muted)]">
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("anh.lqt@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">1. Nhân viên POS (CN01)</div>
+            <div className="text-[11px] text-[#22B573]">anh.lqt@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("ha.tt@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">2. Quản lý CN (CN05)</div>
+            <div className="text-[11px] text-[#22B573]">ha.tt@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("khoa.vm@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">3. Nhân viên Kho</div>
+            <div className="text-[11px] text-[#22B573]">khoa.vm@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("long.nh@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">4. Chủ chuỗi (Admin)</div>
+            <div className="text-[11px] text-[#22B573]">long.nh@milktyway.vn</div>
+          </button>
+        </div>
+        <div className="text-emerald-600 font-semibold mt-2">
+          Mật khẩu mặc định cho tất cả tài khoản: <strong>123456</strong>
         </div>
       </div>
     </div>

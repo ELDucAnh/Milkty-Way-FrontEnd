@@ -1,17 +1,166 @@
-import { cashierCanVisit, cashierName, isCashier } from "../../utils/auth";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { canVisit, homePath, sessionUser } from "../../utils/auth";
+
 export interface SidebarProps { mobileOpen: boolean; collapsed?: boolean; onNavigate: () => void; }
+
+interface SidebarLink { to: string; label: string; page: string; }
+interface SidebarGroup { key: string; label: string; icon: ReactNode; children: readonly SidebarLink[]; }
+interface SidebarSingle extends SidebarLink { icon: ReactNode; }
+type SidebarEntry = SidebarSingle | SidebarGroup;
+interface SidebarSection { label?: string; entries: readonly SidebarEntry[]; }
+
+const isGroup = (entry: SidebarEntry): entry is SidebarGroup => "children" in entry;
+
+const icons = {
+  dashboard: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></>,
+  inventory: <><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></>,
+  purchases: <><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></>,
+  production: <path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" />,
+  planning: <><path d="M3 7h13v11H3zM16 11h3l3 3v4h-6z" /><circle cx="7.5" cy="18.5" r="1.5" /><circle cx="18.5" cy="18.5" r="1.5" /></>,
+  stores: <path d="M3 10h18l-2-6H5l-2 6ZM5 10v10h14V10M9 20v-6h6v6" />,
+  sales: <><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>,
+  invoices: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></>,
+  marketing: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
+  customers: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
+  suppliers: <><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></>,
+  expenses: <><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></>,
+  reports: <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>,
+  users: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+  settings: <><circle cx="12" cy="12" r="3" /><path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M2 12h2M20 12h2M6.34 5.34L4.93 4.93M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M18.66 6.34l-1.41 1.41M6.34 18.66l-1.41 1.41" /></>,
+};
+
+const SECTIONS: readonly SidebarSection[] = [
+  { label: "CHÍNH", entries: [{ to: "/dashboard", label: "Bảng điều khiển", page: "dashboard", icon: icons.dashboard }] },
+  {
+    label: "KHO HÀNG & NGUYÊN LIỆU",
+    entries: [
+      {
+        key: "inventory", label: "Kho hàng", icon: icons.inventory, children: [
+          { to: "/inventory/products", label: "Sản phẩm", page: "products" },
+          { to: "/inventory/ingredients", label: "Nguyên vật liệu", page: "ingredients" },
+          { to: "/inventory/products/new", label: "Thêm sản phẩm", page: "add-product" },
+          { to: "/inventory/categories", label: "Danh mục", page: "categories" },
+          { to: "/inventory/branches", label: "Chi nhánh", page: "branches" },
+          { to: "/inventory/units", label: "Đơn vị tính", page: "units" },
+          { to: "/inventory/stock-adjustment", label: "Điều chỉnh kho", page: "stock-adjustment" },
+        ]
+      },
+      {
+        key: "purchases", label: "Nhập hàng", icon: icons.purchases, children: [
+          { to: "/purchases", label: "Tất cả đơn nhập", page: "purchases" },
+          { to: "/purchases/new", label: "Tạo đơn nhập", page: "add-purchase" },
+          { to: "/purchases/receipts", label: "Phiếu nhập kho", page: "receipts" },
+          { to: "/purchases/transfers", label: "Điều chuyển kho", page: "stock-transfers" },
+        ]
+      },
+      {
+        key: "production", label: "Sản xuất & Pha chế", icon: icons.production, children: [
+          { to: "/production/recipes", label: "Công thức pha chế", page: "recipes" },
+          { to: "/production/batches", label: "Lô sản xuất", page: "batches" },
+        ]
+      },
+      { to: "/distribution/planning", label: "Kế hoạch phân phối", page: "planning", icon: icons.planning },
+      {
+        key: "stores", label: "Cửa hàng chi nhánh", icon: icons.stores, children: [
+          { to: "/stores/ingredients", label: "Nguyên liệu tại quán", page: "store-ingredients" },
+          { to: "/stores/shift-reconciliation", label: "Đối soát ca trực", page: "shift-reconciliation" },
+        ]
+      },
+      {
+        key: "sales", label: "Bán hàng", icon: icons.sales, children: [
+          { to: "/sales", label: "Tất cả đơn bán", page: "sales" },
+          { to: "/sales/pos", label: "Điểm bán hàng (POS)", page: "add-sale" },
+          { to: "/sales/shifts", label: "Ca làm việc & Bàn giao quỹ", page: "shifts" },
+          { to: "/sales/preparation", label: "Hàng đợi pha chế (KDS)", page: "preparation" },
+          { to: "/sales/returns", label: "Trả hàng bán", page: "sales-returns" },
+        ]
+      },
+      { to: "/invoices", label: "Hóa đơn", page: "invoices", icon: icons.invoices },
+    ],
+  },
+  {
+    label: "MARKETING & KHUYẾN MÃI",
+    entries: [
+      {
+        key: "marketing", label: "Marketing", icon: icons.marketing, children: [
+          { to: "/marketing/promotions", label: "Chương trình khuyến mãi", page: "promotions" },
+          { to: "/marketing/branch-promotions", label: "Áp dụng theo chi nhánh", page: "branch-promotions" },
+        ]
+      },
+    ],
+  },
+  { label: "KHÁCH HÀNG", entries: [{ to: "/customers", label: "Khách hàng", page: "customers", icon: icons.customers }] },
+  {
+    label: "ĐỐI TÁC & TÀI CHÍNH",
+    entries: [
+      { to: "/suppliers", label: "Nhà cung cấp", page: "suppliers", icon: icons.suppliers },
+      { to: "/expenses", label: "Chi phí", page: "expenses", icon: icons.expenses },
+    ],
+  },
+  {
+    label: "BÁO CÁO & PHÂN TÍCH",
+    entries: [
+      {
+        key: "reports", label: "Báo cáo", icon: icons.reports, children: [
+          { to: "/reports/sales-report", label: "Báo cáo bán hàng", page: "sales-report" },
+          { to: "/reports/purchase-report", label: "Báo cáo nhập hàng", page: "purchase-report" },
+          { to: "/reports/inventory-report", label: "Báo cáo tồn kho", page: "inventory-report" },
+          { to: "/reports/profit-loss", label: "Lợi nhuận & Lỗ", page: "profit-loss" },
+          { to: "/reports/customer-report", label: "Báo cáo khách hàng", page: "customer-report" },
+          { to: "/reports/supplier-report", label: "Báo cáo nhà cung cấp", page: "supplier-report" },
+        ]
+      },
+    ],
+  },
+  {
+    label: "QUẢN TRỊ HỆ THỐNG",
+    entries: [
+      {
+        key: "users", label: "Người dùng", icon: icons.users, children: [
+          { to: "/users", label: "Tất cả người dùng", page: "users-list" },
+          { to: "/users/roles", label: "Vai trò & Quyền hạn", page: "roles" },
+        ]
+      },
+      {
+        key: "settings", label: "Cài đặt", icon: icons.settings, children: [
+          { to: "/settings/general", label: "Cài đặt chung", page: "settings-general" },
+          { to: "/settings/inventory", label: "Cài đặt kho", page: "settings-inventory" },
+          { to: "/settings/sales", label: "Cài đặt bán hàng", page: "settings-sales" },
+          { to: "/settings/purchases", label: "Cài đặt nhập hàng", page: "settings-purchases" },
+          { to: "/settings/notifications", label: "Thông báo", page: "settings-notifications" },
+          { to: "/settings/offline-sync", label: "Đồng bộ & Offline", page: "settings-offline-sync" },
+        ]
+      },
+    ],
+  },
+];
+
+function NavIcon({ children, className = "flex-shrink-0" }: { children: ReactNode; className?: string }) {
+  return <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
+}
+
 export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: SidebarProps) {
-  const cashier = isCashier();
+  const user = sessionUser();
   const { pathname } = useLocation();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ sales: true });
   useEffect(() => {
     const group = pathname.split("/")[1];
     setExpanded(current => ({ ...current, [group]: true }));
   }, [pathname]);
+
+  const visibleSections = SECTIONS.map(section => ({
+    ...section,
+    entries: section.entries.flatMap((entry): SidebarEntry[] => {
+      if (!isGroup(entry)) return canVisit(entry.to) ? [entry] : [];
+      const children = entry.children.filter(child => canVisit(child.to));
+      return children.length ? [{ ...entry, children }] : [];
+    }),
+  })).filter(section => section.entries.length > 0);
+
   return <aside id="sidebar" className={`${mobileOpen ? "mobile-open" : ""} ${collapsed ? "collapsed" : ""}`} aria-label="Thanh điều hướng chính">
-    <NavLink onClick={onNavigate} end to={cashier ? "/sales/pos" : "/dashboard"} id="sidebar-logo" className="flex items-center h-16 px-4 border-b" style={{ "borderColor": "var(--border)", "flexShrink": "0", "textDecoration": "none", "transition": "background 0.15s" }}>
+    <NavLink onClick={onNavigate} end to={homePath()} id="sidebar-logo" className="flex items-center h-16 px-4 border-b" style={{ "borderColor": "var(--border)", "flexShrink": "0", "textDecoration": "none", "transition": "background 0.15s" }}>
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center" style={{ "background": "linear-gradient(135deg,#22B573 0%,#16A34A 100%)", "borderRadius": "12px", "boxShadow": "0 2px 8px rgba(34,181,115,0.3)" }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -30,207 +179,37 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
     </NavLink>
 
     <nav id="sidebar-nav" className="flex-1 overflow-y-auto py-3 px-3" style={{ "gap": "2px" }}>
-
-      {!cashier && (<><div className="sidebar-section-label">CHÍNH</div>
-
-      <NavLink onClick={onNavigate} end to="/dashboard" className="nav-item" data-page="dashboard">
-        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-        <span className="sidebar-label flex-1">Bảng điều khiển</span>
-      </NavLink></>)}
-
-      <div className="sidebar-section-label">KHO HÀNG & NGUYÊN LIỆU</div>
-
-
-      <div className="submenu-group" data-submenu="inventory">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-inventory" data-page-group="inventory" onClick={() => setExpanded(current => ({ ...current, "inventory": !current["inventory"] }))} aria-expanded={!!expanded["inventory"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
-          <span className="sidebar-label flex-1 text-left">Kho hàng</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["inventory"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["inventory"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["inventory"] ? "open" : ""}`} id="submenu-inventory" inert={!expanded["inventory"]}>
-          {(!cashier || cashierCanVisit("/inventory/products")) && <NavLink onClick={onNavigate} end to="/inventory/products" className="submenu-item" data-page="products">Sản phẩm</NavLink>}
-          {(!cashier || cashierCanVisit("/inventory/ingredients")) && <NavLink onClick={onNavigate} end to="/inventory/ingredients" className="submenu-item" data-page="ingredients">Nguyên vật liệu</NavLink>}
-          {(!cashier || cashierCanVisit("/inventory/products/new")) && <NavLink onClick={onNavigate} end to="/inventory/products/new" className="submenu-item" data-page="add-product">Thêm sản phẩm</NavLink>}
-          {(!cashier || cashierCanVisit("/inventory/categories")) && <NavLink onClick={onNavigate} end to="/inventory/categories" className="submenu-item" data-page="categories">Danh mục</NavLink>}
-          {(!cashier || cashierCanVisit("/inventory/branches")) && <NavLink onClick={onNavigate} end to="/inventory/branches" className="submenu-item" data-page="branches">Chi nhánh</NavLink>}
-          {(!cashier || cashierCanVisit("/inventory/units")) && <NavLink onClick={onNavigate} end to="/inventory/units" className="submenu-item" data-page="units">Đơn vị tính</NavLink>}
-          {(!cashier || cashierCanVisit("/inventory/stock-adjustment")) && <NavLink onClick={onNavigate} end to="/inventory/stock-adjustment" className="submenu-item" data-page="stock-adjustment">Điều chỉnh kho</NavLink>}
-        </div>
-      </div>
-
-
-      {!cashier && (<><div className="submenu-group" data-submenu="purchases">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-purchases" data-page-group="purchases" onClick={() => setExpanded(current => ({ ...current, "purchases": !current["purchases"] }))} aria-expanded={!!expanded["purchases"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
-          <span className="sidebar-label flex-1 text-left">Nhập hàng</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["purchases"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["purchases"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["purchases"] ? "open" : ""}`} id="submenu-purchases" inert={!expanded["purchases"]}>
-          <NavLink onClick={onNavigate} end to="/purchases" className="submenu-item" data-page="purchases">Tất cả đơn nhập</NavLink>
-          <NavLink onClick={onNavigate} end to="/purchases/new" className="submenu-item" data-page="add-purchase">Tạo đơn nhập</NavLink>
-          <NavLink onClick={onNavigate} end to="/purchases/receipts" className="submenu-item" data-page="receipts">Phiếu nhập kho</NavLink>
-          <NavLink onClick={onNavigate} end to="/purchases/transfers" className="submenu-item" data-page="stock-transfers">Điều chuyển kho</NavLink>
-        </div>
-      </div>
-
-
-      <div className="submenu-group" data-submenu="production">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-production" data-page-group="production" onClick={() => setExpanded(current => ({ ...current, "production": !current["production"] }))} aria-expanded={!!expanded["production"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" /></svg>
-          <span className="sidebar-label flex-1 text-left">Sản xuất & Pha chế</span>
-          <span className="nav-toggle-icon sidebar-label"><svg className="icon-plus" style={{ display: expanded["production"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg><svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: expanded["production"] ? "block" : "none" }}><path d="M5 12h14" /></svg></span>
-        </button>
-        <div className={`submenu ${expanded["production"] ? "open" : ""}`} id="submenu-production" inert={!expanded["production"]}>
-          <NavLink onClick={onNavigate} end to="/production/recipes" className="submenu-item" data-page="recipes">Công thức pha chế</NavLink>
-          <NavLink onClick={onNavigate} end to="/production/batches" className="submenu-item" data-page="batches">Lô sản xuất</NavLink>
-        </div>
-      </div>
-
-      <NavLink onClick={onNavigate} end to="/distribution/planning" className="nav-item" data-page="planning"><svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7h13v11H3zM16 11h3l3 3v4h-6z" /><circle cx="7.5" cy="18.5" r="1.5" /><circle cx="18.5" cy="18.5" r="1.5" /></svg><span className="sidebar-label flex-1">Kế hoạch phân phối</span></NavLink>
-
-
-      <div className="submenu-group" data-submenu="stores">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-stores" data-page-group="stores" onClick={() => setExpanded(current => ({ ...current, "stores": !current["stores"] }))} aria-expanded={!!expanded["stores"]}><svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10h18l-2-6H5l-2 6ZM5 10v10h14V10M9 20v-6h6v6" /></svg><span className="sidebar-label flex-1 text-left">Cửa hàng chi nhánh</span><span className="nav-toggle-icon sidebar-label"><svg className="icon-plus" style={{ display: expanded["stores"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg><svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: expanded["stores"] ? "block" : "none" }}><path d="M5 12h14" /></svg></span></button>
-        <div className={`submenu ${expanded["stores"] ? "open" : ""}`} id="submenu-stores" inert={!expanded["stores"]}>
-          <NavLink onClick={onNavigate} end to="/stores/ingredients" className="submenu-item" data-page="store-ingredients">Nguyên liệu tại quán</NavLink>
-          <NavLink onClick={onNavigate} end to="/stores/shift-reconciliation" className="submenu-item" data-page="shift-reconciliation">Đối soát ca trực</NavLink>
-        </div>
-      </div>
-</>)}
-
-      <div className="submenu-group" data-submenu="sales">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-sales" data-page-group="sales" onClick={() => setExpanded(current => ({ ...current, "sales": !current["sales"] }))} aria-expanded={!!expanded["sales"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-          <span className="sidebar-label flex-1 text-left">Bán hàng</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["sales"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["sales"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["sales"] ? "open" : ""}`} id="submenu-sales" inert={!expanded["sales"]}>
-          {(!cashier || cashierCanVisit("/sales")) && <NavLink onClick={onNavigate} end to="/sales" className="submenu-item" data-page="sales">Tất cả đơn bán</NavLink>}
-          {(!cashier || cashierCanVisit("/sales/pos")) && <NavLink onClick={onNavigate} end to="/sales/pos" className="submenu-item" data-page="add-sale">Điểm bán hàng (POS)</NavLink>}
-          {(!cashier || cashierCanVisit("/sales/shifts")) && <NavLink onClick={onNavigate} end to="/sales/shifts" className="submenu-item" data-page="shifts">Ca làm việc &amp; Bàn giao quỹ</NavLink>}
-          {(!cashier || cashierCanVisit("/sales/preparation")) && <NavLink onClick={onNavigate} end to="/sales/preparation" className="submenu-item" data-page="preparation">Hàng đợi pha chế (KDS)</NavLink>}
-          {(!cashier || cashierCanVisit("/sales/returns")) && <NavLink onClick={onNavigate} end to="/sales/returns" className="submenu-item" data-page="sales-returns">Trả hàng bán</NavLink>}
-        </div>
-      </div>
-
-      <NavLink onClick={onNavigate} end to="/invoices" className="nav-item" data-page="invoices">
-        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
-        <span className="sidebar-label flex-1">Hóa đơn</span>
-      </NavLink>
-
-      <div className="sidebar-section-label">MARKETING &amp; KHUYẾN MÃI</div>
-
-      <div className="submenu-group" data-submenu="marketing">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-marketing" data-page-group="marketing" onClick={() => setExpanded(current => ({ ...current, "marketing": !current["marketing"] }))} aria-expanded={!!expanded["marketing"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-          <span className="sidebar-label flex-1 text-left">Marketing</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["marketing"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["marketing"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["marketing"] ? "open" : ""}`} id="submenu-marketing" inert={!expanded["marketing"]}>
-          {(!cashier || cashierCanVisit("/marketing/promotions")) && <NavLink onClick={onNavigate} end to="/marketing/promotions" className="submenu-item" data-page="promotions">Chương trình khuyến mãi</NavLink>}
-          {(!cashier || cashierCanVisit("/marketing/branch-promotions")) && <NavLink onClick={onNavigate} end to="/marketing/branch-promotions" className="submenu-item" data-page="branch-promotions">Áp dụng theo chi nhánh</NavLink>}
-        </div>
-      </div>
-
-      {!cashier && (<><div className="sidebar-section-label">KHÁCH HÀNG</div>
-
-      <NavLink onClick={onNavigate} end to="/customers" className="nav-item" data-page="customers">
-        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-        <span className="sidebar-label flex-1">Khách hàng</span>
-      </NavLink>
-
-      <div className="sidebar-section-label">ĐỐI TÁC &amp; TÀI CHÍNH</div>
-
-      <NavLink onClick={onNavigate} end to="/suppliers" className="nav-item" data-page="suppliers">
-        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>
-        <span className="sidebar-label flex-1">Nhà cung cấp</span>
-      </NavLink>
-
-      <NavLink onClick={onNavigate} end to="/expenses" className="nav-item" data-page="expenses">
-        <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>
-        <span className="sidebar-label flex-1">Chi phí</span>
-      </NavLink>
-
-      <div className="sidebar-section-label">BÁO CÁO & PHÂN TÍCH</div>
-
-
-      <div className="submenu-group" data-submenu="reports">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-reports" data-page-group="reports" onClick={() => setExpanded(current => ({ ...current, "reports": !current["reports"] }))} aria-expanded={!!expanded["reports"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-          <span className="sidebar-label flex-1 text-left">Báo cáo</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["reports"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["reports"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["reports"] ? "open" : ""}`} id="submenu-reports" inert={!expanded["reports"]}>
-          <NavLink onClick={onNavigate} end to="/reports/sales-report" className="submenu-item" data-page="sales-report">Báo cáo bán hàng</NavLink>
-          <NavLink onClick={onNavigate} end to="/reports/purchase-report" className="submenu-item" data-page="purchase-report">Báo cáo nhập hàng</NavLink>
-          <NavLink onClick={onNavigate} end to="/reports/inventory-report" className="submenu-item" data-page="inventory-report">Báo cáo tồn kho</NavLink>
-          <NavLink onClick={onNavigate} end to="/reports/profit-loss" className="submenu-item" data-page="profit-loss">Lợi nhuận &amp; Lỗ</NavLink>
-          <NavLink onClick={onNavigate} end to="/reports/customer-report" className="submenu-item" data-page="customer-report">Báo cáo khách hàng</NavLink>
-          <NavLink onClick={onNavigate} end to="/reports/supplier-report" className="submenu-item" data-page="supplier-report">Báo cáo nhà cung cấp</NavLink>
-        </div>
-      </div>
-
-      <div className="sidebar-section-label">QUẢN TRỊ HỆ THỐNG</div>
-
-
-      <div className="submenu-group" data-submenu="users">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-users" data-page-group="users" onClick={() => setExpanded(current => ({ ...current, "users": !current["users"] }))} aria-expanded={!!expanded["users"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-          <span className="sidebar-label flex-1 text-left">Người dùng</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["users"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["users"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["users"] ? "open" : ""}`} id="submenu-users" inert={!expanded["users"]}>
-          <NavLink onClick={onNavigate} end to="/users" className="submenu-item" data-page="users-list">Tất cả người dùng</NavLink>
-          <NavLink onClick={onNavigate} end to="/users/roles" className="submenu-item" data-page="roles">Vai trò &amp; Quyền hạn</NavLink>
-        </div>
-      </div>
-
-
-      <div className="submenu-group" data-submenu="settings">
-        <button className="nav-item submenu-toggle" type="button" aria-controls="submenu-settings" data-page-group="settings" onClick={() => setExpanded(current => ({ ...current, "settings": !current["settings"] }))} aria-expanded={!!expanded["settings"]}>
-          <svg className="flex-shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.07 4.93l-1.41 1.41M5.34 18.66l-1.41 1.41M2 12h2M20 12h2M6.34 5.34L4.93 4.93M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M18.66 6.34l-1.41 1.41M6.34 18.66l-1.41 1.41" /></svg>
-          <span className="sidebar-label flex-1 text-left">Cài đặt</span>
-          <span className="nav-toggle-icon sidebar-label">
-            <svg className="icon-plus" style={{ display: expanded["settings"] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded["settings"] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          </span>
-        </button>
-        <div className={`submenu ${expanded["settings"] ? "open" : ""}`} id="submenu-settings" inert={!expanded["settings"]}>
-          <NavLink onClick={onNavigate} end to="/settings/general" className="submenu-item" data-page="settings-general">Cài đặt chung</NavLink>
-          <NavLink onClick={onNavigate} end to="/settings/inventory" className="submenu-item" data-page="settings-inventory">Cài đặt kho</NavLink>
-          <NavLink onClick={onNavigate} end to="/settings/sales" className="submenu-item" data-page="settings-sales">Cài đặt bán hàng</NavLink>
-          <NavLink onClick={onNavigate} end to="/settings/purchases" className="submenu-item" data-page="settings-purchases">Cài đặt nhập hàng</NavLink>
-          <NavLink onClick={onNavigate} end to="/settings/notifications" className="submenu-item" data-page="settings-notifications">Thông báo</NavLink>
-          <NavLink onClick={onNavigate} end to="/settings/offline-sync" className="submenu-item" data-page="settings-offline-sync">Đồng bộ &amp; Offline</NavLink>
-        </div>
-      </div></>)}
+      {visibleSections.map(section => <div key={section.label}>
+        {section.label && <div className="sidebar-section-label">{section.label}</div>}
+        {section.entries.map(entry => isGroup(entry) ? (
+          <div className="submenu-group" data-submenu={entry.key} key={entry.key}>
+            <button className="nav-item submenu-toggle" type="button" aria-controls={`submenu-${entry.key}`} data-page-group={entry.key} onClick={() => setExpanded(current => ({ ...current, [entry.key]: !current[entry.key] }))} aria-expanded={!!expanded[entry.key]}>
+              <NavIcon>{entry.icon}</NavIcon>
+              <span className="sidebar-label flex-1 text-left">{entry.label}</span>
+              <span className="nav-toggle-icon sidebar-label">
+                <svg className="icon-plus" style={{ display: expanded[entry.key] ? "none" : "block" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                <svg className="icon-minus" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: expanded[entry.key] ? "block" : "none" }}><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              </span>
+            </button>
+            <div className={`submenu ${expanded[entry.key] ? "open" : ""}`} id={`submenu-${entry.key}`} inert={!expanded[entry.key]}>
+              {entry.children.map(child => <NavLink key={child.to} onClick={onNavigate} end to={child.to} className="submenu-item" data-page={child.page}>{child.label}</NavLink>)}
+            </div>
+          </div>
+        ) : (
+          <NavLink key={entry.to} onClick={onNavigate} end to={entry.to} className="nav-item" data-page={entry.page}>
+            <NavIcon>{entry.icon}</NavIcon>
+            <span className="sidebar-label flex-1">{entry.label}</span>
+          </NavLink>
+        ))}
+      </div>)}
     </nav>
-
 
     <div id="sidebar-user" className="p-3 border-t" style={{ "borderColor": "var(--border)", "flexShrink": "0" }}>
       <NavLink onClick={onNavigate} end to="/profile" className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--background)] transition-colors" style={{ "textDecoration": "none" }}>
-        <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm" style={{ "background": "var(--primary)" }}>HL</div>
+        <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm" style={{ "background": "var(--primary)" }}>{user.name.split(" ").slice(-2).map(part => part[0]).join("").toUpperCase()}</div>
         <div className="sidebar-label min-w-0">
-          <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>{cashier ? cashierName() : "Nguyễn Hoàng Long"}</div>
-          <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>{cashier ? "Nhân viên POS" : "Quản trị viên"}</div>
+          <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>{user.name}</div>
+          <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>{user.roleLabel}</div>
         </div>
       </NavLink>
     </div>

@@ -1,16 +1,23 @@
-import { isCashier, cashierName } from "../../utils/auth";
+import { canVisit, homePath, isCashier, isManager, isWarehouse, sessionUser } from "../../utils/auth";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
 
+const STAFF_CODES = { owner: "NV-ADMIN-01", manager: "NV-QL-CN05", cashier: "NV-POS-01", warehouse: "NV-KHO-01" } as const;
+const DEFAULT_PHONE = { owner: "0903 123 456", manager: "0907 654 321", cashier: "0908 111 222", warehouse: "0909 888 777" } as const;
+const DEFAULT_ADDRESS = { owner: "Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM", manager: "Quận 10, TP.HCM", cashier: "Quận 1, TP.HCM", warehouse: "Bình Tân, TP.HCM" } as const;
+
 export default function ProfilePage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const user = sessionUser();
+  const persisted = isCashier() || isManager() || isWarehouse();
+  const storageKey = (field: string) => `milktyway.${user.role}.${field}`;
 
-  const [fullName, setFullName] = useState(isCashier() ? cashierName() : "Nguyễn Hoàng Long");
-  const [phone, setPhone] = useState(isCashier() ? localStorage.getItem("milktyway.cashier.phone") || "" : "0903 123 456");
-  const [address, setAddress] = useState(isCashier() ? localStorage.getItem("milktyway.cashier.address") || "" : "Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM");
+  const [fullName, setFullName] = useState(user.name);
+  const [phone, setPhone] = useState(persisted ? localStorage.getItem(storageKey("phone")) || DEFAULT_PHONE[user.role] : DEFAULT_PHONE[user.role]);
+  const [address, setAddress] = useState(persisted ? localStorage.getItem(storageKey("address")) || DEFAULT_ADDRESS[user.role] : DEFAULT_ADDRESS[user.role]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -32,11 +39,11 @@ export default function ProfilePage() {
       toast.error("Mật khẩu xác nhận không khớp!");
       return;
     }
-    if (isCashier()) {
-      localStorage.setItem("milktyway.cashier.name", fullName.trim());
-      localStorage.setItem("milktyway.cashier.phone", phone);
-      localStorage.setItem("milktyway.cashier.address", address);
-      if (newPassword) localStorage.setItem("milktyway.cashier.password", newPassword);
+    if (persisted) {
+      localStorage.setItem(storageKey("name"), fullName.trim());
+      localStorage.setItem(storageKey("phone"), phone);
+      localStorage.setItem(storageKey("address"), address);
+      if (newPassword) localStorage.setItem(storageKey("password"), newPassword);
     }
     toast.success("Đã cập nhật hồ sơ nhân sự thành công!", {
       title: "Hồ Sơ",
@@ -49,7 +56,7 @@ export default function ProfilePage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Hồ sơ cá nhân</span>
           </nav>
@@ -80,9 +87,9 @@ export default function ProfilePage() {
           </div>
           <h2 className="text-lg font-bold text-[var(--text)]">{fullName}</h2>
           <div className="text-[13px] text-[var(--primary)] font-semibold mt-1">
-            {isCashier() ? "Nhân viên POS" : "Quản trị viên (Chủ Doanh Nghiệp)"}
+            {user.roleLabel}
           </div>
-          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: {isCashier() ? "NV-POS-01" : "NV-ADMIN-01"}</div>
+          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: {STAFF_CODES[user.role]}</div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mt-2 border border-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Đang Trong Ca Trực Chiều
@@ -108,11 +115,11 @@ export default function ProfilePage() {
           <div className="text-left flex flex-col gap-2.5 mt-5 text-xs text-[var(--muted)]">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Chi Nhánh:</span>
-              {isCashier() ? "CN01 · Quầy 01" : "Trụ Sở Chính & Giám sát CN05"}
+              {user.branchLabel}
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Email:</span>
-              {isCashier() ? "anh.lqt@MilktyWay.vn" : "long.nh@MilktyWay.vn"}
+              {user.email}
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Hotline:</span>
@@ -159,13 +166,15 @@ export default function ProfilePage() {
               >
                 Xin Đổi Ca Trực
               </button>)}
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => navigate("/sales/shifts")}
-              >
-                Đóng Ca &amp; Đối Soát Tiền Mặt
-              </button>
+              {canVisit("/sales/shifts") && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/sales/shifts")}
+                >
+                  Đóng Ca &amp; Đối Soát Tiền Mặt
+                </button>
+              )}
             </div>
           </div>
 

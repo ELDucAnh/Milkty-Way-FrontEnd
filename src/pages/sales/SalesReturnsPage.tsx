@@ -1,4 +1,4 @@
-import { checkLogin, isCashier, counterBranch } from "../../utils/auth";
+import { can, checkLogin, homePath, isCashier, isManager, scopedBranch, sessionUser } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import Modal from "../../components/common/Modal";
@@ -81,22 +81,26 @@ export default function SalesReturnsPage() {
     const [reviewNote, setReviewNote] = useState("");
 
     // Form tạo khiếu nại mới
-    const availableOrders = useMemo(() => loadOrders().filter(o => !isCashier() || o.branchId === counterBranch), [open]);
+    const availableOrders = useMemo(() => loadOrders().filter(o => !scopedBranch() || o.branchId === scopedBranch()), [open]);
     const [formOrderId, setFormOrderId] = useState("");
     const [formReason, setFormReason] = useState("Sai mức đường / đá");
     const [formResolution, setFormResolution] = useState("Hoàn tiền");
     const [formAmount, setFormAmount] = useState("45000");
     const [formNote, setFormNote] = useState("");
 
-    const canReview = checkLogin() === "manager" || checkLogin() === "owner";
+    const canReview = (checkLogin() === "manager" || checkLogin() === "owner") && can("payment.refundReview");
     const selected = reviewState.requests.find(request => request.id === selectedId);
     const visibleRequests = reviewState.requests.filter(request =>
-        (!isCashier() || availableOrders.some(o => o.id === request.orderId)) &&
+        (!scopedBranch() || availableOrders.some(o => o.id === request.orderId)) &&
         (!status || request.status === status) &&
         `${request.id} ${request.orderId} ${request.customer}`.toLocaleLowerCase("vi-VN").includes(query.trim().toLocaleLowerCase("vi-VN")));
 
     function reviewRequest(decision: "Approved" | "Rejected") {
         if (!canReview || !selected) return;
+        if (scopedBranch() && !availableOrders.some(o => o.id === selected.orderId)) {
+            toast.warning("Chỉ được xử lý khiếu nại của đơn hàng thuộc chi nhánh của bạn.");
+            return;
+        }
         if (decision === "Rejected" && !reviewNote.trim()) {
             toast.warning("Vui lòng nhập lý do từ chối giải quyết khiếu nại.");
             return;
@@ -105,7 +109,7 @@ export default function SalesReturnsPage() {
         const isRefund = decision === "Approved" && selected.resolution === "Hoàn tiền" && selected.amount > 0;
         const entry: ReviewEntry = {
             requestId: selected.id,
-            reviewer: checkLogin() === "manager" ? "Quản lý chi nhánh" : "Nguyễn Hoàng Long (Quản Trị Viên)",
+            reviewer: checkLogin() === "manager" ? `${sessionUser().name} (Quản lý chi nhánh)` : "Nguyễn Hoàng Long (Quản Trị Viên)",
             memberId: selected.memberId,
             refundedAmount: isRefund ? selected.amount : 0,
             pointsChange: isRefund && selected.memberId ? selected.points : 0,
@@ -187,7 +191,7 @@ export default function SalesReturnsPage() {
             <div className="page-header">
                 <div>
                     <div className="breadcrumb">
-                        <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Tổng quan</Link>
+                        <Link to={homePath()}>Tổng quan</Link>
                         <span className="sep">/</span>
                         <Link to="/sales">Đơn hàng</Link>
                         <span className="sep">/</span>
@@ -196,12 +200,14 @@ export default function SalesReturnsPage() {
                     <h1 className="page-title">Khiếu nại và hoàn tiền</h1>
                     <p className="page-subtitle">Theo dõi đổi món, hủy trước pha, bù mã ưu đãi và hoàn tiền toàn chuỗi.</p>
                 </div>
-                <div className="flex gap-2.5 flex-wrap">
-                    <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                        Tạo yêu cầu xử lý
-                    </button>
-                </div>
+                {!isManager() && (
+                    <div className="flex gap-2.5 flex-wrap">
+                        <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                            Tạo yêu cầu xử lý
+                        </button>
+                    </div>
+                )}
             </div>
 
             {!isCashier() && (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">

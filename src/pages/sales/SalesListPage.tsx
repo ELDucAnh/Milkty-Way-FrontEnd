@@ -1,4 +1,4 @@
-import { isCashier, counterBranch } from "../../utils/auth";
+import { can, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
 import { useToast } from "../../components/common/useToast";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -30,7 +30,7 @@ export default function SalesListPage() {
     const [filters, setFilters] = useState<Record<string, string>>({});
 
     const groups = [
-        { key: "branchId", label: "Chi nhánh", options: branches.filter(b => !isCashier() || b.id === counterBranch).map(b => [b.id, b.name]) },
+        { key: "branchId", label: "Chi nhánh", options: branches.filter(b => !scopedBranch() || b.id === scopedBranch()).map(b => [b.id, b.name]) },
         { key: "shift", label: "Ca làm việc", options: Object.entries(shiftLabels) },
         { key: "channel", label: "Kênh bán", options: Object.entries(channelLabels) },
         ...[
@@ -44,7 +44,7 @@ export default function SalesListPage() {
         })),
     ];
 
-    const rows = allOrders.filter(row => (!isCashier() || row.branchId === counterBranch) &&
+    const rows = allOrders.filter(row => (!scopedBranch() || row.branchId === scopedBranch()) &&
         `${row.id} ${row.customer} ${row.phone}`.toLocaleLowerCase("vi-VN").includes(appliedQuery.trim().toLocaleLowerCase("vi-VN")) &&
         groups.every(g => !appliedFilters[g.key] || row[g.key as keyof SalesOrder] === appliedFilters[g.key])
     );
@@ -155,18 +155,18 @@ export default function SalesListPage() {
                             </svg>
                             Xuất dữ liệu
                         </button>}
-                        <button className="btn btn-primary" onClick={() => navigate("/sales/pos")}>
+                        {can("order.create") && <button className="btn btn-primary" onClick={() => navigate("/sales/pos")}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19" />
                                 <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
                             Tạo đơn mới (POS)
-                        </button>
+                        </button>}
                     </>
                 }
             />
 
-            {!isCashier() && (<section aria-label="Thống kê đơn hàng">
+            {!isBranchScoped() && (<section aria-label="Thống kê đơn hàng">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
                     <div className="stat-card">
                         <div className="stat-card-icon icon-bg-primary">

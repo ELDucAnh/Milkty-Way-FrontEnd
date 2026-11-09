@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { cashierCanVisit, checkLogin, logout } from "../utils/auth";
+import { canVisit, checkLogin, homePath, logout } from "../utils/auth";
 import { useLocation, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import AuthLayout from "../layouts/AuthLayout";
@@ -80,7 +80,7 @@ export default function AppRoutes() {
   const role = checkLogin();
   const { pathname } = useLocation();
   useEffect(() => { if (pathname === "/logout") logout(); }, [pathname]);
-  if (role === "cashier" && !cashierCanVisit(pathname)) return <Navigate to="/sales/pos" replace />;
+  if (role && !canVisit(pathname, role)) return <Navigate to={homePath(role)} replace />;
   return (
     <Routes>
       {/* Auth Layout - Không header, không sidebar */}
@@ -98,7 +98,7 @@ export default function AppRoutes() {
 
       {/* Main Layout - Header & Sidebar tĩnh cố định, inner fade-in */}
       <Route element={role ? <MainLayout /> : <Navigate to="/login" replace />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<Navigate to={homePath(role)} replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
 
         {/* Bán Hàng & POS */}

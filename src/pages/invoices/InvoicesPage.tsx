@@ -1,4 +1,4 @@
-import { counterBranch, isCashier } from "../../utils/auth";
+import { can, homePath, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
@@ -141,7 +141,7 @@ export default function InvoicesPage() {
     return INITIAL_INVOICES;
   });
   const [search, setSearch] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState(isCashier() ? counterBranch : "");
+  const [selectedBranch, setSelectedBranch] = useState(scopedBranch() ?? "");
   const [selectedType, setSelectedType] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
 
@@ -271,7 +271,8 @@ export default function InvoicesPage() {
         item.customerName.toLowerCase().includes(q) ||
         item.customerPhone.includes(q);
 
-      const matchBranch = isCashier() ? item.branch.startsWith(counterBranch) : !selectedBranch || item.branch.includes(selectedBranch);
+      const branchScope = scopedBranch();
+      const matchBranch = branchScope ? item.branch.startsWith(branchScope) : !selectedBranch || item.branch.includes(selectedBranch);
       const matchType = !selectedType || item.type === selectedType;
       const matchStatus = !selectedStatus || item.status === selectedStatus;
 
@@ -285,7 +286,7 @@ export default function InvoicesPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Hóa đơn</span>
           </nav>
@@ -307,22 +308,22 @@ export default function InvoicesPage() {
             </svg>
             Xuất Excel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Lập Hóa Đơn Mới
-          </button></>}
+            {can("order.create") && <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Lập Hóa Đơn Mới
+            </button>}</>}
         </div>
       </div>
 
       {/* Thẻ thống kê */}
-      {!isCashier() && <section aria-label="Thống kê hóa đơn">
+      {!isBranchScoped() && <section aria-label="Thống kê hóa đơn">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Hóa Đơn"
@@ -396,7 +397,7 @@ export default function InvoicesPage() {
         <select
           className="form-input form-select h-[38px] text-[13px] min-w-[140px]"
           aria-label="Lọc theo chi nhánh"
-          disabled={isCashier()} value={selectedBranch}
+          disabled={isBranchScoped()} value={scopedBranch() ?? selectedBranch}
           onChange={(e) => setSelectedBranch(e.target.value)}
         >
           <option value="">Toàn Chuỗi</option>

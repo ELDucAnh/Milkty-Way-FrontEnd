@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
+import { scopedBranch } from "../../utils/auth";
 
 interface BestSeller {
   name: string;
@@ -73,7 +74,8 @@ const TIME_WEIGHTS: Record<string, number> = {
 
 export default function SalesReportPage() {
   const toast = useToast();
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const branchScope = scopedBranch();
+  const [selectedBranch, setSelectedBranch] = useState(branchScope ?? "");
   const [timeFilter, setTimeFilter] = useState("month");
 
   const scaleFactor = (BRANCH_WEIGHTS[selectedBranch] ?? 1) * (TIME_WEIGHTS[timeFilter] ?? 1);
@@ -114,6 +116,7 @@ export default function SalesReportPage() {
         <div className="flex gap-2.5 flex-wrap items-center">
           <select
             className="form-input form-select text-xs w-auto"
+            disabled={!!branchScope}
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
           >

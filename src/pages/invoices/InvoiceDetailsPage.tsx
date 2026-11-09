@@ -1,4 +1,4 @@
-import { isCashier, counterBranch } from "../../utils/auth";
+import { homePath, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import { Navigate, Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -14,8 +14,9 @@ export default function InvoiceDetailsPage() {
   const toast = useToast();
   const [printFormat, setPrintFormat] = useState<"k80" | "k57">("k80");
 
-  const invoices = useMemo(() => loadInvoices().filter(i => !isCashier() || i.branch.startsWith(counterBranch)), []);
-  const orders = useMemo(() => loadOrders().filter(o => !isCashier() || o.branchId === counterBranch), []);
+  const branchScope = scopedBranch();
+  const invoices = useMemo(() => loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)), [branchScope]);
+  const orders = useMemo(() => loadOrders().filter(o => !branchScope || o.branchId === branchScope), [branchScope]);
 
   const effectiveId = id && id !== "invoice-details" ? id : null;
 
@@ -54,11 +55,11 @@ export default function InvoiceDetailsPage() {
       if (byMatchedOrder) return byMatchedOrder;
       return undefined;
     }
-    if (isCashier() && (orderIdParam || effectiveId)) return undefined;
+    if (isBranchScoped() && (orderIdParam || effectiveId)) return undefined;
     return invoices[0];
   }, [effectiveId, orderIdParam, invoices, matchedOrder]);
 
-  if (isCashier() && !matchedInvoice && !matchedOrder) return <Navigate to="/invoices" replace />;
+  if (isBranchScoped() && !matchedInvoice && !matchedOrder) return <Navigate to="/invoices" replace />;
 
   const invoiceId = matchedInvoice
     ? matchedInvoice.id
@@ -132,7 +133,7 @@ export default function InvoiceDetailsPage() {
       <div className="page-header no-print">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to={isCashier() ? "/sales/pos" : "/dashboard"}>Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/invoices">Hóa đơn</Link>
             <span className="sep">/</span>

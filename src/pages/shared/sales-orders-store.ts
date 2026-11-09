@@ -469,6 +469,18 @@ export const INITIAL_RETURNS: ReturnRequest[] = [
     memberId: null,
     status: "Pending",
   },
+  {
+    id: "HT-0003",
+    orderId: "DH-00122",
+    customer: "Trần Văn An",
+    createdAt: "2026-10-28T15:10:00+07:00",
+    resolution: "Hoàn tiền",
+    reason: "Pha nhầm mức đá tại CN05",
+    amount: 44000,
+    points: -4,
+    memberId: "HV-0002",
+    status: "Pending",
+  },
 ];
 
 // Helper functions for orders
@@ -517,7 +529,9 @@ export function loadReturns(): ReturnRequest[] {
     const raw = localStorage.getItem(STORAGE_RETURNS);
     if (!raw) return INITIAL_RETURNS;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_RETURNS;
+    if (!Array.isArray(parsed) || parsed.length === 0) return INITIAL_RETURNS;
+    const saved = parsed as ReturnRequest[];
+    return [...saved, ...INITIAL_RETURNS.filter(seed => !saved.some(item => item.id === seed.id))];
   } catch {
     return INITIAL_RETURNS;
   }

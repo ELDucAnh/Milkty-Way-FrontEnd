@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
+import { scopedBranch } from "../../utils/auth";
 
 interface BranchBreakEven {
   branch: string;
@@ -94,26 +95,29 @@ const mockBranchData: BranchBreakEven[] = [
 
 export default function ProfitLossPage() {
   const toast = useToast();
+  const branchScope = scopedBranch();
   const [selectedPeriod, setSelectedPeriod] = useState<"oct26" | "q3" | "q4">("oct26");
 
   const periodFactor = selectedPeriod === "q3" ? 2.85 : selectedPeriod === "q4" ? 3.15 : 1;
 
   const periodBranches = useMemo(() => {
-    return mockBranchData.map((b) => {
-      const revenue = Math.round(b.revenue * periodFactor);
-      const cogs = Math.round(b.cogs * periodFactor);
-      const opex = Math.round(b.opex * periodFactor);
-      const netProfit = revenue - cogs - opex;
-      const breakEven = Math.round(b.breakEven * periodFactor);
-      return {
-        ...b,
-        revenue,
-        cogs,
-        opex,
-        netProfit,
-        breakEven,
-      };
-    });
+    return mockBranchData
+      .filter((b) => !branchScope || b.branch.startsWith(branchScope))
+      .map((b) => {
+        const revenue = Math.round(b.revenue * periodFactor);
+        const cogs = Math.round(b.cogs * periodFactor);
+        const opex = Math.round(b.opex * periodFactor);
+        const netProfit = revenue - cogs - opex;
+        const breakEven = Math.round(b.breakEven * periodFactor);
+        return {
+          ...b,
+          revenue,
+          cogs,
+          opex,
+          netProfit,
+          breakEven,
+        };
+      });
   }, [periodFactor]);
 
   const summary = useMemo(() => {
@@ -370,13 +374,12 @@ export default function ProfitLossPage() {
                     {b.opex.toLocaleString("vi-VN")} ₫
                   </td>
                   <td
-                    className={`text-right font-bold ${
-                      b.netProfit < 0
+                    className={`text-right font-bold ${b.netProfit < 0
                         ? "text-red-600"
                         : b.statusBadge === "warning"
                           ? "text-amber-700"
                           : "text-emerald-600"
-                    }`}
+                      }`}
                   >
                     {b.netProfit < 0
                       ? `-${Math.abs(b.netProfit).toLocaleString("vi-VN")} ₫`
@@ -386,9 +389,8 @@ export default function ProfitLossPage() {
                     {b.breakEven.toLocaleString("vi-VN")} ₫
                   </td>
                   <td
-                    className={`text-center font-bold ${
-                      b.breakEvenPercent < 100 ? "text-red-600" : "text-emerald-600"
-                    }`}
+                    className={`text-center font-bold ${b.breakEvenPercent < 100 ? "text-red-600" : "text-emerald-600"
+                      }`}
                   >
                     {b.breakEvenPercent}%
                   </td>
