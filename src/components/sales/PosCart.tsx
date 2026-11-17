@@ -1,69 +1,142 @@
+<<<<<<< Updated upstream
 import { useState } from "react";
+=======
+import { findPosMember } from "../../data/sales/members";
+import { checkLogin } from "../../utils/auth";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+>>>>>>> Stashed changes
 import ConfirmDialog from "../common/ConfirmDialog";
 import { useToast } from "../common/useToast";
 import { formatCurrency } from "../../utils/format";
-import { createPosOrder } from "../../pages/shared/sales-orders-store";
+import {
+  assertPosCheckoutEditable,
+  createPosOrderExclusive,
+} from "../../pages/shared/sales-orders-store";
+import {
+  parsePromotionCodes,
+  quotePromotionCheckout,
+  PROMOTIONS_CHANGED,
+  STORAGE_PROMOTIONS,
+  type PromotionQuote,
+} from "../../pages/shared/promotions-store";
 
-export interface PosCartItem {
-    id: string;
-    productId: string;
-    name: string;
-    size: "M" | "L";
-    sugar: string;
-    ice: string;
-    toppings: readonly string[];
-    note: string;
-    quantity: number;
-    unitPrice: number;
-}
+import { parsePercentage as validPercentage, type PosLine } from "../../pages/shared/sales-pricing";
+import { savePosDraft, listPosDrafts, restorePosDraft, type PosDraft } from "../../pages/shared/pos-drafts-store";
+export type PosCartItem = PosLine;
 
 export interface PosCartProps {
     items: readonly PosCartItem[];
     onRemove: (id: string) => void;
     onClear: () => void;
-    branchId?: string;
+    branchId: string;
+    staffId: string;
+    counterId: string;
+    shiftId: string;
+    customizer: ReactNode;
+    onQuantity: (id: string, quantity: number) => void;
+    onRestore: (items: PosCartItem[]) => void;
 }
 
-function validPercentage(value: string): number | null {
-    const number = value.trim() === "" ? 0 : Number(value);
-
-    return Number.isFinite(number) && number >= 0 && number <= 100
-        ? number
-        : null;
-}
-
-const SAMPLE_MEMBERS: Record<string, { name: string; tier: string; points: number; discount: number; nextProgression: string }> = {
-    "0903 123 456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 15, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 15%)" },
-    "0903123456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 15, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 15%)" },
-    "0908 123 456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 10, nextProgression: "Cần 150 điểm nữa lên VIP" },
-    "0908123456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 10, nextProgression: "Cần 150 điểm nữa lên VIP" },
-    "0912 345 678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 5, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
-    "0912345678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 5, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
-    "0988 777 666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
-    "0988777666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
-};
-
-export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }: PosCartProps) {
+export default function PosCart({ items, onRemove, onClear, branchId, staffId, counterId, shiftId, onRestore, customizer, onQuantity }: PosCartProps) {
     const toast = useToast();
+    const [channel, setChannel] = useState<"counter" | "takeaway">("counter");
+    const [orderNote, setOrderNote] = useState("");
     const [clearOpen, setClearOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("cash");
     const [phone, setPhone] = useState("");
     const [memberInfo, setMemberInfo] = useState<string | null>(null);
     const [memberName, setMemberName] = useState<string>("");
     const [voucher, setVoucher] = useState("");
+    const [promotionCodes, setPromotionCodes] = useState<string[]>([]);
+    const [, refreshPromotions] = useState(0);
+
+    useEffect(() => {
+        const refresh = () => refreshPromotions(value => value + 1);
+        const storage = (event: StorageEvent) => {
+            if (event.key === STORAGE_PROMOTIONS || event.key === null) refresh();
+        };
+        const timer = window.setInterval(refresh, 30000);
+        window.addEventListener(PROMOTIONS_CHANGED, refresh);
+        window.addEventListener("storage", storage);
+
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener(PROMOTIONS_CHANGED, refresh);
+            window.removeEventListener("storage", storage);
+        };
+    }, []);
     const [discountInput, setDiscountInput] = useState("");
+    const [flatDiscount, setFlatDiscount] = useState(0);
     const [taxInput, setTaxInput] = useState("10");
     const [paidInput, setPaidInput] = useState("");
 
     const discountRate = validPercentage(discountInput);
     const taxRate = validPercentage(taxInput);
-    const subtotal = items.reduce(
-        (sum, item) => sum + item.quantity * item.unitPrice,
-        0,
-    );
-    const discount = Math.round(subtotal * (discountRate ?? 0) / 100);
-    const tax = Math.round((subtotal - discount) * (taxRate ?? 0) / 100);
-    const total = subtotal - discount + tax;
+    let pricingError = "";
+    let amounts: PromotionQuote = {
+        subtotal: 0,
+        discount: 0,
+        tax: 0,
+        total: 0,
+        memberDiscount: 0,
+        memberSuppressed: false,
+        appliedPromotions: [],
+        ignoredCodes: [],
+        lineAmounts: [],
+    };
+
+    try {
+        amounts = quotePromotionCheckout({
+            items,
+            branchId,
+            channel,
+            discountRate: discountRate ?? 0,
+            flatDiscount,
+            taxRate: taxRate ?? 0,
+            promotionCodes, customerPhone: phone,
+        });
+    } catch (error) {
+        pricingError = error instanceof Error
+            ? error.message
+            : "Giá không hợp lệ.";
+    }
+    const { subtotal, discount, tax, total } = amounts;
+    const context = { staffId, branchId, counterId, shiftId };
+    const submitting = useRef(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const checkout = useRef({ id: crypto.randomUUID() as string, fingerprint: "" });
+    const [drafts, setDrafts] = useState<PosDraft[]>([]);
+    const [draftId, setDraftId] = useState("");
+    function holdSale() {
+        if (submitting.current) return;
+      try {
+        const id = checkout.current.id;
+        savePosDraft({ ...context, version: 1, id, checkoutId: id, createdAt: new Date().toISOString(), items: [...items], phone, memberName, memberInfo, voucher, discountInput, taxInput, paidInput, paymentMethod, flatDiscount, channel, orderNote, promotionCodes: [...promotionCodes] });
+        onClear(); setPhone(""); setMemberName(""); setMemberInfo(null); setVoucher(""); setPromotionCodes([]); setDiscountInput(""); setFlatDiscount(0); setPaidInput(""); setOrderNote(""); setChannel("counter");
+        checkout.current = { id: crypto.randomUUID(), fingerprint: "" };
+        setDrafts(listPosDrafts(context));
+        toast.success("Đã giữ đơn.");
+      } catch (error) { toast.error(error instanceof Error ? error.message : "Không giữ được đơn."); }
+    }
+    function restoreSale() {
+      try {
+        if (items.length) throw new Error("Hãy giữ hoặc xóa giỏ hiện tại trước khi khôi phục.");
+        const draft = restorePosDraft(draftId, context);
+        onRestore(draft.items); setPhone(draft.phone); setMemberName(draft.memberName); setMemberInfo(draft.memberInfo);
+        setChannel(draft.channel ?? "counter"); setOrderNote(draft.orderNote ?? ""); setVoucher(draft.voucher);
+        setPromotionCodes(draft.promotionCodes ?? []);
+
+        if (draft.voucher && !draft.promotionCodes?.length) {
+            toast.info(
+                "Đơn giữ cũ có nội dung voucher nhưng chưa xác nhận bằng store. " +
+                "Hãy áp dụng lại mã trước khi thanh toán.",
+            );
+        }
+ setDiscountInput(draft.discountInput); setFlatDiscount(draft.flatDiscount ?? 0); setTaxInput(draft.taxInput); setPaidInput(draft.paidInput); setPaymentMethod(draft.paymentMethod);
+        checkout.current = { id: draft.checkoutId, fingerprint: "" };
+        toast.success("Đã khôi phục đơn giữ.");
+      } catch (error) { toast.error(error instanceof Error ? error.message : "Không khôi phục được đơn."); }
+    }
     const paid = paidInput.trim() ? Number(paidInput) : 0;
     const paidValid = Number.isSafeInteger(paid) && paid >= 0;
     const change = paidValid ? Math.max(0, paid - total) : 0;
@@ -75,8 +148,20 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
             return;
         }
 
+<<<<<<< Updated upstream
         const found = SAMPLE_MEMBERS[cleanPhone];
         if (found) {
+=======
+        const found = findPosMember(cleanPhone);
+        setFlatDiscount(found?.tier.includes("Bạc") ? 5000 : !found || found.tier.includes("Thành Viên") ? 2000 : 0);
+        setDiscountInput(String(found?.discount ?? 0));
+        if (found && checkLogin() === "cashier") {
+            setMemberName(found.name);
+            setMemberInfo(found.name);
+            setDiscountInput(String(found.discount));
+            toast.success("Đã áp dụng ưu đãi hiện có của khách hàng.");
+        } else if (found) {
+>>>>>>> Stashed changes
             setMemberName(found.name);
             setMemberInfo(`${found.name} · ${found.tier} (${found.points.toLocaleString()} điểm · ${found.nextProgression})`);
             if (found.discount > 0) {
@@ -99,30 +184,50 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
     }
 
     function handleApplyVoucher() {
-        const code = voucher.trim().toUpperCase();
-        if (!code) {
-            toast.warning("Vui lòng nhập mã ưu đãi.");
-            return;
-        }
+        try {
+            const codes = parsePromotionCodes(voucher);
 
-        if (code === "CHAOBAN" || code === "MILTYWAY" || code === "GIAM10") {
-            setDiscountInput("10");
-            toast.success(`Mã ưu đãi [${code}] hợp lệ: Giảm ngay 10% tổng đơn!`, {
-                title: "Áp Dụng Thành Công",
+            if (!codes.length) {
+                setPromotionCodes([]);
+                toast.info("Đã bỏ mã khuyến mãi.");
+                return;
+            }
+
+            const quote = quotePromotionCheckout({
+                items,
+                branchId,
+                channel,
+                discountRate: discountRate ?? 0,
+                flatDiscount,
+                taxRate: taxRate ?? 0,
+                promotionCodes: codes, customerPhone: phone,
             });
-        } else if (code === "GIAM20" || code === "VIP20") {
-            setDiscountInput("20");
-            toast.success(`Mã ưu đãi [${code}] hợp lệ: Giảm ngay 20% tổng đơn!`, {
-                title: "Áp Dụng Thành Công",
-            });
-        } else {
-            toast.error(`Mã ưu đãi [${code}] không tồn tại hoặc đã hết lượt dùng.`, {
-                title: "Không Hợp Lệ",
-            });
+
+            setPromotionCodes(codes);
+
+            const applied = quote.appliedPromotions.map(row => row.code).join(", ");
+            toast.success(`Đã áp dụng: ${applied}.`);
+
+            if (quote.memberSuppressed && (discountRate || flatDiscount)) {
+                toast.info("Mã ưu đãi không cộng dồn giảm hạng thành viên.");
+            }
+            if (quote.ignoredCodes.length) {
+                toast.info(
+                    `Không áp dụng ${quote.ignoredCodes.join(", ")} ` +
+                    "do quy tắc độc quyền/ưu tiên.",
+                );
+            }
+        } catch (error) {
+            setPromotionCodes([]);
+            toast.error(
+                error instanceof Error ? error.message : "Không áp dụng được mã.",
+            );
         }
     }
 
-    function completeSale() {
+    async function completeSale() {
+        if (submitting.current) return;
+        if (pricingError) { toast.error(pricingError); return; }
         if (!items.length) {
             toast.warning("Giỏ hàng đang trống.");
             return;
@@ -140,11 +245,18 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
 
         // Xác định hạng thành viên nếu tìm thấy
         const cleanPhone = phone.trim();
-        const found = cleanPhone ? SAMPLE_MEMBERS[cleanPhone] : null;
+        const found = cleanPhone ? findPosMember(cleanPhone) : null;
         const tier = found ? (found.tier.includes("VIP") ? "VIP" : found.tier.includes("Vàng") ? "Gold" : found.tier.includes("Bạc") ? "Silver" : "Member") : (cleanPhone ? "Member" : undefined);
 
         // Tạo đơn hàng thực tế vào hệ thống chung
-        const { order, invoice } = createPosOrder({
+        submitting.current = true; setIsSubmitting(true);
+        try {
+        const payload = { ...context, items, customerPhone: cleanPhone, customerName: memberName, tier, paymentMethod, paidAmount: paymentMethod === "cash" ? paid : total, discountRate, taxRate, flatDiscount, channel, orderNote, promotionCodes, expectedTotal: total };
+        const fingerprint = JSON.stringify(payload);
+        if (checkout.current.fingerprint && checkout.current.fingerprint !== fingerprint) checkout.current.id = crypto.randomUUID();
+        checkout.current.fingerprint = fingerprint;
+        const { order, invoice } = await createPosOrderExclusive({
+            ...context, checkoutId: checkout.current.id,
             branchId,
             items: [...items],
             customerPhone: cleanPhone || undefined,
@@ -154,6 +266,10 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
             paidAmount: paymentMethod === "cash" ? paid : total,
             discountRate: discountRate ?? 0,
             taxRate: taxRate ?? 10,
+            flatDiscount, channel, orderNote,
+            promotionCodes: [...promotionCodes],
+            expectedTotal: total,
+
         });
 
         toast.success(
@@ -162,57 +278,42 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         );
 
         onClear();
-        setPaidInput("");
-        setVoucher("");
-        setDiscountInput("");
+        setPaidInput(""); setOrderNote(""); setChannel("counter");
+        setVoucher(""); setPromotionCodes([]);
+        setDiscountInput(""); setFlatDiscount(0);
         setPhone("");
         setMemberInfo(null);
         setMemberName("");
+        checkout.current = { id: crypto.randomUUID(), fingerprint: "" };
+        setDrafts([]); setDraftId("");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Không lưu được giao dịch. Giỏ được giữ lại.");
+        } finally { submitting.current = false; setIsSubmitting(false); }
     }
 
+    const shortcutActions = useRef({ holdSale, completeSale, total, paymentMethod, clearOpen });
+    shortcutActions.current = { holdSale, completeSale, total, paymentMethod, clearOpen };
+    useEffect(() => {
+      const handler = (event: KeyboardEvent) => {
+        if (event.repeat || event.isComposing || document.querySelector('[role="dialog"]')) return;
+        const action = shortcutActions.current;
+        if (action.clearOpen) return;
+        if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "h") { event.preventDefault(); action.holdSale(); }
+        else if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "d") { event.preventDefault(); if (action.paymentMethod === "cash") setPaidInput(String(action.total)); }
+        else if (event.ctrlKey && !event.altKey && !event.metaKey && event.key === "Enter") { event.preventDefault(); action.completeSale(); }
+      };
+      window.addEventListener("keydown", handler);
+      return () => window.removeEventListener("keydown", handler);
+    }, []);
+    function changeQuantity(id: string, quantity: number) {
+      try { assertPosCheckoutEditable(context, checkout.current.id); if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) return; onQuantity(id,quantity); }
+      catch (error) { toast.error(error instanceof Error ? error.message : "Không sửa được giỏ."); }
+    }
     return (
-        <div className="lg:col-span-5 flex flex-col gap-4 sticky top-20">
+        <div className="pos-cart-shell">
+            <div className="pos-cart-header"><strong>Đơn hiện tại · {items.reduce((n,item) => n + item.quantity, 0)} ly</strong><select aria-label="Loại đơn" className="form-input" value={channel} onChange={e => setChannel(e.target.value as "counter" | "takeaway")}><option value="counter">Tại quầy</option><option value="takeaway">Mang đi</option></select></div>
+            <div className="pos-cart-scroll">{customizer}
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-[var(--border)]">
-                    <label className="form-label" htmlFor="member-phone">
-                        Số điện thoại hội viên
-                    </label>
-                    <div className="flex gap-2">
-                        <input
-                            id="member-phone"
-                            type="tel"
-                            inputMode="tel"
-                            className="form-input"
-                            placeholder="Ví dụ: 0903 123 456"
-                            value={phone}
-                            onChange={(event) => setPhone(event.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    handleLookupMember();
-                                }
-                            }}
-                        />
-                        <button
-                            type="button"
-                            className="btn btn-secondary shrink-0"
-                            onClick={handleLookupMember}
-                        >
-                            Tra cứu
-                        </button>
-                    </div>
-                    {memberInfo ? (
-                        <p className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            {memberInfo}
-                        </p>
-                    ) : (
-                        <p className="text-xs text-[var(--muted)] mt-2">
-                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (Hạng VIP: -15%, Hạng Vàng: -10%, Hạng Bạc: -5%).
-                        </p>
-                    )}
-                </div>
-
                 <div className="px-5 pt-4 pb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-bold">Giỏ hàng hiện tại</span>
@@ -223,14 +324,14 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                     <button
                         type="button"
                         className="text-xs text-[var(--danger)] hover:underline font-medium"
-                        disabled={!items.length}
+                        disabled={!items.length || isSubmitting || !!pricingError}
                         onClick={() => setClearOpen(true)}
                     >
                         Xóa giỏ hàng
                     </button>
                 </div>
 
-                <div className="px-5 pb-4 divide-y divide-[var(--border)] max-h-[300px] overflow-y-auto">
+                <div className="px-5 pb-4 divide-y divide-[var(--border)] ">
                     {!items.length && (
                         <div className="py-8 text-center text-sm text-[var(--muted)]">
                             <svg className="w-10 h-10 mx-auto mb-2 text-[var(--muted)]/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -255,11 +356,11 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-[var(--text)]">×{item.quantity}</span>
+                                    <button type="button" aria-label={`Giảm ${item.name}`} className="btn btn-secondary btn-sm" onClick={() => changeQuantity(item.id,item.quantity-1)}>−</button><span className="text-xs font-bold">{item.quantity}</span><button type="button" aria-label={`Tăng ${item.name}`} className="btn btn-secondary btn-sm" onClick={() => changeQuantity(item.id,item.quantity+1)}>+</button>
                                     <button
                                         type="button"
                                         className="text-[var(--muted)] hover:text-[var(--danger)] p-1"
-                                        onClick={() => onRemove(item.id)}
+                                        onClick={() => { try { assertPosCheckoutEditable(context, checkout.current.id); onRemove(item.id); } catch (error) { toast.error(error instanceof Error ? error.message : "Không sửa được giỏ."); } }}
                                         title="Xóa món này"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -279,6 +380,46 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                 </div>
             </div>
 
+                <div className="px-5 py-4 border-b border-[var(--border)]">
+                    <label className="form-label" htmlFor="member-phone">
+                        Số điện thoại hội viên
+                    </label>
+                    <div className="flex gap-2">
+                        <input
+                            id="member-phone"
+                            type="tel"
+                            inputMode="tel"
+                            className="form-input"
+                            placeholder="Ví dụ: 0903 123 456"
+                            value={phone}
+                            onChange={(event) => { setPhone(event.target.value); setMemberName(""); setMemberInfo(null); setFlatDiscount(0); setDiscountInput(""); }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                                    e.preventDefault();
+                                    handleLookupMember();
+                                }
+                            }}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-secondary shrink-0"
+                            onClick={handleLookupMember}
+                        >
+                            Tra cứu
+                        </button>
+                    </div>
+                    {memberInfo ? (
+                        <p className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            {memberInfo}
+                        </p>
+                    ) : (
+                        <p className="text-xs text-[var(--muted)] mt-2">
+                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (Thành viên: -2.000đ, Bạc: -5.000đ, Vàng: -5%, VIP: -10%).
+                        </p>
+                    )}
+                </div>
+
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-sm">
                 <div className="mb-4">
                     <label className="form-label" htmlFor="pos-voucher-code">
@@ -288,11 +429,11 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                         <input
                             id="pos-voucher-code"
                             className="form-input uppercase font-mono"
-                            placeholder="Nhập CHAOBAN hoặc GIAM20"
+                            placeholder="Nhập mã; dùng dấu phẩy để nhập nhiều mã"
                             value={voucher}
-                            onChange={(event) => setVoucher(event.target.value)}
+                            onChange={event => { setVoucher(event.target.value); setPromotionCodes([]); }}
                             onKeyDown={(e) => {
-                                if (e.key === "Enter") {
+                                if (e.key === "Enter" && !e.ctrlKey && !e.altKey && !e.metaKey) {
                                     e.preventDefault();
                                     handleApplyVoucher();
                                 }
@@ -306,6 +447,22 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                             Áp dụng
                         </button>
                     </div>
+{amounts.appliedPromotions.length > 0 && (
+    <div className="space-y-1 mb-3 text-xs text-emerald-700">
+        {amounts.appliedPromotions.map(promotion => (
+            <p key={promotion.campaignId}>
+                {promotion.code}: −{formatCurrency(promotion.discountAmount)}
+            </p>
+        ))}
+        {amounts.memberSuppressed && (
+            <p>Không cộng dồn giảm hạng thành viên.</p>
+        )}
+        {amounts.ignoredCodes.length > 0 && (
+            <p>Không áp dụng: {amounts.ignoredCodes.join(", ")}.</p>
+        )}
+    </div>
+)}
+
                 </div>
 
                 <div className="flex justify-between items-center mb-4 text-sm">
@@ -365,6 +522,14 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                 </div>
             </div>
 
+            <label className="form-label p-3">Ghi chú đơn<textarea className="form-input" value={orderNote} onChange={e => setOrderNote(e.target.value)} /></label>
+            <div className="card flex flex-wrap gap-2">
+
+                <button type="button" className="btn btn-secondary" onClick={() => { try { setDrafts(listPosDrafts(context)); } catch (error) { toast.error(error instanceof Error ? error.message : "Không đọc được đơn giữ."); } }}>Danh sách đơn giữ</button>
+                {drafts.length > 0 && <><select aria-label="Đơn giữ" className="form-input" value={draftId} onChange={e => setDraftId(e.target.value)}><option value="">Chọn đơn giữ</option>{drafts.map(d => <option key={d.id} value={d.id}>{d.createdAt} · {d.items.length} món</option>)}</select><button type="button" className="btn btn-secondary" onClick={restoreSale} disabled={!draftId || items.length > 0}>Khôi phục</button></>}
+                {pricingError && <p role="alert">{pricingError}</p>}
+            </div>
+            </div><div className="pos-cart-footer"><div className="flex justify-between text-sm mb-2"><span>Tạm tính {formatCurrency(subtotal)} · Giảm {formatCurrency(discount)}</span><strong>{formatCurrency(total)}</strong></div>
             <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-sm">
                 <label className="form-label" htmlFor="payment-method">Phương thức thanh toán</label>
                 <select
@@ -381,6 +546,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                 {paymentMethod === "cash" && (
                     <>
                         <div className="flex flex-wrap gap-2 mb-4">
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPaidInput(String(total))}>Đưa đủ · Alt+D</button>
                             {[50000, 100000, 200000, 500000].map((amount) => (
                                 <button
                                     key={amount}
@@ -426,7 +592,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                     id="pos-complete-btn"
                     type="button"
                     onClick={completeSale}
-                    disabled={!items.length}
+                    disabled={!items.length || isSubmitting || !!pricingError}
                     className="group relative w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 text-white text-[15px] font-bold flex items-center justify-center gap-3 transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(34,181,115,0.5)] hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
                 >
                     <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></span>
@@ -434,7 +600,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </div>
                     <span className="flex items-center gap-2">
-                        Hoàn tất thanh toán
+                        Hoàn tất · Ctrl+Enter
                         <span className="px-2.5 py-0.5 rounded-lg bg-white/20 text-[14px] font-extrabold backdrop-blur-sm">
                             {formatCurrency(total)}
                         </span>
@@ -442,6 +608,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                 </button>
             </div>
 
+<div className="flex gap-2"><button type="button" className="btn btn-secondary" onClick={holdSale} disabled={!items.length || isSubmitting}>Giữ đơn · Alt+H</button><button type="button" className="btn btn-secondary" onClick={() => setClearOpen(true)}>Xóa giỏ</button></div></div>
             <ConfirmDialog
                 open={clearOpen}
                 title="Xóa toàn bộ giỏ hàng?"
@@ -449,8 +616,12 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                 confirmText="Xóa giỏ hàng"
                 onCancel={() => setClearOpen(false)}
                 onConfirm={() => {
-                    onClear();
-                    setClearOpen(false);
+                    try {
+                      assertPosCheckoutEditable(context, checkout.current.id);
+                      onClear(); setPhone(""); setMemberName(""); setMemberInfo(null); setVoucher(""); setPromotionCodes([]); setDiscountInput(""); setFlatDiscount(0); setPaidInput(""); setOrderNote(""); setChannel("counter");
+                      checkout.current = { id: crypto.randomUUID(), fingerprint: "" };
+                      setClearOpen(false);
+                    } catch (error) { toast.error(error instanceof Error ? error.message : "Không xóa được giỏ."); }
                 }}
             />
         </div>

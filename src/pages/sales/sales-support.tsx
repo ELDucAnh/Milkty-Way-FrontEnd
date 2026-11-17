@@ -13,7 +13,7 @@ export { salesBranches as branches } from "../../data/sales/branches";
 
 export type SalesChannel = "counter" | "takeaway" | "online";
 export type SalesShift = "morning" | "afternoon" | "evening";
-export type PaymentStatus = "unpaid" | "paid" | "refunded";
+export type PaymentStatus = "unpaid" | "paid" | "partially-refunded" | "refunded";
 export type PreparationStatus = "waiting" | "preparing" | "ready";
 export type DeliveryStatus = "pickup" | "waiting" | "delivering" | "delivered";
 
@@ -56,6 +56,11 @@ export const shiftLabels: Record<SalesShift, string> = {
 };
 
 export const paymentStatuses: Record<PaymentStatus, StatusDisplay> = {
+    "partially-refunded": {
+        label: "Hoàn một phần / Đã điều chỉnh",
+        variant: "warning",
+    },
+
     unpaid: { label: "Chưa thanh toán", variant: "warning" },
     paid: { label: "Đã thanh toán", variant: "success" },
     refunded: { label: "Đã hoàn tiền", variant: "info" },

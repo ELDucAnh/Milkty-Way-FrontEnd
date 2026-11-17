@@ -9,6 +9,21 @@ export default function MainLayout() {
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const { pathname } = useLocation();
+    const isPos = pathname === "/sales/pos";
+    const [posFocus, setPosFocus] = useState(() => { try { return localStorage.getItem("milktyway_pos_sidebar_hidden_v1") === "1"; } catch { return false; } });
+    const toggleFocus = () => setPosFocus(previous => { const next = !previous; try { localStorage.setItem("milktyway_pos_sidebar_hidden_v1", next ? "1" : "0"); } catch { /* Preference still works for this visit. */ } return next; });
+    useEffect(() => {
+      if (!isPos) return;
+      const toggle = () => { if (window.matchMedia("(min-width: 1024px)").matches) toggleFocus(); else setMobileOpen(v => !v); };
+      const key = (e: KeyboardEvent) => {
+        if (e.repeat || e.isComposing || e.metaKey || e.altKey || document.querySelector('[role="dialog"]')) return;
+        const alias = e.ctrlKey && e.key.toLowerCase() === "b";
+        const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || e.target.closest("input,textarea,select"));
+        if (alias || (!e.ctrlKey && !typing && (e.key === "`" || e.key === "~"))) { e.preventDefault(); toggle(); }
+      };
+      window.addEventListener("milktyway:toggle-pos-focus", toggle); window.addEventListener("keydown",key);
+      return () => { window.removeEventListener("milktyway:toggle-pos-focus",toggle); window.removeEventListener("keydown",key); };
+    }, [isPos]);
     const { isDark, toggleTheme } = useTheme();
 
     useEffect(() => {
@@ -45,7 +60,7 @@ export default function MainLayout() {
     }, [mobileOpen]);
 
     return (
-        <div className="sales-ui">
+        <div className={`sales-ui ${isPos ? "pos-route" : ""} ${isPos && posFocus ? "pos-focus" : ""}`}>
             <Sidebar
                 mobileOpen={mobileOpen}
                 collapsed={collapsed}
@@ -56,7 +71,8 @@ export default function MainLayout() {
                 <Header
                     mobileOpen={mobileOpen}
                     isDark={isDark}
-                    onToggleSidebar={() => window.matchMedia("(min-width: 1024px)").matches ? setCollapsed(v => !v) : setMobileOpen(v => !v)}
+                    onToggleSidebar={() => window.matchMedia("(min-width: 1024px)").matches ? (isPos ? toggleFocus() : setCollapsed(v => !v)) : setMobileOpen(v => !v)}
+                    posFocus={isPos && posFocus}
                     onToggleTheme={toggleTheme}
                 />
 

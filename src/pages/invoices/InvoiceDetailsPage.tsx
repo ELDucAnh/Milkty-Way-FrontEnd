@@ -1,4 +1,11 @@
+<<<<<<< Updated upstream
 import { useState, useMemo } from "react";
+=======
+import OrderReturnHistory from "../sales/OrderReturnHistory";
+import { RETURNS_CHANGED } from "../shared/sales-returns-store";
+import { homePath, isCashier, scopedBranch } from "../../utils/auth";
+import { useEffect, useState, useMemo } from "react";
+>>>>>>> Stashed changes
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
@@ -13,8 +20,22 @@ export default function InvoiceDetailsPage() {
   const toast = useToast();
   const [printFormat, setPrintFormat] = useState<"k80" | "k57">("k80");
 
+<<<<<<< Updated upstream
   const invoices = useMemo(() => loadInvoices(), []);
   const orders = useMemo(() => loadOrders(), []);
+=======
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    for (const event of ["storage", "focus", RETURNS_CHANGED]) window.addEventListener(event, refresh);
+    return () => {
+      for (const event of ["storage", "focus", RETURNS_CHANGED]) window.removeEventListener(event, refresh);
+    };
+  }, []);
+  const branchScope = scopedBranch();
+  const invoices = useMemo(() => loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)), [branchScope, revision]);
+  const orders = useMemo(() => loadOrders().filter(o => !branchScope || o.branchId === branchScope), [branchScope, revision]);
+>>>>>>> Stashed changes
 
   const effectiveId = id && id !== "invoice-details" ? id : null;
 
@@ -53,9 +74,30 @@ export default function InvoiceDetailsPage() {
       if (byMatchedOrder) return byMatchedOrder;
       return undefined;
     }
+<<<<<<< Updated upstream
     return invoices[0];
   }, [effectiveId, orderIdParam, invoices, matchedOrder]);
 
+=======
+    if (orderIdParam || effectiveId) return undefined;
+    return invoices[0];
+  }, [effectiveId, orderIdParam, invoices, matchedOrder]);
+
+  if (!matchedInvoice && !matchedOrder) {
+    return (
+      <div className="card space-y-3">
+        <h1 className="page-title">Không tìm thấy hóa đơn</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Mã không tồn tại hoặc không thuộc phạm vi chi nhánh được phép xem.
+        </p>
+        <Link to="/invoices" className="btn btn-secondary">
+          Danh sách hóa đơn
+        </Link>
+      </div>
+    );
+  }
+
+>>>>>>> Stashed changes
   const invoiceId = matchedInvoice
     ? matchedInvoice.id
     : (effectiveId || `HD-${matchedOrder?.branchId || "CN01"}-${(matchedOrder?.id || "000125").replace(/\D/g, "").padStart(6, "0")}`);
@@ -64,40 +106,24 @@ export default function InvoiceDetailsPage() {
   const customerPhone = matchedInvoice?.customerPhone || matchedOrder?.phone || "0908 123 456";
   const branchName = matchedInvoice?.branch || `${matchedOrder?.branchId || "CN01"} - Bến Nghé (Quận 1)`;
   const branchAddress = matchedInvoice?.branchAddress || "12 Nguyễn Huệ, Quận 1, TP.HCM";
-  const invoiceStatus = matchedInvoice?.status || (matchedOrder?.payment === "refunded" ? "Đã Hoàn Tiền" : matchedOrder?.payment === "unpaid" ? "Chờ Thanh Toán" : "Đã Thanh Toán");
+  const invoiceStatus =
+    matchedInvoice?.status ||
+    (
+      matchedOrder?.payment === "refunded"
+        ? "Đã Hoàn Tiền"
+        : matchedOrder?.payment === "partially-refunded"
+          ? "Hoàn Một Phần / Đã Điều Chỉnh"
+          : matchedOrder?.payment === "unpaid"
+            ? "Chờ Thanh Toán"
+            : "Đã Thanh Toán"
+    );
   const invoiceStatusVariant = matchedInvoice?.statusVariant || (invoiceStatus === "Đã Hoàn Tiền" ? "danger" : invoiceStatus === "Đã Thanh Toán" ? "success" : "warning");
   const memberTier = matchedInvoice?.tier || "Member";
   const invoiceDate = matchedInvoice?.date || (matchedOrder?.createdAt
     ? new Date(matchedOrder.createdAt).toLocaleDateString("vi-VN") + " — " + new Date(matchedOrder.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
     : new Date().toLocaleDateString("vi-VN") + " — " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
 
-  const items = matchedInvoice?.items && matchedInvoice.items.length > 0
-    ? matchedInvoice.items
-    : (matchedOrder?.items && matchedOrder.items.length > 0 ? matchedOrder.items : [
-      {
-        id: "item-default-1",
-        name: "Trà Sữa Ô Long Nướng",
-        size: "L" as const,
-        sugar: "50%",
-        ice: "Ít đá",
-        toppings: ["Trân châu hoàng kim", "Kem phô mai"],
-        note: "Ít ngọt",
-        quantity: 1,
-        unitPrice: 55000,
-      },
-      {
-        id: "item-default-2",
-        name: "Trà Sữa Trân Châu Hoàng Kim",
-        size: "M" as const,
-        sugar: "70%",
-        ice: "Vừa đá",
-        toppings: ["Pudding trứng"],
-        note: "",
-        quantity: 1,
-        unitPrice: 46000,
-      }
-    ]);
-
+  const items = matchedInvoice?.items ?? matchedOrder?.items ?? [];
   const computedSubtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const subtotal = matchedInvoice?.subtotal ?? matchedOrder?.subtotal ?? computedSubtotal;
   const discount = matchedInvoice?.discount ?? matchedOrder?.discount ?? 0;
@@ -319,6 +345,7 @@ export default function InvoiceDetailsPage() {
                   <td className="text-xs text-[var(--muted)]">{index + 1}</td>
                   <td>
                     <div className="font-bold text-[var(--text)] text-sm">{item.name}</div>
+                    {!!item.returnedQty && <div className="text-xs text-[var(--muted)]">Đã xử lý {item.returnedQty}/{item.quantity} ly</div>}
                     <div className="text-[12px] text-[var(--muted)]">
                       Cỡ {item.size} · Đường {item.sugar} · Đá {item.ice}
                       {item.toppings && item.toppings.length > 0 && ` · +${item.toppings.join(", ")}`}
@@ -370,6 +397,13 @@ export default function InvoiceDetailsPage() {
           </div>
         </div>
 
+        <OrderReturnHistory
+          amendments={matchedInvoice?.amendments ?? matchedOrder?.amendments}
+          refundedAmount={matchedInvoice?.refundedAmount ?? matchedOrder?.refundedAmount}
+          netTotal={matchedInvoice?.netTotal ?? matchedOrder?.netTotal}
+          parentOrderId={matchedInvoice?.parentOrderId ?? matchedOrder?.parentOrderId}
+          replacedByOrderId={matchedInvoice?.replacedByOrderId ?? matchedOrder?.replacedByOrderId}
+        />
         {/* Footer hóa đơn */}
         <div className="border-t border-[var(--border)] pt-5 flex justify-between items-end flex-wrap gap-5">
           <div className="max-w-[420px]">

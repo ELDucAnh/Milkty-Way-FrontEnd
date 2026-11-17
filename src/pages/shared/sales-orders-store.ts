@@ -1,19 +1,40 @@
+import {
+  quotePromotionCheckout,
+  planPromotionRedemptions,
+  notifyPromotionsChanged,
+  type AppliedPromotion,
+} from "./promotions-store";
+import { withSalesWriteLock } from "./sales-write-lock";
+import type {
+  OrderReturnAmendment,
+  ReturnSelection,
+  ReturnCostPreview,
+} from "./sales-returns-store";
+import { isPosProductAvailable } from "../../data/sales/products";
 /**
  * Bộ lưu trữ dữ liệu tập trung cho phân hệ Bán Hàng & POS & Pha Chế KDS
  * Kết nối luồng: POS -> Đơn hàng -> Hàng đợi pha chế -> Hóa đơn -> Trừ tồn quầy
  */
 
 import type { BadgeVariant } from "../../components/common/Badge";
-import type { PosCartItem } from "../../components/sales/PosCart";
-import { DEMO_STORAGE_KEY, INITIAL_DEMO_STATE, INITIAL_STORES } from "./business-demo";
+import { validatePosItems, calculatePosChange, findPosProduct, type PosLine } from "./sales-pricing";
+import { currentStaff, canAtBranch } from "../../utils/auth";
+import { sameCounter } from "../../utils/counters";
+import { loadCashShifts } from "./cash-shifts-store";
+import { INITIAL_STORES } from "./business-demo";
 
 export type SalesChannel = "counter" | "takeaway" | "online";
 export type SalesShift = "morning" | "afternoon" | "evening";
-export type PaymentStatus = "unpaid" | "paid" | "refunded";
+export type PaymentStatus = "unpaid" | "paid" | "partially-refunded" | "refunded";
 export type PreparationStatus = "waiting" | "preparing" | "ready";
 export type DeliveryStatus = "pickup" | "waiting" | "delivering" | "delivered";
 
 export interface SalesOrderItem {
+  /** SKU POS; not the inventory product ID. */
+  productId?: string;
+  sku?: string;
+  /** Stable numeric ID of the POS catalogue, not the inventory ID. */
+  posProductId?: number;
   id: string;
   name: string;
   size: "M" | "L";
@@ -23,9 +44,32 @@ export interface SalesOrderItem {
   note: string;
   quantity: number;
   unitPrice: number;
+  preparedBeforeExchange?: "ready" | "delivered";
+  returnedQty?: number;
+  returnAction?: "none" | "refunded" | "exchanged";
+  replacementName?: string;
+  replacementUnitPrice?: number;
+
+  /**
+   * Snapshot tiền được phân bổ cho TOÀN BỘ dòng này.
+   * Không phải giá một ly.
+   * Được tạo từ hóa đơn gốc khi xử lý A4 lần đầu.
+   */
+  paidDiscountAmount?: number;
+  paidTaxAmount?: number;
 }
 
 export interface SalesOrder {
+<<<<<<< Updated upstream
+=======
+  orderNote?: string;
+  checkoutId?: string;
+  checkoutFingerprint?: string;
+  shiftId?: string;
+  counterId?: string;
+  createdByStaffId?: string;
+  onlineDecision?: "accepted" | "rejected";
+>>>>>>> Stashed changes
   id: string;
   branchId: string;
   shift: SalesShift;
@@ -43,6 +87,12 @@ export interface SalesOrder {
   delivery: DeliveryStatus | null;
   largeOrder: boolean;
   items: SalesOrderItem[];
+  appliedPromotions?: AppliedPromotion[];
+  amendments?: OrderReturnAmendment[];
+  refundedAmount?: number;
+  netTotal?: number;
+  parentOrderId?: string;
+  replacedByOrderId?: string;
 }
 
 export interface PreparationOrder {
@@ -78,9 +128,15 @@ export interface InvoiceRecord {
   paid: number;
   change: number;
   paymentMethod: string;
-  status: "Đã Thanh Toán" | "Thanh Toán 50%" | "Chờ Thanh Toán" | "Đã Hoàn Tiền";
+  status: "Đã Thanh Toán" | "Thanh Toán 50%" | "Chờ Thanh Toán" | "Hoàn Một Phần / Đã Điều Chỉnh" | "Đã Hoàn Tiền";
   statusVariant: BadgeVariant;
   items: SalesOrderItem[];
+  appliedPromotions?: AppliedPromotion[];
+  amendments?: OrderReturnAmendment[];
+  refundedAmount?: number;
+  netTotal?: number;
+  parentOrderId?: string;
+  replacedByOrderId?: string;
 }
 
 export interface ReturnRequest {
@@ -94,11 +150,21 @@ export interface ReturnRequest {
   points: number;
   memberId: string | null;
   status: "Pending" | "Approved" | "Rejected";
+  branchId?: string;
+  createdByStaffId?: string;
+  details?: ReturnSelection;
+  preview?: ReturnCostPreview;
+  reviewedByStaffId?: string;
+  reviewer?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  newCreatedOrderId?: string;
 }
 
-const STORAGE_ORDERS = "miltyway_sales_orders_v2";
-const STORAGE_RETURNS = "miltyway_sales_returns_v2";
-const STORAGE_INVOICES = "miltyway_invoices_v2";
+export const STORAGE_ORDERS = "miltyway_sales_orders_v2";
+export const RETURN_PENDING_KEY = "milktyway.returns.pending.v1";
+export const STORAGE_RETURNS = "miltyway_sales_returns_v2";
+export const STORAGE_INVOICES = "miltyway_invoices_v2";
 
 export const INITIAL_ORDERS: SalesOrder[] = [
   {
@@ -470,48 +536,49 @@ export const INITIAL_RETURNS: ReturnRequest[] = [
   },
 ];
 
-// Helper functions for orders
-export function loadOrders(): SalesOrder[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_ORDERS);
-    if (!raw) return INITIAL_ORDERS;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_ORDERS;
-  } catch {
-    return INITIAL_ORDERS;
+function readRecords<T extends { id: string }>(key: string, seed: T[]): T[] {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return structuredClone(seed);
+  const value: unknown = JSON.parse(raw);
+  if (!Array.isArray(value) || value.some(row => !row || typeof row.id !== "string") || new Set(value.map(row => row.id)).size !== value.length) {
+    throw new Error(`Dữ liệu ${key} không hợp lệ. Không ghi đè dữ liệu đã lưu.`);
   }
+  return value as T[];
+}
+export function loadOrders(): SalesOrder[] { return readRecords(STORAGE_ORDERS, INITIAL_ORDERS); }
+export function saveOrders(orders: SalesOrder[]): void { localStorage.setItem(STORAGE_ORDERS, JSON.stringify(orders)); }
+export function loadInvoices(): InvoiceRecord[] { return readRecords(STORAGE_INVOICES, INITIAL_INVOICES); }
+export function saveInvoices(invoices: InvoiceRecord[]): void { localStorage.setItem(STORAGE_INVOICES, JSON.stringify(invoices)); }
+
+export interface PosCheckoutContext { staffId: string; branchId: string; counterId: string; shiftId: string; }
+export function assertPosContext(context: PosCheckoutContext, checkShift = true): void {
+  if (localStorage.getItem(RETURN_PENDING_KEY) !== null) {
+    throw new Error(
+      "Có giao dịch đổi trả chưa đối soát xong. Không thanh toán mới trước khi kiểm tra dữ liệu.",
+    );
+  }
+
+  const staff = currentStaff();
+  if (!staff || staff.staffId !== context.staffId || staff.branchId !== context.branchId || !sameCounter(staff.counterId, context.counterId) || !canAtBranch("pos.use", context.branchId) || !canAtBranch("order.create", context.branchId)) {
+    throw new Error("Phiên hoặc phân công quầy đã thay đổi. Vui lòng tải lại POS.");
+  }
+  if (checkShift) {
+    const shifts = loadCashShifts().filter(s => s.branchId === context.branchId && sameCounter(s.counterId, context.counterId) && s.status !== "closed");
+    if (shifts.length !== 1 || shifts[0].status !== "open" || shifts[0].id !== context.shiftId) throw new Error("Ca đã thay đổi hoặc không còn mở. Không thể thanh toán giỏ này.");
+  }
+}
+export const CHECKOUT_PENDING_KEY = "milktyway.pos.checkout.pending.v1";
+/** Guard editing/holding/restoring without silently discarding an unresolved payment. */
+export function assertPosCheckoutEditable(context: PosCheckoutContext, checkoutId?: string): void {
+  assertPosContext(context);
+  if (localStorage.getItem(CHECKOUT_PENDING_KEY) !== null) throw new Error("Giao dịch chưa đối soát xong. Không sửa, xóa hoặc giữ/khôi phục giỏ lúc này.");
+  if (checkoutId && loadOrders().some(order => order.checkoutId === checkoutId)) throw new Error("Giao dịch này đã hoàn tất. Kiểm tra hóa đơn trước khi tạo giỏ mới.");
 }
 
-export function saveOrders(orders: SalesOrder[]): void {
-  try {
-    localStorage.setItem(STORAGE_ORDERS, JSON.stringify(orders));
-  } catch (e) {
-    console.error("Failed to save orders to localStorage", e);
-  }
-}
-
-// Helper functions for invoices
-export function loadInvoices(): InvoiceRecord[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_INVOICES);
-    if (!raw) return INITIAL_INVOICES;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_INVOICES;
-  } catch {
-    return INITIAL_INVOICES;
-  }
-}
-
-export function saveInvoices(invoices: InvoiceRecord[]): void {
-  try {
-    localStorage.setItem(STORAGE_INVOICES, JSON.stringify(invoices));
-  } catch (e) {
-    console.error("Failed to save invoices to localStorage", e);
-  }
-}
 
 // Helper functions for returns
 export function loadReturns(): ReturnRequest[] {
+<<<<<<< Updated upstream
   try {
     const raw = localStorage.getItem(STORAGE_RETURNS);
     if (!raw) return INITIAL_RETURNS;
@@ -520,25 +587,24 @@ export function loadReturns(): ReturnRequest[] {
   } catch {
     return INITIAL_RETURNS;
   }
+=======
+  return readRecords(STORAGE_RETURNS, INITIAL_RETURNS);
+>>>>>>> Stashed changes
 }
 
 export function saveReturns(returns: ReturnRequest[]): void {
-  try {
-    localStorage.setItem(STORAGE_RETURNS, JSON.stringify(returns));
-  } catch (e) {
-    console.error("Failed to save returns to localStorage", e);
-  }
+  localStorage.setItem(STORAGE_RETURNS, JSON.stringify(returns));
 }
 
 /**
  * Tạo một đơn hàng mới từ POS, đồng thời:
  * 1. Lưu vào danh sách đơn hàng
  * 2. Tạo hóa đơn tương ứng
- * 3. Trừ tồn kho quầy bar trong business_demo_state_v1 nếu có
+ * Tồn kho chưa cập nhật: chờ mapping SKU/BOM chính xác.
  */
-export function createPosOrder(params: {
-  branchId: string;
-  items: PosCartItem[];
+export function createPosOrder(params: PosCheckoutContext & {
+  checkoutId: string;
+  items: PosLine[];
   customerPhone?: string;
   customerName?: string;
   tier?: "Member" | "Silver" | "Gold" | "VIP";
@@ -546,8 +612,56 @@ export function createPosOrder(params: {
   paidAmount: number;
   discountRate: number;
   taxRate: number;
+  flatDiscount?: number;
+  channel?: "counter" | "takeaway";
+  orderNote?: string;
+  promotionCodes?: string[];
+  /** Tổng tiền cart đã hiển thị; chặn thay đổi giá ở thời điểm chốt. */
+  expectedTotal?: number;
+
 }): { order: SalesOrder; invoice: InvoiceRecord } {
+  assertPosContext(params, false);
+  if (!params.checkoutId?.trim()) throw new Error("Thiếu mã giao dịch.");
+  const fingerprint = JSON.stringify(params);
   const currentOrders = loadOrders();
+  const currentInvoices = loadInvoices();
+  if (localStorage.getItem(CHECKOUT_PENDING_KEY) !== null) throw new Error("Có giao dịch chưa đối soát xong. Giữ nguyên giỏ và kiểm tra dữ liệu trước khi thử lại.");
+  const previous = currentOrders.find(order => order.checkoutId === params.checkoutId);
+  if (previous) {
+    const invoice = currentInvoices.find(item => item.orderId === previous.id);
+    if (previous.checkoutFingerprint !== fingerprint || !invoice) throw new Error("Mã giao dịch đã dùng với nội dung khác hoặc thiếu hóa đơn. Cần đối soát.");
+    return { order: structuredClone(previous), invoice: structuredClone(invoice) };
+  }
+  assertPosContext(params);
+  const validatedItems = validatePosItems(params.items);
+  if (params.channel !== undefined && !["counter", "takeaway"].includes(params.channel)) throw new Error("Loại đơn không hợp lệ.");
+  if (params.orderNote !== undefined && typeof params.orderNote !== "string") throw new Error("Ghi chú không hợp lệ.");
+  for (const item of validatedItems) if (!isPosProductAvailable(findPosProduct(item.productId)!, params.branchId)) throw new Error("Món đã hết hoặc bị khóa tại chi nhánh. Vui lòng cập nhật giỏ.");
+  if (!["cash", "transfer", "card"].includes(params.paymentMethod)) throw new Error("Phương thức thanh toán không hợp lệ.");
+  const quote = quotePromotionCheckout({
+    items: validatedItems,
+    branchId: params.branchId,
+    channel: params.channel ?? "counter",
+    discountRate: params.discountRate,
+    flatDiscount: params.flatDiscount ?? 0,
+    taxRate: params.taxRate,
+    promotionCodes: params.promotionCodes,
+    customerPhone: params.customerPhone,
+  });
+
+  const { subtotal, discount, tax, total } = quote;
+
+  if (
+    params.expectedTotal !== undefined &&
+    params.expectedTotal !== total
+  ) {
+    throw new Error(
+      "Giá trị thanh toán đã thay đổi. Vui lòng kiểm tra và áp dụng lại ưu đãi.",
+    );
+  }
+
+  calculatePosChange(params.paidAmount, total);
+
   const maxNum = currentOrders.reduce((max, o) => {
     const m = o.id.match(/DH-0*(\d+)/);
     return m ? Math.max(max, Number(m[1])) : max;
@@ -556,21 +670,24 @@ export function createPosOrder(params: {
   const orderId = `DH-${String(nextNum).padStart(5, "0")}`;
   const invoiceId = `HD-${params.branchId}-${String(nextNum).padStart(6, "0")}`;
 
-  const subtotal = params.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
-  const discount = Math.round(subtotal * (params.discountRate / 100));
-  const tax = Math.round((subtotal - discount) * (params.taxRate / 100));
-  const total = subtotal - discount + tax;
-
-  const salesItems: SalesOrderItem[] = params.items.map((it, idx) => ({
-    id: `item-${Date.now()}-${idx}`,
+  const salesItems: SalesOrderItem[] = validatedItems.map((it) => ({
+    id: it.id,
+    productId: it.productId,
+    sku: it.productId,
+    posProductId: findPosProduct(it.productId)!.id,
     name: it.name,
     size: it.size,
     sugar: it.sugar,
     ice: it.ice,
-    toppings: it.toppings,
+    toppings: [...it.toppings],
     note: it.note,
     quantity: it.quantity,
     unitPrice: it.unitPrice,
+    paidDiscountAmount: quote.lineAmounts.find(line => line.id === it.id)!
+      .paidDiscountAmount,
+    paidTaxAmount: quote.lineAmounts.find(line => line.id === it.id)!
+      .paidTaxAmount,
+
   }));
 
   const customerName = params.customerName?.trim() || (params.customerPhone ? "Khách Hội Viên" : "Khách Vãng Lai");
@@ -584,24 +701,29 @@ export function createPosOrder(params: {
     ? `${matchedStore.address}, ${matchedStore.area}, TP.HCM`
     : "12 Nguyễn Huệ, Quận 1, TP.HCM";
 
+  const vietnamHour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date()));
   const newOrder: SalesOrder = {
     id: orderId,
     branchId: params.branchId,
-    shift: "morning",
+    shift: vietnamHour < 12 ? "morning" : vietnamHour < 18 ? "afternoon" : "evening",
+    shiftId: params.shiftId, counterId: params.counterId, createdByStaffId: params.staffId,
+    checkoutId: params.checkoutId, checkoutFingerprint: fingerprint,
     customer: customerName,
     phone: customerPhone,
-    channel: "counter",
+    channel: params.channel ?? "counter",
+    orderNote: params.orderNote?.trim() ?? "",
     createdAt: new Date().toISOString(),
     subtotal,
     discount,
     tax,
     total,
+    appliedPromotions: structuredClone(quote.appliedPromotions),
     paymentMethod: params.paymentMethod,
     payment: "paid",
     preparation: "waiting", // Đưa vào hàng đợi KDS
     delivery: "pickup",
     largeOrder: total >= 300000,
-    items: salesItems,
+    items: structuredClone(salesItems),
   };
 
   const newInvoice: InvoiceRecord = {
@@ -621,95 +743,89 @@ export function createPosOrder(params: {
     discount,
     tax,
     total,
-    paid: params.paidAmount || total,
-    change: Math.max(0, (params.paidAmount || total) - total),
+    appliedPromotions: structuredClone(quote.appliedPromotions),
+    paid: params.paidAmount,
+    change: Math.max(0, params.paidAmount - total),
     paymentMethod: params.paymentMethod === "cash" ? "Tiền mặt" : params.paymentMethod === "card" ? "Thẻ ngân hàng" : "Chuyển khoản QR",
     status: "Đã Thanh Toán",
     statusVariant: "success",
-    items: salesItems,
+    items: structuredClone(salesItems),
   };
 
-  // Lưu Order và Invoice
-  saveOrders([newOrder, ...currentOrders]);
-  const currentInvoices = loadInvoices();
-  saveInvoices([newInvoice, ...currentInvoices]);
+  const promotionEntries = planPromotionRedemptions({
+    quote,
+    customerPhone: params.customerPhone,
+    checkoutId: params.checkoutId,
+    orderId,
+    branchId: params.branchId,
+    createdAt: newOrder.createdAt,
+  });
 
-  const totalCups = params.items.reduce((s, it) => s + it.quantity, 0);
-  const pearlCount = params.items
-    .filter(it => it.toppings.some(t => t.toLowerCase().includes("trân châu")))
-    .reduce((s, it) => s + it.quantity, 0);
+  const entries: [string, unknown][] = [
+    [STORAGE_ORDERS, [newOrder, ...currentOrders]],
+    [STORAGE_INVOICES, [newInvoice, ...currentInvoices]],
+    ...promotionEntries,
+  ];
 
-  // 1) Trừ tồn kho trên DEMO_STORAGE_KEY ("miltyway.user2.demo.v1")
+  const before = entries.map(([key]) => ({
+    key,
+    value: localStorage.getItem(key),
+  }));
+
+  localStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify({
+    checkoutId: params.checkoutId,
+    orderId,
+    invoiceId,
+    before,
+  }));
+
   try {
-    const rawUser2 = localStorage.getItem(DEMO_STORAGE_KEY);
-    const demoState = rawUser2 ? JSON.parse(rawUser2) : structuredClone(INITIAL_DEMO_STATE);
-    if (demoState && Array.isArray(demoState.lots)) {
-      const deductions: Record<string, number> = {
-        "ing-tea-base": totalCups * 120,
-        "ing-milk": totalCups * 30,
-        "ing-syrup": totalCups * 25,
-        "ing-cup": totalCups * 1,
-        "ing-seal": totalCups * 1,
-        ...(pearlCount > 0 ? { "ing-pearl": pearlCount * 30 } : {}),
-      };
-      const deductedIngredients = new Set<string>();
-      demoState.lots = demoState.lots.map((lot: any) => {
-        if (
-          lot.location === "counter" &&
-          lot.locationId === params.branchId &&
-          lot.quality === "pass" &&
-          lot.quantity > 0 &&
-          deductions[lot.ingredientId] &&
-          !deductedIngredients.has(lot.ingredientId)
-        ) {
-          deductedIngredients.add(lot.ingredientId);
-          return {
-            ...lot,
-            quantity: Math.max(0, lot.quantity - deductions[lot.ingredientId]),
-          };
-        }
-        return lot;
-      });
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoState));
+    for (const [key, value] of entries) {
+      localStorage.setItem(key, JSON.stringify(value));
     }
-  } catch (err) {
-    console.warn("Could not auto-deduct counter lots in DEMO_STORAGE_KEY", err);
-  }
+    localStorage.removeItem(CHECKOUT_PENDING_KEY);
+  } catch {
+    let restored = true;
 
-  // 2) Trừ tồn kho nguyên liệu quầy trong business_demo_state_v1 (tương thích bộ test)
-  try {
-    const rawDemo = localStorage.getItem("business_demo_state_v1");
-    if (rawDemo) {
-      const demo = JSON.parse(rawDemo);
-      if (demo && Array.isArray(demo.lots)) {
-        demo.lots = demo.lots.map((lot: any) => {
-          if (lot.location === "counter") {
-            if (lot.ingredientId === "ing-black-tea" || lot.ingredientId === "ing-olong-tea" || lot.ingredientId === "ing-tea-base") {
-              const deduction = totalCups * 150;
-              return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
-            }
-            if (lot.ingredientId === "ing-fresh-milk" || lot.ingredientId === "ing-condensed-milk" || lot.ingredientId === "ing-milk") {
-              const deduction = totalCups * 30;
-              return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
-            }
-            if (lot.ingredientId === "ing-cup-m" || lot.ingredientId === "ing-cup-l" || lot.ingredientId === "ing-cup") {
-              const deduction = totalCups;
-              return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
-            }
-            if (lot.ingredientId === "ing-tapioca-pearl" || lot.ingredientId === "ing-pearl") {
-              const deduction = pearlCount * 30;
-              return { ...lot, quantity: Math.max(0, lot.quantity - deduction) };
-            }
-          }
-          return lot;
-        });
-        localStorage.setItem("business_demo_state_v1", JSON.stringify(demo));
+    for (const { key, value } of before) {
+      try {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      } catch {
+        restored = false;
       }
     }
-  } catch (err) {
-    console.warn("Could not auto-deduct counter lots", err);
+
+    if (restored) {
+      try {
+        localStorage.removeItem(CHECKOUT_PENDING_KEY);
+      } catch {
+        restored = false;
+      }
+    }
+
+    throw new Error(
+      restored
+        ? "Không lưu được giao dịch. Giỏ được giữ lại để thử lại."
+        : "Giao dịch ghi một phần, cần đối soát trước khi thử lại.",
+    );
   }
 
+  if (promotionEntries.length) notifyPromotionsChanged();
+
+  // Inventory deduction awaits an explicit SKU -> recipe/BOM contract.
   return { order: newOrder, invoice: newInvoice };
 }
 
+<<<<<<< Updated upstream
+=======
+/**
+ * Caller UI dùng API này để POS và A4 dùng chung Web Lock.
+ * Giữ createPosOrder đồng bộ cho caller cũ và các test hiện có.
+ */
+export function createPosOrderExclusive(
+  params: Parameters<typeof createPosOrder>[0],
+): Promise<ReturnType<typeof createPosOrder>> {
+  return withSalesWriteLock(() => createPosOrder(params));
+}
+>>>>>>> Stashed changes

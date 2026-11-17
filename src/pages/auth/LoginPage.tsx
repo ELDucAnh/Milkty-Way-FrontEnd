@@ -206,6 +206,7 @@ export default function LoginPage() {
         <div className="font-bold text-[var(--text)] mb-1">
           Tài Khoản Mẫu Cho 4 Vai Trò Nghiệp Vụ:
         </div>
+<<<<<<< Updated upstream
         <div className="text-[var(--muted)] space-y-0.5">
           <div>• <strong>Chủ Doanh Nghiệp:</strong> long.nh@MilktyWay.vn (Toàn chuỗi)</div>
           <div>• <strong>Quản Lý CN:</strong> ha.tt@MilktyWay.vn (CN05 Sư Vạn Hạnh)</div>
@@ -214,6 +215,52 @@ export default function LoginPage() {
           <div className="text-emerald-600 font-semibold mt-1">
             Mật khẩu thử nghiệm: <strong>123456</strong>
           </div>
+=======
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[var(--muted)]">
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("anh.lqt@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">1. Nhân viên POS (CN01)</div>
+            <div className="text-[11px] text-[#22B573]">anh.lqt@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("ha.tt@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">2. Quản lý CN (CN05)</div>
+            <div className="text-[11px] text-[#22B573]">ha.tt@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("khoa.vm@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">3. Nhân viên Kho</div>
+            <div className="text-[11px] text-[#22B573]">khoa.vm@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("long.nh@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">4. Chủ chuỗi (Admin)</div>
+            <div className="text-[11px] text-[#22B573]">long.nh@milktyway.vn</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSelect("ql.cn01@milktyway.vn")}
+            className="text-left p-2 rounded-lg border border-[var(--border)] hover:border-[#22B573] hover:bg-emerald-50/40 transition-colors cursor-pointer bg-transparent"
+          >
+            <div className="font-semibold text-[var(--text)]">5. Quản lý CN01</div>
+            <div className="text-[11px] text-[#22B573]">ql.cn01@milktyway.vn</div>
+          </button>
+        </div>
+        <div className="text-emerald-600 font-semibold mt-2">
+          Mật khẩu mặc định cho tất cả tài khoản: <strong>123456</strong>
+>>>>>>> Stashed changes
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import CashShiftReconciliationInbox from "../sales/CashShiftReconciliationInbox";
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -530,6 +531,7 @@ export default function ShiftReconciliationPage() {
           Cửa hàng · ca vận hành
         </span>
       </div>
+      <CashShiftReconciliationInbox />
       <section className="mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard

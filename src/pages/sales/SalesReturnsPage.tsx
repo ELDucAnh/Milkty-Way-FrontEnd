@@ -1,26 +1,39 @@
+<<<<<<< Updated upstream
 import { useState, useMemo } from "react";
+=======
+import {
+    can,
+    canAtBranch,
+    currentStaff,
+    homePath,
+    isCashier,
+    scopedBranch,
+} from "../../utils/auth";
+import { useEffect, useState } from "react";
+>>>>>>> Stashed changes
 import { Link } from "react-router-dom";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 import { formatCurrency } from "../../utils/format";
-import { loadInvoices, loadOrders, loadReturns, saveInvoices, saveOrders, saveReturns } from "../shared/sales-orders-store";
+import {
+    loadOrders,
+    loadReturns,
+} from "../shared/sales-orders-store";
 import type { ReturnRequest } from "../shared/sales-orders-store";
+import { loadCashShifts } from "../shared/cash-shifts-store";
+import type { CashShift } from "../shared/cash-shifts-store";
+import {
+    RETURNS_CHANGED,
+    isComplaintResolution,
+    reviewReturnRequest,
+} from "../shared/sales-returns-store";
+import type { ReturnScope } from "../shared/sales-returns-store";
+import SalesReturnForm, {
+    ReturnCostBox,
+    ReturnOrderSearch,
+} from "./SalesReturnForm";
 
-const STORAGE_RETURN_HISTORY = "miltyway_sales_return_history_v1";
-
-type RequestStatus = "Pending" | "Approved" | "Rejected";
-
-interface ReviewEntry {
-    requestId: string;
-    reviewer: string;
-    memberId: string | null;
-    refundedAmount: number;
-    pointsChange: number;
-    reviewedAt: string;
-    decision: "Approved" | "Rejected";
-    note: string;
-}
-
+type RequestStatus = ReturnRequest["status"];
 const statusLabels: Record<RequestStatus, string> = {
     Pending: "Chờ duyệt",
     Approved: "Đã duyệt",
@@ -46,39 +59,20 @@ export default function SalesReturnsPage() {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [status, setStatus] = useState("");
-    const [reviewState, setReviewState] = useState<{ requests: ReturnRequest[]; history: ReviewEntry[] }>(() => {
-        const defaultHistory: ReviewEntry[] = [
-            {
-                requestId: "HT-0000",
-                reviewer: "Nguyễn Hoàng Long",
-                memberId: "HV-0001",
-                refundedAmount: 52000,
-                pointsChange: -52,
-                reviewedAt: "2026-10-27T16:20:00+07:00",
-                decision: "Approved",
-                note: "Đã hoàn tiền vào tài khoản hội viên do giao nhầm vị trà sữa.",
-            }
-        ];
-        let loadedHistory = defaultHistory;
-        try {
-            const raw = localStorage.getItem(STORAGE_RETURN_HISTORY);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    loadedHistory = parsed;
-                }
-            }
-        } catch {
-            loadedHistory = defaultHistory;
-        }
-        return {
-            requests: loadReturns(),
-            history: loadedHistory,
-        };
-    });
+    const [requests, setRequests] = useState<ReturnRequest[]>([]);
+    const [orders, setOrders] = useState<ReturnType<typeof loadOrders>>([]);
+    const [shifts, setShifts] = useState<CashShift[]>([]);
+    const [loadError, setLoadError] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [reviewNote, setReviewNote] = useState("");
+    const [cashShiftId, setCashShiftId] = useState("");
+    const [confirmAdditionalPayment, setConfirmAdditionalPayment] = useState(false);
+    const [reviewBusy, setReviewBusy] = useState(false);
+    const [initialOrderId, setInitialOrderId] = useState("");
+    const [initialScope, setInitialScope] = useState<ReturnScope>("single-item");
+    const [formVersion, setFormVersion] = useState(0);
 
+<<<<<<< Updated upstream
     // Form tạo khiếu nại mới
     const availableOrders = useMemo(() => loadOrders(), [open]);
     const [formOrderId, setFormOrderId] = useState("");
@@ -122,61 +116,103 @@ export default function SalesReturnsPage() {
         });
 
         saveReturns(updatedRequests);
+=======
+    const actorStaffId = currentStaff()?.staffId ?? "";
+    const canCreate = currentStaff()?.loginRole === "cashier";
+    const canReview = currentStaff()?.loginRole === "manager" && can("payment.refundReview");
+
+    function refresh() {
+>>>>>>> Stashed changes
         try {
-            localStorage.setItem(STORAGE_RETURN_HISTORY, JSON.stringify(updatedHistory));
-            if (decision === "Approved" && selected.resolution === "Hoàn tiền") {
-                saveOrders(
-                    loadOrders().map(o =>
-                        o.id === selected.orderId ? { ...o, payment: "refunded" } : o
-                    )
-                );
-                saveInvoices(
-                    loadInvoices().map(inv =>
-                        inv.orderId === selected.orderId
-                            ? { ...inv, status: "Đã Hoàn Tiền", statusVariant: "danger" }
-                            : inv
-                    )
-                );
-            }
-        } catch (err) {
-            console.warn(err);
+            const nextRequests = loadReturns();
+            const nextOrders = loadOrders();
+            const nextShifts = loadCashShifts();
+            setRequests(nextRequests);
+            setOrders(nextOrders);
+            setShifts(nextShifts);
+            setLoadError("");
+        } catch (error) {
+            setLoadError(error instanceof Error ? error.message : "Không đọc được dữ liệu.");
         }
-        toast.success(`Đã ${decision === "Approved" ? "phê duyệt" : "từ chối"} yêu cầu ${selected.id}!`);
-        setSelectedId(null);
-        setReviewNote("");
     }
 
-    function handleCreateReturn() {
-        if (!formOrderId) {
-            toast.warning("Vui lòng chọn đơn gốc cần xử lý khiếu nại.");
-            return;
-        }
+    useEffect(() => {
+        refresh();
+        window.addEventListener("storage", refresh);
+        window.addEventListener("focus", refresh);
+        window.addEventListener(RETURNS_CHANGED, refresh);
 
-        const order = availableOrders.find(o => o.id === formOrderId);
-        const amount = Number(formAmount) || 0;
-        const nextId = `HT-${String(reviewState.requests.length + 1).padStart(4, "0")}`;
-        const combinedReason = formNote.trim() ? `${formReason} — ${formNote.trim()}` : formReason;
-
-        const newReq: ReturnRequest = {
-            id: nextId,
-            orderId: formOrderId,
-            customer: order?.customer || "Khách Hàng",
-            createdAt: new Date().toISOString(),
-            resolution: formResolution,
-            reason: combinedReason,
-            amount,
-            points: -Math.round(amount / 10000),
-            memberId: order?.phone ? "HV-0001" : null,
-            status: "Pending",
+        return () => {
+            window.removeEventListener("storage", refresh);
+            window.removeEventListener("focus", refresh);
+            window.removeEventListener(RETURNS_CHANGED, refresh);
         };
+    }, []);
 
-        const updated = [newReq, ...reviewState.requests];
-        setReviewState(current => ({ ...current, requests: updated }));
-        saveReturns(updated);
-        toast.success(`Đã tạo yêu cầu xử lý khiếu nại ${nextId} thành công! Đang chờ Quản lý duyệt.`);
-        setOpen(false);
-        setFormOrderId("");
-        setFormNote("");
+    const branch = scopedBranch();
+    const branchRequests = requests.filter(request => {
+        const order = orders.find(value => value.id === request.orderId);
+        return !!order && (!branch || order.branchId === branch);
+    });
+
+    const visibleRequests = branchRequests.filter(request =>
+        (!status || request.status === status) &&
+        `${request.id} ${request.orderId} ${request.customer}`
+            .toLocaleLowerCase("vi-VN")
+            .includes(query.trim().toLocaleLowerCase("vi-VN")),
+    );
+
+    const selected = branchRequests.find(request => request.id === selectedId);
+    const selectedOrder = orders.find(order => order.id === selected?.orderId);
+    const availableCashShifts = shifts.filter(shift =>
+        shift.status === "open" &&
+        shift.branchId === selectedOrder?.branchId,
+    );
+
+    // Giữ tên reviewState để không phải sửa toàn bộ JSX thống kê hiện có.
+    const reviewState = {
+        requests: branchRequests,
+        history: branchRequests
+            .filter(request => request.status === "Approved")
+            .map(request => ({
+                refundedAmount: request.preview?.autoRefundAmount ?? (request.resolution === "Hoàn tiền" ? request.amount : 0),
+            })),
+    };
+
+    function openCreate(orderId = "", scope: ReturnScope = "single-item") {
+        refresh();
+        setInitialOrderId(orderId);
+        setInitialScope(scope);
+        setFormVersion(value => value + 1);
+        setOpen(true);
+    }
+
+    async function reviewRequest(decision: "Approved" | "Rejected") {
+        if (!selected || !selectedOrder || reviewBusy || loadError) return;
+
+        setReviewBusy(true);
+        try {
+            const result = await reviewReturnRequest({
+                actorStaffId,
+                requestId: selected.id,
+                decision,
+                note: reviewNote,
+                cashShiftId,
+                confirmAdditionalPayment,
+            });
+
+            refresh();
+            setSelectedId(null);
+            setReviewNote("");
+            toast.success(
+                `Đã ${decision === "Approved" ? "duyệt" : "từ chối"} ${result.id}.`,
+            );
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Không xử lý được phiếu.");
+            refresh();
+        } finally {
+            setReviewBusy(false);
+        }
     }
 
     return (
@@ -193,6 +229,7 @@ export default function SalesReturnsPage() {
                     <h1 className="page-title">Khiếu nại và hoàn tiền</h1>
                     <p className="page-subtitle">Theo dõi đổi món, hủy trước pha, bù mã ưu đãi và hoàn tiền toàn chuỗi.</p>
                 </div>
+<<<<<<< Updated upstream
                 <div className="flex gap-2.5 flex-wrap">
                     <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -202,6 +239,30 @@ export default function SalesReturnsPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+=======
+                {canCreate && (
+                    <div className="flex gap-2.5 flex-wrap">
+                        <button className="btn btn-primary" type="button" onClick={() => openCreate()}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                            Tạo yêu cầu xử lý
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {loadError && (
+                <div role="alert" className="card mb-4 text-red-600">
+                    {loadError} Các thao tác ghi đang bị khóa.
+                </div>
+            )}
+
+            {canCreate && <section className="card mb-6">
+                <ReturnOrderSearch
+                    onSelect={(order, scope) => openCreate(order.id, scope)}
+                />
+            </section>}
+            {!isCashier() && (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+>>>>>>> Stashed changes
                 <div className="card p-4">
                     <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng yêu cầu</div>
                     <div className="text-[26px] font-extrabold text-[var(--text)] mt-1">{reviewState.requests.length}</div>
@@ -297,10 +358,19 @@ export default function SalesReturnsPage() {
                                             </span>
                                         </td>
                                         <td>
+<<<<<<< Updated upstream
                                             <button
+=======
+                                            {canReview && canAtBranch(
+                                                "payment.refundReview",
+                                                orders.find(order => order.id === r.orderId)?.branchId ?? "",
+                                            ) ? <button
+>>>>>>> Stashed changes
                                                 className="btn btn-secondary btn-sm"
                                                 onClick={() => {
                                                     setSelectedId(r.id);
+                                                    setCashShiftId("");
+                                                    setConfirmAdditionalPayment(false);
                                                     setReviewNote("");
                                                 }}
                                             >
@@ -351,6 +421,126 @@ export default function SalesReturnsPage() {
                             </div>
                         </div>
 
+                        {selected.details && (
+                            <div className="rounded-lg border border-[var(--border)] p-3 text-sm space-y-2">
+                                <p>
+                                    <strong>Phạm vi:</strong>{" "}
+                                    {selected.details.scope === "full-order"
+                                        ? "Toàn bộ số ly còn được xử lý"
+                                        : "Một hoặc vài món"}
+                                </p>
+
+                                <p>
+                                    <strong>Ghi nhận:</strong>{" "}
+                                    {selected.details.recordMode === "amend-original"
+                                        ? "Điều chỉnh đơn và hóa đơn gốc"
+                                        : "Tạo đơn thay thế liên kết đơn gốc"}
+                                </p>
+
+                                <ul className="space-y-1">
+                                    {selected.details.selectedLines.map(line => {
+                                        const item = selectedOrder?.items.find(
+                                            value => value.id === line.itemId,
+                                        );
+
+                                        return (
+                                            <li key={line.itemId}>
+                                                {item?.name ?? line.itemId}
+                                                {" · "}{line.quantity} ly
+                                                {selected.details?.resolutionType === "exchange" && (
+                                                    <>
+                                                        {" → "}
+                                                        {line.replacementSku
+                                                            ? `${line.replacementSku}, M, không topping`
+                                                            : "Làm lại đúng món và tùy chọn cũ"}
+                                                    </>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        )}
+
+                        {selected.preview && (
+                            <ReturnCostBox preview={selected.preview} />
+                        )}
+
+                        {!selected.details && !isComplaintResolution(selected.resolution) && selected.status === "Pending" && (
+                            <div role="alert" className="text-sm text-amber-700">
+                                Phiếu cũ thiếu dòng món và số lượng.
+                                Không được duyệt theo số tiền đã nhập tay.
+                                Hãy từ chối và lập phiếu mới theo dòng.
+                            </div>
+                        )}
+
+                        {selected.status === "Pending" &&
+                            selected.preview &&
+                            selectedOrder?.paymentMethod === "cash" &&
+                            (
+                                selected.preview.autoRefundAmount > 0 ||
+                                selected.preview.additionalPaymentAmount > 0
+                            ) && (
+                                <label className="block">
+                                    <span className="form-label">
+                                        Ca tiền mặt thực chi / thu thêm tại chi nhánh
+                                    </span>
+                                    <select
+                                        className="form-input form-select"
+                                        value={cashShiftId}
+                                        onChange={event => setCashShiftId(event.target.value)}
+                                    >
+                                        <option value="">— Chọn ca đang mở —</option>
+                                        {availableCashShifts.map(shift => (
+                                            <option key={shift.id} value={shift.id}>
+                                                {shift.id} · {shift.counterName} · {shift.staffName}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    {availableCashShifts.length === 0 && (
+                                        <span className="text-sm text-amber-700">
+                                            Chưa có ca đang mở để ghi phát sinh tiền mặt.
+                                        </span>
+                                    )}
+                                </label>
+                            )}
+
+                        {selected.status === "Pending" &&
+                            (selected.preview?.additionalPaymentAmount ?? 0) > 0 && (
+                                <label className="flex items-start gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        checked={confirmAdditionalPayment}
+                                        onChange={event =>
+                                            setConfirmAdditionalPayment(event.target.checked)
+                                        }
+                                    />
+                                    Đã thu đủ khoản khách bù thêm theo phương thức thanh toán
+                                    của đơn gốc.
+                                </label>
+                            )}
+
+                        {selected.reviewedAt && (
+                            <div className="text-sm text-[var(--muted)] space-y-1">
+                                <p>
+                                    Người xử lý: {selected.reviewer}
+                                    {" · "}{displayTime(selected.reviewedAt)}
+                                </p>
+                                <p>{selected.reviewNote}</p>
+
+                                {selected.newCreatedOrderId && (
+                                    <Link
+                                        className="text-[var(--primary)] underline"
+                                        to={`/invoices/invoice-details?orderId=${encodeURIComponent(
+                                            selected.newCreatedOrderId,
+                                        )}`}
+                                    >
+                                        Xem đơn thay thế {selected.newCreatedOrderId}
+                                    </Link>
+                                )}
+                            </div>
+                        )}
                         {selected.status === "Pending" ? (
                             <div>
                                 <label className="form-label" htmlFor="review-note">Ghi chú phê duyệt / Lý do từ chối</label>
@@ -366,6 +556,7 @@ export default function SalesReturnsPage() {
                                     <button
                                         type="button"
                                         className="btn btn-secondary !text-red-600"
+                                        disabled={reviewBusy || !!loadError}
                                         onClick={() => reviewRequest("Rejected")}
                                     >
                                         Từ Chối Yêu Cầu
@@ -373,9 +564,10 @@ export default function SalesReturnsPage() {
                                     <button
                                         type="button"
                                         className="btn btn-primary"
+                                        disabled={reviewBusy || !!loadError || (!isComplaintResolution(selected.resolution) && (!selected.details || !selected.preview))}
                                         onClick={() => reviewRequest("Approved")}
                                     >
-                                        Phê Duyệt &amp; Hoàn Tiền
+                                        {reviewBusy ? "Đang xử lý..." : "Phê duyệt & Ghi nhận"}
                                     </button>
                                 </div>
                             </div>
@@ -388,104 +580,23 @@ export default function SalesReturnsPage() {
                 )}
             </Modal>
 
-            {/* Modal Tạo Yêu Cầu Mới */}
             <Modal
-                open={open}
+                open={open && canCreate}
                 onClose={() => setOpen(false)}
-                title="Tạo Yêu Cầu Khiếu Nại &amp; Hoàn Tiền"
-                size="lg"
-                footer={
-                    <>
-                        <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
-                            Hủy Bỏ
-                        </button>
-                        <button type="button" className="btn btn-primary" onClick={handleCreateReturn}>
-                            Gửi Yêu Cầu Duyệt
-                        </button>
-                    </>
-                }
+                title="Tạo phiếu đổi trả / hoàn tiền"
+                size="xl"
             >
-                <div className="flex flex-col gap-3.5">
-                    <div>
-                        <label className="form-label" htmlFor="return-order">Đơn gốc cần xử lý (*)</label>
-                        <select
-                            id="return-order"
-                            className="form-input form-select"
-                            value={formOrderId}
-                            onChange={e => {
-                                setFormOrderId(e.target.value);
-                                const found = availableOrders.find(o => o.id === e.target.value);
-                                if (found) {
-                                    setFormAmount(String(found.total));
-                                }
-                            }}
-                        >
-                            <option value="">-- Chọn đơn hàng gốc --</option>
-                            {availableOrders.map(o => (
-                                <option key={o.id} value={o.id}>
-                                    {o.id} · {o.customer} ({o.phone}) · {formatCurrency(o.total)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="form-label" htmlFor="return-reason">Lý do khiếu nại</label>
-                        <select
-                            id="return-reason"
-                            className="form-input form-select"
-                            value={formReason}
-                            onChange={e => setFormReason(e.target.value)}
-                        >
-                            <option value="Sai mức đường / đá">Sai mức đường / mức đá so với đơn đặt</option>
-                            <option value="Hỏng vị / chất lượng không đạt">Hỏng vị / trà bị chua hoặc đắng gắt</option>
-                            <option value="Nhầm món hoặc cỡ ly">Nhầm món hoặc nhầm cỡ ly (M/L)</option>
-                            <option value="Thiếu món thêm">Thiếu món thêm (Topping)</option>
-                            <option value="Khách yêu cầu hủy trước pha">Khách đổi ý yêu cầu hủy trước khi pha chế</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="form-label" htmlFor="return-resolution">Hướng xử lý đề xuất</label>
-                        <select
-                            id="return-resolution"
-                            className="form-input form-select"
-                            value={formResolution}
-                            onChange={e => setFormResolution(e.target.value)}
-                        >
-                            <option value="Hoàn tiền">Hoàn tiền lại cho khách hàng</option>
-                            <option value="Đổi món">Đổi món mới cho khách</option>
-                            <option value="Bù voucher">Tặng voucher ưu đãi cho đơn kế tiếp</option>
-                            <option value="Hủy trước pha">Hủy đơn trước khi pha</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="form-label" htmlFor="return-amount">Số tiền đề nghị hoàn (₫)</label>
-                        <input
-                            id="return-amount"
-                            type="number"
-                            min="0"
-                            step="1000"
-                            className="form-input"
-                            value={formAmount}
-                            onChange={e => setFormAmount(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="form-label" htmlFor="return-note">Ghi chú chi tiết</label>
-                        <textarea
-                            id="return-note"
-                            className="form-input form-textarea"
-                            placeholder="Mô tả cụ thể phản hồi của khách hàng tại quầy..."
-                            rows={3}
-                            value={formNote}
-                            onChange={e => setFormNote(e.target.value)}
-                        />
-                    </div>
-                </div>
+                <SalesReturnForm
+                    key={formVersion}
+                    initialOrderId={initialOrderId}
+                    initialScope={initialScope}
+                    onCreated={() => {
+                        refresh();
+                        setOpen(false);
+                    }}
+                />
             </Modal>
+
         </>
     );
 }

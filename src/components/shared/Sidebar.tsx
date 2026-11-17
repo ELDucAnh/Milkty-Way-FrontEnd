@@ -2,6 +2,23 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 export interface SidebarProps { mobileOpen: boolean; collapsed?: boolean; onNavigate: () => void; }
 export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: SidebarProps) {
+<<<<<<< Updated upstream
+=======
+  const [, setProfileVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setProfileVersion(version => version + 1);
+    function handleStorage(event: StorageEvent) {
+      if (event.key === null || event.key.startsWith("milktyway.")) refresh();
+    }
+    window.addEventListener("milktyway:profile-updated", refresh);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("milktyway:profile-updated", refresh);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+  const user = sessionUser();
+>>>>>>> Stashed changes
   const { pathname } = useLocation();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ sales: true });
   useEffect(() => {
@@ -227,8 +244,14 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
       <NavLink onClick={onNavigate} end to="/profile" className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--background)] transition-colors" style={{ "textDecoration": "none" }}>
         <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm" style={{ "background": "var(--primary)" }}>HL</div>
         <div className="sidebar-label min-w-0">
+<<<<<<< Updated upstream
           <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>Nguyễn Hoàng Long</div>
           <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>Quản trị viên</div>
+=======
+          <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>{user.name}</div>
+          <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>{user.roleLabel}</div>
+          <div className="text-[11px] text-[var(--muted)] truncate max-w-[220px]" title={user.branchLabel}>{user.branchLabel}</div>
+>>>>>>> Stashed changes
         </div>
       </NavLink>
     </div>

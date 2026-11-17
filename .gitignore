@@ -50,10 +50,11 @@ Thumbs.db
 .cache/
 .temp/
 .tmp/
+.agents/
 *.tmp
 
 #Markdown
 .md
-
+*.md
 # Build output
 dist/

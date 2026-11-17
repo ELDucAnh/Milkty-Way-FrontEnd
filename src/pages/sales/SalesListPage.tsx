@@ -1,5 +1,10 @@
+<<<<<<< Updated upstream
+=======
+import { RETURNS_CHANGED } from "../shared/sales-returns-store";
+import { can, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
+>>>>>>> Stashed changes
 import { useToast } from "../../components/common/useToast";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
@@ -22,7 +27,32 @@ import type { SalesOrder } from "../shared/sales-orders-store";
 export default function SalesListPage() {
     const toast = useToast();
     const navigate = useNavigate();
-    const [allOrders] = useState<SalesOrder[]>(() => loadOrders());
+    const [allOrders, setAllOrders] = useState<SalesOrder[]>([]);
+    const [ordersLoadError, setOrdersLoadError] = useState("");
+
+    useEffect(() => {
+        function refreshOrders() {
+            try {
+                setAllOrders(loadOrders());
+                setOrdersLoadError("");
+            } catch (error) {
+                setOrdersLoadError(
+                    error instanceof Error ? error.message : "Không đọc được đơn hàng.",
+                );
+            }
+        }
+
+        refreshOrders();
+        window.addEventListener("focus", refreshOrders);
+        window.addEventListener("storage", refreshOrders);
+        window.addEventListener(RETURNS_CHANGED, refreshOrders);
+
+        return () => {
+            window.removeEventListener("focus", refreshOrders);
+            window.removeEventListener("storage", refreshOrders);
+            window.removeEventListener(RETURNS_CHANGED, refreshOrders);
+        };
+    }, []);
     const [appliedQuery, setAppliedQuery] = useState("");
     const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
     const [query, setQuery] = useState("");
@@ -48,10 +78,19 @@ export default function SalesListPage() {
         groups.every(g => !appliedFilters[g.key] || row[g.key as keyof SalesOrder] === appliedFilters[g.key])
     );
 
-    const totalOrdersCount = 786 + (allOrders.length - 4);
-    const totalRevenue = 67347000 + allOrders.slice(0, allOrders.length - 4).reduce((s, o) => s + o.total, 0);
+    const branchOrders = allOrders.filter(order => !scopedBranch() || order.branchId === scopedBranch());
+    const totalOrdersCount = branchOrders.filter(order => !order.parentOrderId).length;
+
+    const totalRevenue = branchOrders.reduce((sum, order) => {
+        if (order.payment === "unpaid") return sum;
+        if (order.replacedByOrderId) return sum;
+        if (order.payment === "refunded") return sum;
+        return sum + (order.netTotal ?? order.total);
+    }, 0);
+
+    // Chưa có giá vốn thực tế; đây vẫn là chỉ số ước tính của màn hình cũ.
     const netProfit = Math.round(totalRevenue * 0.273);
-    const preparingCount = allOrders.filter(order => order.preparation === "preparing" || order.preparation === "waiting").length;
+    const preparingCount = branchOrders.filter(order => order.preparation === "preparing" || order.preparation === "waiting").length;
 
     const columns: DataTableColumn<SalesOrder>[] = [
         {
@@ -61,6 +100,18 @@ export default function SalesListPage() {
                 <div className="flex items-center gap-1.5">
                     <span className="font-mono font-bold text-[var(--primary)]">{r.id}</span>
                     {r.largeOrder && <Badge variant="warning">Đơn lớn</Badge>}
+                    {r.parentOrderId && (
+                        <span className="text-xs text-[var(--muted)]">
+                            Thay thế {r.parentOrderId}
+                        </span>
+                    )}
+
+                    {r.replacedByOrderId && (
+                        <span className="text-xs text-[var(--muted)]">
+                            → {r.replacedByOrderId}
+                        </span>
+                    )}
+
                 </div>
             )
         },
@@ -92,7 +143,16 @@ export default function SalesListPage() {
         {
             id: "total",
             header: "Tổng tiền",
-            render: r => <span className="font-bold">{formatCurrency(r.total)}</span>
+            render: r => (
+                <div>
+                    <span className="font-bold">{formatCurrency(r.total)}</span>
+                    {r.netTotal !== undefined && (
+                        <div className="text-xs text-[var(--muted)]">
+                            Sau điều chỉnh: {formatCurrency(r.netTotal)}
+                        </div>
+                    )}
+                </div>
+            )
         },
         {
             id: "payment",
@@ -282,6 +342,11 @@ export default function SalesListPage() {
             </section>
 
             <section className="card p-0 overflow-hidden">
+            {ordersLoadError && (
+                <div role="alert" className="card mb-4 text-red-600">
+                    {ordersLoadError}
+                </div>
+            )}
                 <DataTable
                     pagination
                     pageSize={10}

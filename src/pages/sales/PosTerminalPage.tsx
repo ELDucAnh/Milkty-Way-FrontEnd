@@ -1,26 +1,92 @@
+<<<<<<< Updated upstream
+=======
+import { assertPosCheckoutEditable } from "../shared/sales-orders-store";
+import {
+    canAtBranch,
+    checkLogin,
+    currentStaff,
+} from "../../utils/auth";
+import {
+    counterLabel,
+    normalizeCounterId,
+    sameCounter,
+} from "../../utils/counters";
+>>>>>>> Stashed changes
 import { useToast } from "../../components/common/useToast";
 import "./pos-template.css";
-import { products } from "../../data/sales/products";
+import { products, isPosProductAvailable } from "../../data/sales/products";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+<<<<<<< Updated upstream
 import { Link } from "react-router-dom";
+=======
+import { loadCashShifts } from "../shared/cash-shifts-store";
+import type { CashShift } from "../shared/cash-shifts-store";
+import { Navigate, Link } from "react-router-dom";
+>>>>>>> Stashed changes
 import PosCart from "../../components/sales/PosCart";
 import type { PosCartItem } from "../../components/sales/PosCart";
 import { formatCurrency } from "./sales-support";
 
-const toppings = [
-    { id: "pearl", name: "Trân châu hoàng kim", price: 5000 },
-    { id: "pudding", name: "Pudding trứng", price: 7000 },
-    { id: "cheese", name: "Kem phô mai", price: 10000 },
-    { id: "aloe", name: "Thạch nha đam", price: 5000 },
-];
+import { POS_TOPPINGS as toppings, calculatePosUnitPrice } from "../shared/sales-pricing";
 export default function PosTerminalPage() {
+ const staff = currentStaff();
+
+ if (!staff?.loginRole) {
+  return <Navigate to="/login" replace />;
+ }
+
+ if (
+  !staff.branchId ||
+  !staff.counterId ||
+  !canAtBranch("pos.use", staff.branchId)
+ ) {
+  return (
+   <section className="card">
+    <h1 className="card-title">Không thể mở POS</h1>
+    <p className="text-sm text-[var(--muted)] mt-2">
+     Tài khoản cần có quyền bán hàng và được phân công chi nhánh, quầy.
+    </p>
+    <Link to="/sales/shifts" className="btn btn-secondary mt-4">
+     Xem ca làm việc
+    </Link>
+   </section>
+  );
+ }
+
+ return (
+  <AssignedPosTerminal
+   key={`${staff.staffId}:${staff.branchId}:${normalizeCounterId(staff.counterId)}`}
+   staffId={staff.staffId}
+   branchId={staff.branchId}
+   counterId={normalizeCounterId(staff.counterId)}
+  />
+ );
+}
+
+interface AssignedPosTerminalProps {
+ staffId: string;
+ branchId: string;
+ counterId: string;
+}
+
+function AssignedPosTerminal({
+ staffId,
+ branchId,
+ counterId,
+}: AssignedPosTerminalProps) {
  const toast = useToast();
  const searchRef = useRef<HTMLInputElement>(null);
  useEffect(() => {
   const focusSearch = (event: KeyboardEvent) => {
-   if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select')))) {
-    event.preventDefault(); searchRef.current?.focus();
+   if (event.repeat || event.isComposing || event.metaKey || event.altKey || document.querySelector('[role="dialog"]')) return;
+   const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select'));
+   const help = document.getElementById('pos-shortcut-help') as HTMLDetailsElement | null;
+   if (!event.ctrlKey && event.key === 'Escape' && help?.open) { help.open = false; return; }
+   if (!event.ctrlKey && !typing && event.key === '?' && help) { event.preventDefault(); help.open = !help.open; return; }
+   const alias = event.ctrlKey && event.key.toLowerCase() === 'k';
+   if (alias || (event.key === '/' && !event.ctrlKey && !(event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select'))))) {
+    event.preventDefault(); searchRef.current?.focus(); searchRef.current?.select();
    }
   };
   window.addEventListener('keydown', focusSearch);
@@ -37,15 +103,153 @@ export default function PosTerminalPage() {
  const [selected, setSelected] = useState<string[]>([]);
  const [quantity, setQuantity] = useState("1");
  const [note, setNote] = useState("");
- const unitPrice = (product.price + (size === "L" ? 6000 : 0)) + toppings.filter(t => selected.includes(t.id)).reduce((sum, t) => sum + t.price, 0);
+ const unitPrice = calculatePosUnitPrice({ productId: product.sku, size, toppings: toppings.filter(t => selected.includes(t.id)).map(t => t.name) });
+ function requireOpenAssignedShift(): CashShift {
+  const actor = currentStaff();
+
+  if (
+   !actor?.loginRole ||
+   actor.staffId !== staffId ||
+   actor.branchId !== branchId ||
+   !sameCounter(actor.counterId, counterId) ||
+   !canAtBranch("pos.use", branchId)
+  ) {
+   throw new Error(
+    "Phiên hoặc phân công quầy đã thay đổi. Vui lòng tải lại POS.",
+   );
+  }
+
+  const activeShifts = loadCashShifts().filter(shift =>
+   shift.branchId === branchId &&
+   sameCounter(shift.counterId, counterId) &&
+   shift.status !== "closed"
+  );
+
+  if (
+   activeShifts.length !== 1 ||
+   activeShifts[0].status !== "open"
+  ) {
+   throw new Error(
+    "Quầy không có một ca đang mở hợp lệ. Vui lòng kiểm tra ca làm việc.",
+   );
+  }
+
+  return activeShifts[0];
+ }
  function add(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
-  const count = Number(quantity);
-  if (!Number.isSafeInteger(count) || count < 1 || count > 999) return;
-  setItems(current => [...current, { id: crypto.randomUUID(), productId: product.sku, name: product.name, size, sugar, ice, toppings: toppings.filter(t => selected.includes(t.id)).map(t => t.name), note: note.trim(), quantity: count, unitPrice }]);
+
+  try {
+   const openShift = requireOpenAssignedShift();
+   assertPosCheckoutEditable({ staffId, branchId, counterId, shiftId: openShift.id });
+
+   if (!canAtBranch("order.create", branchId)) {
+    throw new Error("Bạn không có quyền tạo đơn tại chi nhánh này.");
+   }
+
+   if (!isPosProductAvailable(product, branchId)) throw new Error("Món không được bán tại chi nhánh này.");
+   const count = Number(quantity);
+
+   if (!Number.isSafeInteger(count) || count < 1 || count > 999) {
+    throw new Error("Số lượng phải là số nguyên từ 1 đến 999.");
+   }
+
+   setItems(current => [
+    ...current,
+    {
+     id: crypto.randomUUID(),
+     productId: product.sku,
+     name: product.name,
+     size,
+     sugar,
+     ice,
+     toppings: toppings
+      .filter(topping => selected.includes(topping.id))
+      .map(topping => topping.name),
+     note: note.trim(),
+     quantity: count,
+     unitPrice,
+    },
+   ]);
+  } catch (error) {
+   toast.warning(
+    error instanceof Error
+     ? error.message
+     : "Không thể thêm món.",
+   );
+  }
  }
+<<<<<<< Updated upstream
  return <>
       <div className="page-header mb-5">
+=======
+ function reportShortage() {
+  try {
+   requireOpenAssignedShift();
+
+   if (!canAtBranch("order.reportShortage", branchId)) {
+    throw new Error(
+     "Bạn không có quyền báo thiếu nguyên liệu tại chi nhánh này.",
+    );
+   }
+
+   const key = `milktyway.shortages.${branchId}`;
+   const raw = localStorage.getItem(key);
+   const parsed: unknown = raw === null ? {} : JSON.parse(raw);
+
+   if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+   ) {
+    throw new Error("Dữ liệu báo thiếu nguyên liệu không hợp lệ.");
+   }
+
+   localStorage.setItem(
+    key,
+    JSON.stringify({
+     ...parsed,
+     [product.sku]: new Date().toISOString(),
+    }),
+   );
+
+   toast.success("Đã ghi nhận báo thiếu nguyên liệu cho quản lý.");
+  } catch (error) {
+   toast.warning(
+    error instanceof Error
+     ? error.message
+     : "Không lưu được báo thiếu nguyên liệu.",
+   );
+  }
+ }
+ let activeShift: CashShift | null = null;
+ let shiftError: string | null = null;
+
+ try {
+  activeShift = requireOpenAssignedShift();
+ } catch (error) {
+  shiftError =
+   error instanceof Error
+    ? error.message
+    : "Không xác nhận được trạng thái ca.";
+ }
+
+ if (!activeShift) {
+  return (
+   <section className="card">
+    <h1 className="card-title">POS chưa sẵn sàng</h1>
+    <p className="text-sm text-[var(--muted)] mt-2" role="alert">
+     {shiftError}
+    </p>
+    <Link to="/sales/shifts" className="btn btn-primary mt-4">
+     Kiểm tra hoặc mở ca
+    </Link>
+   </section>
+  );
+ }
+ return <div className="pos-page">
+      <div className="page-header pos-page-header">
+>>>>>>> Stashed changes
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
             <Link to="/dashboard">Trang chủ</Link>
@@ -58,11 +262,13 @@ export default function PosTerminalPage() {
             <h1 className="page-title mb-0">Bán hàng tại quầy (POS)</h1>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Quầy 01 đang hoạt động
+              {counterLabel(counterId)} đang hoạt động
             </span>
           </div>
         </div>
         <div className="flex gap-2.5 items-center">
+          <button type="button" className="btn btn-secondary" onClick={() => window.dispatchEvent(new Event("milktyway:toggle-pos-focus"))}>Ẩn/hiện menu · ~</button>
+          <details id="pos-shortcut-help" className="pos-shortcut-help"><summary className="btn btn-secondary">Phím tắt [?]</summary><p>/ hoặc Ctrl+K: Tìm món · ~ hoặc Ctrl+B: Ẩn menu · Alt+D: Đưa đủ · Alt+H: Giữ đơn · Ctrl+Enter: Thanh toán · Esc: Đóng hướng dẫn</p></details>
           <Link to="/sales" className="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
             Danh sách đơn
@@ -76,29 +282,30 @@ export default function PosTerminalPage() {
         </div>
       </div>
 
-      <div className="card mb-4" role="status">
+      <div className="card pos-session" role="status">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <span className="badge badge-gray">Chưa xác định kết nối</span>
             <span className="text-sm text-[var(--muted)]">
-              CN01 · Quầy 01 · Ca sáng
+              {branchId} · {counterLabel(counterId)} · {activeShift.id}
             </span>
           </div>
         </div>
       </div>
 
-  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-   <div className="lg:col-span-7 flex flex-col gap-4">
+  <div className="pos-workspace">
+   <div className="pos-catalog">
    <section className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-3"><div className="flex flex-wrap gap-3 items-end">
     <div className="relative flex-1 min-w-0">
      <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
      <input ref={searchRef} id="pos-search" aria-label="Tìm món" className="w-full h-11 pl-11 pr-10 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--text)] text-sm font-medium placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all" placeholder="Quét mã hoặc nhập tên / mã món..." value={search} onChange={e => setSearch(e.target.value)} />
      <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)]">/</kbd>
     </div>
-    <select aria-label="Nhóm món" className="form-input form-select h-11 !w-auto min-w-[160px]" value={category} onChange={e => setCategory(e.target.value)}><option value="">Tất cả nhóm món</option><option value="milk-tea">Trà sữa</option><option value="fruit-tea">Trà trái cây</option><option value="seasonal">Món theo mùa</option></select>
+    <select aria-label="Nhóm món" className="form-input form-select h-11 !w-auto min-w-[160px]" value={category} onChange={e => setCategory(e.target.value)}><option value="">Tất cả nhóm món</option><option value="hot">🔥 Hot Sale</option><option value="milk-tea">Trà sữa</option><option value="fruit-tea">Trà trái cây</option><option value="seasonal">Món theo mùa</option></select>
     </div></section>
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 mb-4">{products.filter(p => (!category || p.category === category) && `${p.name} ${p.sku}`.toLocaleLowerCase("vi-VN").includes(search.trim().toLocaleLowerCase("vi-VN"))).map(p => <button key={p.id} type="button" aria-pressed={product.id === p.id} className={`pos-product-card min-w-0 text-left ${product.id === p.id ? "in-cart" : ""}`} onClick={() => { setProduct(p); setSelected([]); setSize("M"); sizeRef.current?.focus(); }}><span className="flex items-center justify-center h-[100px] rounded-[10px] mb-2.5 bg-[var(--background)]"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M7 7h10l-1 14H8L7 7ZM6 7h12M14 7l2-6"/><circle cx="11" cy="17" r="1"/><circle cx="14" cy="14" r="1"/></svg></span><span className="block truncate text-xs font-semibold mb-1">{p.name}</span><span className="block text-[11px] text-[var(--muted)] mb-1.5">{p.sku}</span><span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><span className="text-[13px] font-bold text-[var(--primary)]">{formatCurrency(p.price)}</span><span className="text-[10px] whitespace-nowrap">Còn: {p.stock}</span></span></button>)}</div>
-    <section className="card"><h2 className="card-title mb-4">Tùy chọn món</h2>
+    <div className="pos-product-grid grid grid-cols-2 sm:grid-cols-3 gap-3">{products.filter(p => isPosProductAvailable(p, branchId) && (!category || (category === "hot" ? p.isHotSale : p.category === category)) && `${p.name} ${p.sku}`.toLocaleLowerCase("vi-VN").includes(search.trim().toLocaleLowerCase("vi-VN"))).sort((a,b) => category === "hot" ? (a.hotRank ?? 99) - (b.hotRank ?? 99) : a.id - b.id).map(p => <button key={p.id} type="button" aria-pressed={product.id === p.id} className={`pos-product-card min-w-0 text-left ${product.id === p.id ? "in-cart" : ""}`} onClick={() => { setProduct(p); setSelected([]); setSize("M"); sizeRef.current?.focus(); }}><span className="flex items-center justify-center h-[100px] rounded-[10px] mb-2.5 bg-[var(--background)]"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M7 7h10l-1 14H8L7 7ZM6 7h12M14 7l2-6"/><circle cx="11" cy="17" r="1"/><circle cx="14" cy="14" r="1"/></svg></span>{p.isHotSale && <span className="pos-hot-badge" title={`${p.soldToday} ly hôm nay (demo)`}>🔥 HOT SALE</span>}<span className="block truncate text-xs font-semibold mb-1">{p.name}</span><span className="block text-[11px] text-[var(--muted)] mb-1.5">{p.sku}</span><span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><span className="text-[13px] font-bold text-[var(--primary)]">{formatCurrency(p.price)}</span><span className="text-[10px] whitespace-nowrap">Còn: {p.stock}</span></span></button>)}</div>
+</div>
+   <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId={branchId} staffId={staffId} counterId={counterId} shiftId={activeShift.id} onRestore={setItems} onQuantity={(id, quantity) => setItems(current => current.map(item => item.id === id ? {...item, quantity} : item))} customizer={    <section className="card"><details open className="pos-customizer"><summary className="card-title mb-3">Tùy chọn · {product.name}</summary>
 
     <form onSubmit={add} className="flex flex-col gap-4"><div className="grid grid-cols-2 gap-3">
      <label className="form-label">Cỡ ly<select ref={sizeRef} id="pos-size" className="form-input" value={size} onChange={e => setSize(e.target.value === "L" ? "L" : "M")}><option value="M">Size M (Tiêu chuẩn)</option><option value="L">Size L (+6.000 ₫)</option></select></label>
@@ -107,10 +314,24 @@ export default function PosTerminalPage() {
      <label className="form-label">Đá<select className="form-input" value={ice} onChange={e => setIce(e.target.value)}>{["Không đá", "Ít đá", "Vừa đá", "Bình thường"].map(v => <option key={v}>{v}</option>)}</select></label>
      </div><fieldset><legend className="form-label">Món thêm / Topping (mỗi ly)</legend><div className="grid grid-cols-2 gap-2">{toppings.map(t => <label key={t.id} className="flex items-center gap-2 text-xs cursor-pointer"><input className="accent-[var(--primary)]" type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} /><span>{t.name} · +{formatCurrency(t.price)}</span></label>)}</div></fieldset>
      <label className="form-label">Ghi chú pha chế<textarea className="form-input" placeholder="Ví dụ: Ít đá, mang đi ngay..." value={note} onChange={e => setNote(e.target.value)} /></label>
+<<<<<<< Updated upstream
      <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button><button type="button" className="btn btn-secondary" onClick={() => toast.info(`Đã tạm khóa món ${product.name} tại chi nhánh CN01 do hết nguyên liệu.`)}>Khóa món tại quầy</button></div>
     </form>
    </section></div>
    <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId="CN01" />
+=======
+     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button>{canAtBranch("order.reportShortage", branchId) && (
+ <button
+  type="button"
+  className="btn btn-secondary"
+  onClick={reportShortage}
+ >
+  Báo hết nguyên liệu
+ </button>
+)}</div>
+    </form></details>
+   </section>} />
+>>>>>>> Stashed changes
   </div>
- </>;
+ </div>;
 }

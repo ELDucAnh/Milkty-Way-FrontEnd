@@ -1,3 +1,9 @@
+<<<<<<< Updated upstream
+=======
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+console.warn("LƯU Ý: kịch bản 1–14 dùng mô phỏng riêng và quy tắc lịch sử, không kiểm chứng module ứng dụng hiện tại. Nghiệm thu Người 1 bằng: node scripts/person-one.test.mjs. Chỉ kịch bản 15 gọi auth thật.");
+>>>>>>> Stashed changes
 /**
  * MilktyWay POS & Chain Operations - Comprehensive E2E Business Flow Test Suite
  * Luồng kiểm thử nghiệp vụ toàn diện từ POS -> KDS -> Hóa Đơn -> Đổi Trả -> Bàn Giao Ca -> FEFO -> Điều Chuyển Kho

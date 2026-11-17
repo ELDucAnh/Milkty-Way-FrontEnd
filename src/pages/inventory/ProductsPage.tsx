@@ -1,3 +1,16 @@
+<<<<<<< Updated upstream
+=======
+import {
+  can,
+  canAtBranch,
+  currentStaff,
+  homePath,
+  isCashier,
+  isWarehouse,
+  scopedBranch,
+} from "../../utils/auth";
+import { productStatusAtStore } from "../shared/product-branch-status";
+>>>>>>> Stashed changes
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -45,9 +58,23 @@ export default function ProductsPage() {
     category: "all",
     status: "all",
   });
-  const [selected, setSelected] = useState<Product | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+const selected =
+  data.products.find(product => product.id === selectedId) ?? null;
   const [page, setPage] = useState(1);
   const pageSize = 8;
+
+const branchId = scopedBranch();
+const branchStore = branchId
+  ? data.stores.find(store => store.code === branchId)
+  : undefined;
+
+const branchStoreId = branchStore?.id ?? null;
+
+function visibleStatus(product: Product): ProductStatus {
+  return productStatusAtStore(product, branchStoreId);
+}
 
   const filtered = useMemo(
     () =>
@@ -60,27 +87,33 @@ export default function ProductsPage() {
               .includes(query)) &&
           (applied.category === "all" ||
             product.category === applied.category) &&
-          (applied.status === "all" || product.status === applied.status)
+          (
+  applied.status === "all" ||
+  visibleStatus(product) === applied.status
+)
         );
       }),
-    [data.products, applied],
+    [data.products, applied, branchStoreId],
   );
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const rows = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const activeCount = data.products.filter(
-    (product) => product.status === "active",
-  ).length;
-  const approvedCount = data.products.filter(
-    (product) =>
-      product.status === "active" &&
-      data.recipes.some(
-        (recipe) =>
-          recipe.productId === product.id && recipe.status === "approved",
-      ),
-  ).length;
-  const lockedCount = data.products.filter(
-    (product) => product.status === "branch-locked",
-  ).length;
+const activeCount = data.products.filter(
+  product => visibleStatus(product) === "active",
+).length;
+
+const approvedCount = data.products.filter(
+  product =>
+    visibleStatus(product) === "active" &&
+    data.recipes.some(
+      recipe =>
+        recipe.productId === product.id &&
+        recipe.status === "approved",
+    ),
+).length;
+
+const lockedCount = data.products.filter(
+  product => visibleStatus(product) === "branch-locked",
+).length;
   const reviewCount = data.products.filter(
     (product) => product.status === "pending-recipe",
   ).length;
@@ -104,6 +137,129 @@ export default function ProductsPage() {
       .map((variant) => `${variant.size} ${formatCurrency(variant.price)}`)
       .join(" · ");
   }
+<<<<<<< Updated upstream
+=======
+const canManageProducts = can("product.manage");
+
+const canLockAtBranch = Boolean(
+  branchId &&
+  branchStoreId &&
+  canAtBranch("product.lockAtBranch", branchId),
+);
+
+const canReportShortage =
+  (isCashier() || isWarehouse()) &&
+  can("order.reportShortage");
+
+function isLockable(product: Product) {
+  return (
+    product.status === "active" ||
+    product.status === "branch-locked"
+  );
+}
+
+function branchLabel(product: Product) {
+  if (branchId && !branchStoreId) {
+    return `Chưa tìm thấy cửa hàng của ${branchId}`;
+  }
+
+  const currentStatus = visibleStatus(product);
+
+  if (branchId && currentStatus === "branch-locked") {
+    return `${branchId} tạm khóa`;
+  }
+
+  if (!branchId && currentStatus === "branch-locked") {
+    return `${product.lockedStoreIds.join(", ")} tạm khóa`;
+  }
+
+  return STATUS_LABEL[currentStatus];
+}
+
+function branchVariant(product: Product) {
+  if (branchId && !branchStoreId) return "warning" as const;
+
+  return STATUS_VARIANT[visibleStatus(product)];
+}
+
+function toggleBranchLock(product: Product) {
+  try {
+    const actor = currentStaff();
+    const targetBranchId = actor?.branchId;
+
+    if (
+      !actor?.loginRole ||
+      !targetBranchId ||
+      !canAtBranch("product.lockAtBranch", targetBranchId)
+    ) {
+      throw new Error(
+        "Bạn không có quyền khóa món tại chi nhánh này.",
+      );
+    }
+
+    setData(current => {
+      // Kiểm tra lại phiên tại lúc cập nhật.
+      if (
+        currentStaff()?.staffId !== actor.staffId ||
+        !canAtBranch("product.lockAtBranch", targetBranchId)
+      ) {
+        throw new Error(
+          "Phiên đăng nhập đã thay đổi. Vui lòng tải lại trang.",
+        );
+      }
+
+      const store = current.stores.find(
+        item => item.code === targetBranchId,
+      );
+
+      if (!store) {
+        throw new Error(
+          `Không tìm thấy cửa hàng tương ứng ${targetBranchId}.`,
+        );
+      }
+
+      const latest = current.products.find(
+        item => item.id === product.id,
+      );
+
+      if (!latest || !isLockable(latest)) {
+        throw new Error(
+          "Món không còn tồn tại hoặc không ở trạng thái được phép khóa/mở bán.",
+        );
+      }
+
+      const locked = latest.lockedStoreIds.includes(store.id);
+
+      const lockedStoreIds = locked
+        ? latest.lockedStoreIds.filter(id => id !== store.id)
+        : [...new Set([...latest.lockedStoreIds, store.id])];
+
+      const updated: Product = {
+        ...latest,
+        lockedStoreIds,
+        status: lockedStoreIds.length
+          ? "branch-locked"
+          : "active",
+      };
+
+      return {
+        ...current,
+        products: current.products.map(item =>
+          item.id === updated.id ? updated : item
+        ),
+      };
+    });
+
+    toast.success("Đã cập nhật trạng thái bán tại chi nhánh của bạn.");
+  } catch (error) {
+    toast.warning(
+      error instanceof Error
+        ? error.message
+        : "Không lưu được trạng thái món.",
+    );
+  }
+}
+>>>>>>> Stashed changes
 
   return (
     <div>
@@ -325,11 +481,17 @@ export default function ProductsPage() {
                         : "Chưa có định mức"}
                     </td>
                     <td className="px-4 py-3">
+<<<<<<< Updated upstream
                       <button onClick={() => setSelected(product)}>
                         <Badge variant={STATUS_VARIANT[product.status]}>
                           {product.status === "branch-locked"
                             ? `${product.lockedStoreIds.join(", ")} tạm khóa`
                             : STATUS_LABEL[product.status]}
+=======
+                      <button onClick={() => setSelectedId(product.id)}>
+                        <Badge variant={branchVariant(product)}>
+                          {branchLabel(product)}
+>>>>>>> Stashed changes
                         </Badge>
                       </button>
                     </td>
@@ -373,7 +535,7 @@ export default function ProductsPage() {
         isOpen={selected !== null}
         title="Thông tin món và trạng thái bán"
         size="lg"
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedId(null)}
       >
         {selected && (
           <div className="space-y-3">
@@ -387,7 +549,7 @@ export default function ProductsPage() {
                 ?.name ?? selected.category}
             </p>
             <p>Giá chuẩn: {prices(selected)}</p>
-            <p>Trạng thái: {STATUS_LABEL[selected.status]}</p>
+            <p>Trạng thái: {branchLabel(selected)}</p>
             <p>
               Cửa hàng tạm khóa:{" "}
               {selected.lockedStoreIds.length
@@ -411,10 +573,38 @@ export default function ProductsPage() {
               )}
             </div>
             <p className="text-sm text-[var(--muted)]">{selected.note}</p>
+<<<<<<< Updated upstream
             <div className="flex justify-end">
+=======
+            <div className="flex justify-end gap-2">
+              {canReportShortage && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    toast.warning(
+                      `Đã gửi cảnh báo món "${selected.name}" hết nguyên liệu cho Quản lý!`,
+                      { title: "Báo Hết Nguyên Liệu" }
+                    );
+                    setSelectedId(null);
+                  }}
+                >
+                  Báo món hết nguyên liệu cho quản lý
+                </button>
+              )}
+              {canLockAtBranch && branchStoreId && isLockable(selected) && (
+                <button
+                  className={selected.lockedStoreIds.includes(branchStoreId) ? "btn btn-primary" : "btn btn-secondary"}
+                  onClick={() => toggleBranchLock(selected)}
+                >
+                  {selected.lockedStoreIds.includes(branchStoreId)
+                    ? `Mở bán lại tại ${branchId}`
+                    : `Khóa bán tại ${branchId}`}
+                </button>
+              )}
+>>>>>>> Stashed changes
               <button
                 className="btn btn-secondary"
-                onClick={() => setSelected(null)}
+                onClick={() => setSelectedId(null)}
               >
                 Đóng
               </button>
