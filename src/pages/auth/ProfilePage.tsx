@@ -1,17 +1,11 @@
-<<<<<<< Updated upstream
-=======
 import { canVisit, homePath, isCashier, currentStaff, readStaffProfile, saveStaffProfile, sessionUser, type StaffRecord, type Role } from "../../utils/auth";
->>>>>>> Stashed changes
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
 
-<<<<<<< Updated upstream
-=======
 const DEFAULT_PHONE = { owner: "0903 123 456", manager: "0907 654 321", cashier: "0908 111 222", warehouse: "0909 888 777" } as const;
 
->>>>>>> Stashed changes
 export default function ProfilePage() {
   const staff = currentStaff();
   if (!staff?.loginRole) return <Navigate to="/login" replace />;
@@ -21,12 +15,6 @@ export default function ProfilePage() {
 function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
   const toast = useToast();
   const navigate = useNavigate();
-<<<<<<< Updated upstream
-
-  const [fullName, setFullName] = useState("Nguyễn Hoàng Long");
-  const [phone, setPhone] = useState("0903 123 456");
-  const [address, setAddress] = useState("Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM");
-=======
   const user = sessionUser();
   const [initial] = useState(() => {
     try {
@@ -40,7 +28,6 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
   const [fullName, setFullName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
   const [address, setAddress] = useState(initial.address);
->>>>>>> Stashed changes
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -62,8 +49,6 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
       toast.error("Mật khẩu xác nhận không khớp!");
       return;
     }
-<<<<<<< Updated upstream
-=======
     try {
       if (initial.error) throw new Error(initial.error);
       saveStaffProfile(staff.staffId, {
@@ -77,7 +62,6 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
       return;
     }
     window.dispatchEvent(new Event("milktyway:profile-updated"));
->>>>>>> Stashed changes
     toast.success("Đã cập nhật hồ sơ nhân sự thành công!", {
       title: "Hồ Sơ",
     });
@@ -89,7 +73,7 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Hồ sơ cá nhân</span>
           </nav>
@@ -120,13 +104,9 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
           </div>
           <h2 className="text-lg font-bold text-[var(--text)]">{fullName}</h2>
           <div className="text-[13px] text-[var(--primary)] font-semibold mt-1">
-            Quản trị viên (Chủ Doanh Nghiệp)
+            {user.roleLabel}
           </div>
-<<<<<<< Updated upstream
-          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: NV-ADMIN-01</div>
-=======
           <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: {staff.staffId}</div>
->>>>>>> Stashed changes
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mt-2 border border-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Đang Trong Ca Trực Chiều
@@ -152,11 +132,11 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
           <div className="text-left flex flex-col gap-2.5 mt-5 text-xs text-[var(--muted)]">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Chi Nhánh:</span>
-              Trụ Sở Chính &amp; Giám sát CN05
+              {user.branchLabel}
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Email:</span>
-              long.nh@MilktyWay.vn
+              {user.email}
             </div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[var(--text)]">Hotline:</span>
@@ -192,7 +172,7 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
               </div>
             </div>
             <div className="mt-3 flex justify-end gap-2">
-              <button
+              {!isCashier() && (<button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() =>
@@ -202,14 +182,16 @@ function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
                 }
               >
                 Xin Đổi Ca Trực
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => navigate("/sales/shifts")}
-              >
-                Đóng Ca &amp; Đối Soát Tiền Mặt
-              </button>
+              </button>)}
+              {canVisit("/sales/shifts") && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/sales/shifts")}
+                >
+                  Đóng Ca &amp; Đối Soát Tiền Mặt
+                </button>
+              )}
             </div>
           </div>
 

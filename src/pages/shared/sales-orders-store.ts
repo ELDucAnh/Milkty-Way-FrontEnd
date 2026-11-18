@@ -60,8 +60,6 @@ export interface SalesOrderItem {
 }
 
 export interface SalesOrder {
-<<<<<<< Updated upstream
-=======
   orderNote?: string;
   checkoutId?: string;
   checkoutFingerprint?: string;
@@ -69,7 +67,6 @@ export interface SalesOrder {
   counterId?: string;
   createdByStaffId?: string;
   onlineDecision?: "accepted" | "rejected";
->>>>>>> Stashed changes
   id: string;
   branchId: string;
   shift: SalesShift;
@@ -534,6 +531,18 @@ export const INITIAL_RETURNS: ReturnRequest[] = [
     memberId: null,
     status: "Pending",
   },
+  {
+    id: "HT-0003",
+    orderId: "DH-00122",
+    customer: "Trần Văn An",
+    createdAt: "2026-10-28T15:10:00+07:00",
+    resolution: "Hoàn tiền",
+    reason: "Pha nhầm mức đá tại CN05",
+    amount: 44000,
+    points: -4,
+    memberId: "HV-0002",
+    status: "Pending",
+  },
 ];
 
 function readRecords<T extends { id: string }>(key: string, seed: T[]): T[] {
@@ -578,18 +587,7 @@ export function assertPosCheckoutEditable(context: PosCheckoutContext, checkoutI
 
 // Helper functions for returns
 export function loadReturns(): ReturnRequest[] {
-<<<<<<< Updated upstream
-  try {
-    const raw = localStorage.getItem(STORAGE_RETURNS);
-    if (!raw) return INITIAL_RETURNS;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_RETURNS;
-  } catch {
-    return INITIAL_RETURNS;
-  }
-=======
   return readRecords(STORAGE_RETURNS, INITIAL_RETURNS);
->>>>>>> Stashed changes
 }
 
 export function saveReturns(returns: ReturnRequest[]): void {
@@ -817,8 +815,6 @@ export function createPosOrder(params: PosCheckoutContext & {
   return { order: newOrder, invoice: newInvoice };
 }
 
-<<<<<<< Updated upstream
-=======
 /**
  * Caller UI dùng API này để POS và A4 dùng chung Web Lock.
  * Giữ createPosOrder đồng bộ cho caller cũ và các test hiện có.
@@ -828,4 +824,3 @@ export function createPosOrderExclusive(
 ): Promise<ReturnType<typeof createPosOrder>> {
   return withSalesWriteLock(() => createPosOrder(params));
 }
->>>>>>> Stashed changes

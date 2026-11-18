@@ -1,11 +1,7 @@
-<<<<<<< Updated upstream
-import { useState, useMemo } from "react";
-=======
 import OrderReturnHistory from "../sales/OrderReturnHistory";
 import { RETURNS_CHANGED } from "../shared/sales-returns-store";
 import { homePath, isCashier, scopedBranch } from "../../utils/auth";
 import { useEffect, useState, useMemo } from "react";
->>>>>>> Stashed changes
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
@@ -20,10 +16,6 @@ export default function InvoiceDetailsPage() {
   const toast = useToast();
   const [printFormat, setPrintFormat] = useState<"k80" | "k57">("k80");
 
-<<<<<<< Updated upstream
-  const invoices = useMemo(() => loadInvoices(), []);
-  const orders = useMemo(() => loadOrders(), []);
-=======
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
@@ -35,7 +27,6 @@ export default function InvoiceDetailsPage() {
   const branchScope = scopedBranch();
   const invoices = useMemo(() => loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)), [branchScope, revision]);
   const orders = useMemo(() => loadOrders().filter(o => !branchScope || o.branchId === branchScope), [branchScope, revision]);
->>>>>>> Stashed changes
 
   const effectiveId = id && id !== "invoice-details" ? id : null;
 
@@ -74,11 +65,6 @@ export default function InvoiceDetailsPage() {
       if (byMatchedOrder) return byMatchedOrder;
       return undefined;
     }
-<<<<<<< Updated upstream
-    return invoices[0];
-  }, [effectiveId, orderIdParam, invoices, matchedOrder]);
-
-=======
     if (orderIdParam || effectiveId) return undefined;
     return invoices[0];
   }, [effectiveId, orderIdParam, invoices, matchedOrder]);
@@ -97,7 +83,6 @@ export default function InvoiceDetailsPage() {
     );
   }
 
->>>>>>> Stashed changes
   const invoiceId = matchedInvoice
     ? matchedInvoice.id
     : (effectiveId || `HD-${matchedOrder?.branchId || "CN01"}-${(matchedOrder?.id || "000125").replace(/\D/g, "").padStart(6, "0")}`);
@@ -154,7 +139,7 @@ export default function InvoiceDetailsPage() {
       <div className="page-header no-print">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/invoices">Hóa đơn</Link>
             <span className="sep">/</span>
@@ -172,7 +157,7 @@ export default function InvoiceDetailsPage() {
             </svg>
             Danh sách hóa đơn
           </Link>
-          <div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
+          {!isCashier() && <><div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
             <button
               type="button"
               className={`btn btn-secondary border-none rounded-none text-xs px-3 ${printFormat === "k80" ? "bg-[var(--surface)]" : ""
@@ -217,7 +202,7 @@ export default function InvoiceDetailsPage() {
               <polyline points="22,6 12,13 2,6" />
             </svg>
             Gửi Cho Khách
-          </button>
+          </button></>}
         </div>
       </div>
 

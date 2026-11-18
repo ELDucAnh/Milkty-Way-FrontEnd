@@ -1,10 +1,6 @@
-<<<<<<< Updated upstream
-import { Navigate, Route, Routes } from "react-router-dom";
-=======
 import { useEffect, useState } from "react";
 import { canVisit, checkLogin, homePath, logout, currentStaff, STAFF_SESSION_KEY, STAFF_SESSION_CHANGED } from "../utils/auth";
 import { useNavigate, useLocation, Navigate, Route, Routes } from "react-router-dom";
->>>>>>> Stashed changes
 import MainLayout from "../layouts/MainLayout";
 import AuthLayout from "../layouts/AuthLayout";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -97,8 +93,6 @@ function LogoutRoute() {
 }
 
 export default function AppRoutes() {
-<<<<<<< Updated upstream
-=======
   const [, refresh] = useState(0);
   useEffect(() => {
     const update = () => refresh(n => n + 1);
@@ -114,7 +108,6 @@ export default function AppRoutes() {
   const normalizedPath = pathname.replace(/\/+$/, "").toLowerCase() || "/";
   const isPublicRoute = normalizedPath === "/logout" || PUBLIC_AUTH_PATHS.has(normalizedPath);
   if (role && !isPublicRoute && !canVisit(normalizedPath, role)) return <Navigate to={homePath(role)} replace />;
->>>>>>> Stashed changes
   return (
     <Routes>
       {/* Auth Layout - Không header, không sidebar */}
@@ -131,13 +124,8 @@ export default function AppRoutes() {
       </Route>
 
       {/* Main Layout - Header & Sidebar tĩnh cố định, inner fade-in */}
-<<<<<<< Updated upstream
-      <Route element={<MainLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-=======
       <Route element={role ? <MainLayout key={currentStaff()?.staffId ?? "guest"} /> : <Navigate to="/login" replace />}>
         <Route index element={<Navigate to={homePath(role)} replace />} />
->>>>>>> Stashed changes
         <Route path="/dashboard" element={<DashboardPage />} />
 
         {/* Bán Hàng & POS */}

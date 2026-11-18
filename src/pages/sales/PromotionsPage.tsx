@@ -1,9 +1,9 @@
-<<<<<<< Updated upstream
-import { useRef, useState } from "react";
-=======
+import "./promotions.css";
+import ProgressBar from "../../components/common/ProgressBar";
+import { Link } from "react-router-dom";
+import { homePath } from "../../utils/auth";
 import { can, checkLogin, scopedBranch } from "../../utils/auth";
 import { useEffect, useState } from "react";
->>>>>>> Stashed changes
 import type { FormEvent, InputHTMLAttributes } from "react";
 import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
@@ -110,104 +110,6 @@ const statusVariants: Record<PromotionStatus, BadgeVariant> = {
     ended: "gray",
 };
 
-<<<<<<< Updated upstream
-export const initialPromotions: readonly Promotion[] = [
-    {
-        id: "KM-001",
-        code: "KM-001",
-        name: "Mua 2 ly tặng trân châu",
-        version: 1,
-        branchIds: ["CN01", "CN02"],
-        branchMode: "include",
-        channel: "online",
-        shift: "afternoon",
-        startDate: "2026-10-28",
-        endDate: "2026-10-31",
-        hourFrom: "14:00",
-        hourTo: "17:00",
-        budget: 2000000,
-        usageLimit: 200,
-        status: "active",
-        description: "",
-        productId: null,
-        minQuantity: null,
-        benefit: null,
-        giftProductId: null,
-        stackable: null,
-    },
-    {
-        id: "KM-002",
-        code: "KM-002",
-        name: "Ưu đãi đầu tháng",
-        version: 1,
-        branchIds: branches.map((branch) => branch.id),
-        branchMode: "include",
-        channel: "all",
-        shift: "all",
-        startDate: "2026-11-01",
-        endDate: "2026-11-07",
-        hourFrom: "08:00",
-        hourTo: "22:00",
-        budget: 5000000,
-        usageLimit: 500,
-        status: "scheduled",
-        description: "",
-        productId: null,
-        minQuantity: null,
-        benefit: null,
-        giftProductId: null,
-        stackable: null,
-    },
-    {
-        id: "KM-003",
-        code: "KM-003",
-        name: "Quà tặng cuối tuần",
-        version: 1,
-        branchIds: ["CN03", "CN04"],
-        branchMode: "include",
-        channel: "counter",
-        shift: "evening",
-        startDate: "2026-10-31",
-        endDate: "2026-11-01",
-        hourFrom: "18:00",
-        hourTo: "21:00",
-        budget: 1000000,
-        usageLimit: 100,
-        status: "draft",
-        description: "",
-        productId: null,
-        minQuantity: null,
-        benefit: null,
-        giftProductId: null,
-        stackable: null,
-    },
-];
-
-export const STORAGE_PROMOTIONS = "miltyway_promotions_v1";
-
-export function loadPromotions(): Promotion[] {
-    try {
-        const raw = localStorage.getItem(STORAGE_PROMOTIONS);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-    } catch {
-        // ignore
-    }
-    return [...initialPromotions];
-}
-
-export function savePromotions(promotions: Promotion[]): void {
-    try {
-        localStorage.setItem(STORAGE_PROMOTIONS, JSON.stringify(promotions));
-    } catch {
-        // ignore
-    }
-}
-
-=======
->>>>>>> Stashed changes
 const emptyFilters: PromotionFilters = {
     search: "",
     status: "",
@@ -261,6 +163,49 @@ function isChannel(value: string): value is PromotionChannel {
 function isShift(value: string): value is PromotionShift {
     return value === "all" || value === "morning" ||
         value === "afternoon" || value === "evening";
+}
+
+type PromotionIconName = "edit" | "pause" | "play" | "clock" | "alert";
+
+function PromotionIcon({ name }: { name: PromotionIconName }) {
+    return (
+        <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.65"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+        >
+            {name === "edit" && (
+                <>
+                    <path d="m15 5 4 4" />
+                    <path d="m4 20 4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z" />
+                </>
+            )}
+
+            {name === "pause" && <path d="M9 6v12M15 6v12" />}
+
+            {name === "play" && <path d="m8 5 11 7-11 7Z" />}
+
+            {name === "clock" && (
+                <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                </>
+            )}
+
+            {name === "alert" && (
+                <>
+                    <path d="m12 3 10 18H2Z" />
+                    <path d="M12 9v4m0 4h.01" />
+                </>
+            )}
+        </svg>
+    );
 }
 
 export default function PromotionsPage() {
@@ -321,17 +266,11 @@ export default function PromotionsPage() {
     }
 
     const query = filters.search.trim().toLocaleLowerCase("vi-VN");
-<<<<<<< Updated upstream
-    const visibleRows = rows.filter((row) =>
-        `${row.code} ${row.name}`.toLocaleLowerCase("vi-VN").includes(query) &&
-        (!filters.status || row.status === filters.status) &&
-=======
 
     const visibleRows = rows.filter(row =>
         `${row.code} ${row.name} ${row.naturalRuleText}`
             .toLocaleLowerCase("vi-VN").includes(query) &&
         (!filters.status || getPromotionStatus(row) === filters.status) &&
->>>>>>> Stashed changes
         (!filters.channel || row.channel === "all" || row.channel === filters.channel)
     );
     function openEdit(row: Promotion) {
@@ -584,25 +523,17 @@ export default function PromotionsPage() {
     const totalBudgetUsed = rows.reduce((total, row) => total + row.budgetUsed, 0);
     const totalUsage = rows.reduce((total, row) => total + row.usageCount, 0);
     return (
-        <>
-<<<<<<< Updated upstream
-            <SalesPageHeader
-                title="Chương trình khuyến mãi & Voucher"
-                breadcrumb="Marketing"
-                parent={{ label: "", to: "" }}
-                description="Thiết lập các chương trình khuyến mãi, voucher ưu đãi và chính sách quà tặng toàn hệ thống MilktyWay."
-                actions={
-=======
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div className="promotions-page">
+            <div className="page-header mb-6">
                 <div>
-                    <h1 className="text-xl font-bold">Khuyến mãi & Voucher</h1>
-                    <p className="text-xs text-[var(--muted)]">
-                        Tra cứu thể lệ, hạn mức và phạm vi áp dụng.
+                    <nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to={homePath()}>Tổng quan</Link><span className="sep">/</span><span>Marketing</span><span className="sep">/</span><span className="current">Khuyến mãi & Voucher</span></nav>
+                    <h1 className="page-title">Khuyến mãi & Voucher</h1>
+                    <p className="page-subtitle">
+                        {isChainAdmin ? "Quản lý chương trình, hạn mức và phân bổ khuyến mãi toàn chuỗi." : `Tra cứu thể lệ và ưu đãi áp dụng${userBranch ? ` tại ${userBranch}` : ""}.`}
                     </p>
                 </div>
 
                 {isChainAdmin && (
->>>>>>> Stashed changes
                     <button
                         type="button"
                         className="btn btn-primary"
@@ -638,313 +569,466 @@ export default function PromotionsPage() {
                 </p>
             )}
 
-            <section aria-label="Danh sách khuyến mãi" className="card !p-3">
-                <form
-                    className="flex flex-wrap items-center gap-2 mb-3"
-                    onSubmit={event => {
-                        event.preventDefault();
-                        setFilters({ ...draftFilters });
-                    }}
-                >
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mr-auto">
-                        <span>Tổng <strong>{rows.length}</strong></span>
-                        <span>Đang chạy <strong>{runningCount}</strong></span>
-                        <span>Đã dùng <strong>{formatCurrency(totalBudgetUsed)}</strong></span>
-                        <span>Lượt <strong>{totalUsage.toLocaleString("vi-VN")}</strong></span>
-                    </div>
+<section
+    aria-label="Danh sách khuyến mãi"
+    className="card data-list-card"
+>
+    <form
+        className="data-list-toolbar"
+        onSubmit={event => {
+            event.preventDefault();
+            setFilters({ ...draftFilters });
+        }}
+    >
+        <div className="data-list-summary">
+            <span>
+                Tổng <strong>{rows.length}</strong>
+            </span>
 
-                    <input
-                        aria-label="Tìm khuyến mãi"
-                        type="search"
-                        className="form-input !w-52 !h-9"
-                        placeholder="Mã, tên, quy định..."
-                        value={draftFilters.search}
-                        onChange={event => setDraftFilters(current => ({
-                            ...current,
-                            search: event.target.value,
-                        }))}
-                    />
+            <span>
+                <span className="status-dot text-success" aria-hidden="true" />
+                Đang chạy <strong>{runningCount}</strong>
+            </span>
 
-                    <select
-                        aria-label="Lọc trạng thái"
-                        className="form-input form-select !w-40 !h-9"
-                        value={draftFilters.status}
-                        onChange={event => setDraftFilters(current => ({
-                            ...current,
-                            status: event.target.value,
-                        }))}
-                    >
-                        <option value="">Mọi trạng thái</option>
-                        {Object.entries(statusLabels).map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
-                        ))}
-                    </select>
+            <span>
+                Đã dùng{" "}
+                <strong className="numeric">
+                    {formatCurrency(totalBudgetUsed)}
+                </strong>
+            </span>
 
-                    <select
-                        aria-label="Lọc kênh bán"
-                        className="form-input form-select !w-36 !h-9"
-                        value={draftFilters.channel}
-                        onChange={event => setDraftFilters(current => ({
-                            ...current,
-                            channel: event.target.value,
-                        }))}
-                    >
-                        <option value="">Mọi kênh</option>
-                        {Object.entries(channelLabels).map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
-                        ))}
-                    </select>
+            <span>
+                Lượt{" "}
+                <strong className="numeric">
+                    {totalUsage.toLocaleString("vi-VN")}
+                </strong>
+            </span>
+        </div>
 
-                    <button type="submit" className="btn btn-primary btn-sm">
-                        Lọc
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                            setFilters(emptyFilters);
-                            setDraftFilters(emptyFilters);
-                        }}
-                    >
-                        Xóa lọc
-                    </button>
-                </form>
+        <div className="search-box data-list-search">
+            <svg
+                className="search-icon"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.65"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path d="m16 16 4 4" />
+            </svg>
 
-<<<<<<< Updated upstream
-                <div className="mt-5">
-                    <DataTable<Promotion> pagination={false}
-                        key={JSON.stringify(filters)}
-                        columns={columns}
-                        data={visibleRows}
-                        rowKey={(row) => row.id}
-                        caption="Danh sách chương trình khuyến mãi"
-                    />
-                </div>
-=======
-                <DataTable>
-                    <table className="data-table w-full table-fixed min-w-[1100px]">
-                        <caption className="sr-only">
-                            Danh sách chương trình khuyến mãi
-                        </caption>
-                        <colgroup>
-                            <col style={{ width: isChainAdmin ? "26%" : "29%" }} />
-                            <col style={{ width: "14%" }} />
-                            <col style={{ width: isChainAdmin ? "28%" : "31%" }} />
-                            <col style={{ width: "16%" }} />
-                            <col style={{ width: "10%" }} />
-                            {isChainAdmin && <col style={{ width: "6%" }} />}
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th scope="col">Chương trình & Quy định</th>
-                                <th scope="col">Mức ưu đãi</th>
-                                <th scope="col">Tổng / Số lượng / Tiền</th>
-                                <th scope="col">Ràng buộc & Kết thúc</th>
-                                <th scope="col">Thời gian & CN</th>
-                                {isChainAdmin && <th scope="col">Thao tác</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {!visibleRows.length && (
-                                <tr>
-                                    <td
-                                        colSpan={isChainAdmin ? 6 : 5}
-                                        className="text-center py-10"
+            <input
+                aria-label="Tìm khuyến mãi"
+                type="search"
+                className="form-input"
+                placeholder="Mã, tên, quy định..."
+                value={draftFilters.search}
+                onChange={event => setDraftFilters(current => ({
+                    ...current,
+                    search: event.target.value,
+                }))}
+            />
+        </div>
+
+        <select
+            aria-label="Lọc trạng thái"
+            className="form-input form-select data-list-status-filter"
+            value={draftFilters.status}
+            onChange={event => setDraftFilters(current => ({
+                ...current,
+                status: event.target.value,
+            }))}
+        >
+            <option value="">Mọi trạng thái</option>
+            {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                    {label}
+                </option>
+            ))}
+        </select>
+
+        <select
+            aria-label="Lọc kênh bán"
+            className="form-input form-select data-list-channel-filter"
+            value={draftFilters.channel}
+            onChange={event => setDraftFilters(current => ({
+                ...current,
+                channel: event.target.value,
+            }))}
+        >
+            <option value="">Mọi kênh</option>
+            {Object.entries(channelLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                    {label}
+                </option>
+            ))}
+        </select>
+
+        <button type="submit" className="btn btn-primary btn-sm">
+            Lọc
+        </button>
+
+        <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+                setFilters(emptyFilters);
+                setDraftFilters(emptyFilters);
+            }}
+        >
+            Xóa lọc
+        </button>
+    </form>
+
+    <DataTable>
+        <table className="data-table data-table--detail w-full table-fixed min-w-[1100px]">
+            <caption className="sr-only">
+                Danh sách chương trình khuyến mãi
+            </caption>
+
+            <colgroup>
+                <col style={{ width: isChainAdmin ? "26%" : "29%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: isChainAdmin ? "28%" : "31%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "10%" }} />
+                {isChainAdmin && <col style={{ width: "6%" }} />}
+            </colgroup>
+
+            <thead>
+                <tr>
+                    <th scope="col">Chương trình & Quy định</th>
+                    <th scope="col">Mức ưu đãi</th>
+                    <th scope="col">Tổng / Số lượng / Tiền</th>
+                    <th scope="col">Ràng buộc & Kết thúc</th>
+                    <th scope="col">Thời gian & CN</th>
+                    {isChainAdmin && (
+                        <th scope="col" className="table-actions-heading">
+                            Thao tác
+                        </th>
+                    )}
+                </tr>
+            </thead>
+
+            <tbody>
+                {!visibleRows.length && (
+                    <tr>
+                        <td
+                            colSpan={isChainAdmin ? 6 : 5}
+                            className="table-empty"
+                        >
+                            Không có chương trình phù hợp.
+                        </td>
+                    </tr>
+                )}
+
+                {visibleRows.map(row => {
+                    const status = getPromotionStatus(row);
+                    const forecast = getPromotionForecast(row);
+                    const capacity = promotionUsageCapacity(row);
+                    let relatedCodes: string[] = [];
+                    let relationError = false;
+                    try {
+                        relatedCodes = findPromotionConflicts(row, rows).map(other => other.code);
+                    } catch {
+                        relationError = true;
+                    }
+                    const startsAt = Date.parse(`${row.startDate}T${row.hourFrom}:00+07:00`);
+                    const endsAt = Date.parse(`${row.endDate}T${row.hourTo}:00+07:00`);
+                    const timePercent = endsAt > startsAt
+                        ? Math.max(0, Math.min(100, (Date.now() - startsAt) / (endsAt - startsAt) * 100))
+                        : 0;
+
+                    const usagePercent = capacity
+                        ? Math.min(100, row.usageCount / capacity * 100)
+                        : 0;
+
+                    const budgetPercent = row.budget
+                        ? Math.min(100, row.budgetUsed / row.budget * 100)
+                        : 100;
+
+                    const forecastTitle = {
+                        budget: "Chạm trần ngân sách trước",
+                        usage: "Chạm trần số lượt trước",
+                        time: "Chạm trần thời gian trước",
+                    }[forecast.predictedBindingLimit];
+
+                    const isEnabled =
+                        row.status === "active" ||
+                        row.status === "scheduled";
+
+                    return (
+                        <tr key={row.id}>
+                            <td>
+                                <div className="table-item-title">
+                                    {row.name}
+                                </div>
+
+                                <div className="table-item-meta">
+                                    <span className="reference-code">
+                                        {row.code}
+                                    </span>
+
+                                    <Badge
+                                        variant={statusVariants[status]}
+                                        className="badge-subtle badge-with-dot"
                                     >
-                                        Không có chương trình phù hợp.
-                                    </td>
-                                </tr>
+                                        {statusLabels[status]}
+                                    </Badge>
+                                </div>
+
+                                <p className="table-item-rule">
+                                    {row.naturalRuleText}
+                                </p>
+
+                                {row.description && (
+                                    <p className="table-item-description">
+                                        {row.description}
+                                    </p>
+                                )}
+                            </td>
+
+                            <td>
+                                <span
+                                    className={
+                                        row.discountType === "buy_x_get_y"
+                                            ? "benefit-value benefit-value--text"
+                                            : "benefit-value"
+                                    }
+                                >
+                                    {row.discountType === "percent"
+                                        ? `−${row.discountValue}%`
+                                        : row.discountType === "fixed"
+                                            ? `−${formatCurrency(row.discountValue)}`
+                                            : row.discountType === "buy_x_get_y"
+                                                ? `Mua ${row.buyQuantity} tặng ${row.giftQuantity}`
+                                                : "Chưa cấu hình"}
+                                </span>
+
+                                <p className="table-item-line">
+                                    {row.productId
+                                        ? `SKU ${row.productId}`
+                                        : row.productCategory
+                                            ? `Nhóm ${row.productCategory}`
+                                            : "Tất cả món"}
+                                </p>
+
+                                <p className="table-item-description">
+                                    Tối thiểu {row.minQuantity ?? 1} ly
+                                </p>
+
+                                {row.benefit && (
+                                    <p className="table-item-description">
+                                        {row.benefit}
+                                    </p>
+                                )}
+                            </td>
+
+                            <td>
+                                <div className="table-total">
+                                    <span>Tổng đã dùng</span>
+
+                                    <strong className="numeric">
+                                        {row.usageCount.toLocaleString("vi-VN")} lượt
+                                    </strong>
+
+                                    <span aria-hidden="true">·</span>
+
+                                    <strong className="numeric">
+                                        {formatCurrency(row.budgetUsed)}
+                                    </strong>
+                                </div>
+
+                                <div className="table-metric">
+                                    <div className="table-metric-heading">
+                                        <span>Số lượng</span>
+
+                                        <strong className="numeric">
+                                            {row.usageCount.toLocaleString("vi-VN")}
+                                            <span className="table-metric-limit">
+                                                {" / "}
+                                                {capacity.toLocaleString("vi-VN")} lượt
+                                            </span>
+                                        </strong>
+                                    </div>
+
+                                    <ProgressBar
+                                        label={`Tiến độ lượt ${row.code}`}
+                                        value={usagePercent}
+                                        variant="info"
+                                        valueText={
+                                            `${row.usageCount.toLocaleString("vi-VN")}` +
+                                            ` trên ${capacity.toLocaleString("vi-VN")} lượt`
+                                        }
+                                    />
+
+                                    {row.usageScope === "branch" && (
+                                        <p className="table-item-description">
+                                            Trần {row.usageLimit} lượt / chi nhánh
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="table-metric">
+                                    <div className="table-metric-heading">
+                                        <span>Ngân sách</span>
+
+                                        <strong className="numeric">
+                                            {formatCurrency(row.budgetUsed)}
+                                            <span className="table-metric-limit">
+                                                {" / "}
+                                                {formatCurrency(row.budget)}
+                                            </span>
+                                        </strong>
+                                    </div>
+
+                                    <ProgressBar
+                                        label={`Tiến độ ngân sách ${row.code}`}
+                                        value={budgetPercent}
+                                        variant="success"
+                                        valueText={
+                                            `${formatCurrency(row.budgetUsed)}` +
+                                            ` trên ${formatCurrency(row.budget)}`
+                                        }
+                                    />
+                                </div>
+
+                                <div className="table-notice table-notice--warning">
+                                    <PromotionIcon
+                                        name={
+                                            forecast.predictedBindingLimit === "time"
+                                                ? "clock"
+                                                : "alert"
+                                        }
+                                    />
+
+                                    <div>
+                                        <strong>{forecastTitle}</strong>
+                                        <p>{forecast.bindingLimitNote}</p>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td>
+                                <p className="table-item-emphasis">
+                                    {row.stackWithOtherPromo === "exclusive"
+                                        ? "Độc quyền một mã"
+                                        : "Cho phép gộp mã"}
+                                </p>
+
+                                <p className="table-item-description">
+                                    {row.stackWithMemberTier
+                                        ? "Cộng dồn hạng thành viên"
+                                        : "Không cộng dồn hạng thành viên"}
+                                </p>
+
+                                <p className="table-item-description mt-2">
+                                    Ưu tiên:{" "}
+                                    <strong className="table-item-emphasis numeric">
+                                        {row.priority}/5
+                                    </strong>
+                                </p>
+
+                                {relatedCodes.length > 0 && <p className="table-item-description mt-2">
+                                    Trùng phạm vi áp dụng với: <strong>{relatedCodes.join(", ")}</strong>.
+                                    Kiểm tra quy tắc cộng dồn và thứ tự ưu tiên khi áp dụng.
+                                </p>}
+                                {relationError && <p className="table-item-description">Chưa đọc được các chương trình liên quan.</p>}
+                                {row.oncePerMember && <p className="table-item-description">Tối đa 1 lượt / SĐT hội viên.</p>}
+                                {row.usageScope === "daily" && <p className="table-item-description">Giới hạn {row.usageLimit} lượt mỗi ngày.</p>}
+
+                                <p className="table-end-rule">
+                                    Dừng ngay khi hết thời gian, đủ lượt
+                                    hoặc hết ngân sách.
+                                </p>
+                            </td>
+
+                            <td>
+                                <div className="table-date-range">
+                                    <p>{formatDate(row.startDate)}</p>
+                                    <p className="text-muted">
+                                        → {formatDate(row.endDate)}
+                                    </p>
+                                </div>
+
+                                <p className="table-item-description numeric">
+                                    {row.hourFrom}–{row.hourTo}
+                                </p>
+
+                                <ProgressBar label={`Thời gian chương trình ${row.code}`} value={timePercent}
+                                    valueText={`Đã qua ${Math.round(timePercent)}% thời gian chương trình`} />
+
+                                <div className="table-scope">
+                                    <p className="table-item-emphasis">
+                                        {row.branchMode === "all"
+                                            ? "Toàn chuỗi"
+                                            : `${row.branchMode === "exclude" ? "Trừ " : ""}${row.branchIds.join(", ") || "Không có CN"}`}
+                                    </p>
+
+                                    <p>
+                                        {row.channel === "all"
+                                            ? "Mọi kênh"
+                                            : channelLabels[row.channel]}
+                                    </p>
+
+                                    <p>
+                                        {row.shift === "all"
+                                            ? "Mọi ca"
+                                            : shiftLabels[row.shift]}
+                                    </p>
+                                </div>
+                            </td>
+
+                            {isChainAdmin && (
+                                <td>
+                                    <div className="table-row-actions">
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-icon table-action-button"
+                                            title={`Sửa ${row.code}`}
+                                            aria-label={`Sửa ${row.code}`}
+                                            disabled={saving}
+                                            onClick={() => openEdit(row)}
+                                        >
+                                            <PromotionIcon name="edit" />
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-icon table-action-button"
+                                            title={
+                                                isEnabled
+                                                    ? "Dừng chương trình"
+                                                    : "Kích hoạt chương trình"
+                                            }
+                                            aria-label={
+                                                `${isEnabled ? "Dừng" : "Kích hoạt"}` +
+                                                ` chương trình ${row.code}`
+                                            }
+                                            disabled={saving}
+                                            onClick={() => {
+                                                void togglePromotionStatus(row.id);
+                                            }}
+                                        >
+                                            <PromotionIcon
+                                                name={isEnabled ? "pause" : "play"}
+                                            />
+                                        </button>
+                                    </div>
+                                </td>
                             )}
-
-                            {visibleRows.map(row => {
-                                const status = getPromotionStatus(row);
-                                const forecast = getPromotionForecast(row);
-                                const capacity = promotionUsageCapacity(row);
-                                const usagePercent = capacity
-                                    ? Math.min(100, row.usageCount / capacity * 100)
-                                    : 0;
-                                const budgetPercent = row.budget
-                                    ? Math.min(100, row.budgetUsed / row.budget * 100)
-                                    : 100;
-                                const forecastTitle = {
-                                    budget: "🔥 Chạm trần TIỀN / NGÂN SÁCH trước",
-                                    usage: "⚡ Chạm trần SỐ LƯỢNG trước",
-                                    time: "🕒 Chạm trần THỜI GIAN trước",
-                                }[forecast.predictedBindingLimit];
-
-                                return (
-                                    <tr key={row.id}>
-                                        <td className="align-top whitespace-normal break-words">
-                                            <div className="text-base font-bold">{row.name}</div>
-                                            <span className="inline-block mt-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-bold">
-                                                {row.code}
-                                            </span>
-                                            <p className="mt-2 text-sm font-semibold">
-                                                🏃 {row.naturalRuleText}
-                                            </p>
-                                            {row.description && (
-                                                <p className="mt-1 text-xs text-[var(--muted)]">
-                                                    {row.description}
-                                                </p>
-                                            )}
-                                            <div className="mt-2">
-                                                <Badge variant={statusVariants[status]}>
-                                                    {statusLabels[status]}
-                                                </Badge>
-                                            </div>
-                                        </td>
-
-                                        <td className="align-top whitespace-normal">
-                                            <span className="inline-block text-lg font-extrabold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">
-                                                {row.discountType === "percent"
-                                                    ? `-${row.discountValue}%`
-                                                    : row.discountType === "fixed"
-                                                        ? `-${formatCurrency(row.discountValue)}`
-                                                        : row.discountType === "buy_x_get_y"
-                                                            ? `MUA ${row.buyQuantity} TẶNG ${row.giftQuantity}`
-                                                            : "Chưa cấu hình"}
-                                            </span>
-                                            <p className="mt-2 text-xs">
-                                                {row.productId
-                                                    ? `SKU ${row.productId}`
-                                                    : row.productCategory
-                                                        ? `Nhóm ${row.productCategory}`
-                                                        : "Tất cả món"}
-                                            </p>
-                                            <p className="mt-1 text-xs">
-                                                Tối thiểu {row.minQuantity ?? 1} ly
-                                            </p>
-                                            {row.benefit && (
-                                                <p className="mt-1 text-xs text-[var(--muted)]">
-                                                    {row.benefit}
-                                                </p>
-                                            )}
-                                        </td>
-
-                                        <td className="align-top whitespace-normal">
-                                            <div className="text-xs font-bold mb-2">
-                                                TỔNG: {row.usageCount.toLocaleString("vi-VN")} lượt
-                                                {" · "}{formatCurrency(row.budgetUsed)}
-                                            </div>
-
-                                            <div className="flex justify-between gap-2 text-xs mb-1">
-                                                <span>SỐ LƯỢNG</span>
-                                                <strong>
-                                                    {row.usageCount} / {capacity} lượt
-                                                </strong>
-                                            </div>
-                                            <progress
-                                                aria-label={`Tiến độ lượt ${row.code}`}
-                                                className="w-full h-3 accent-blue-600"
-                                                max={100}
-                                                value={usagePercent}
-                                            />
-
-                                            {row.usageScope === "branch" && (
-                                                <p className="text-xs text-[var(--muted)]">
-                                                    Trần {row.usageLimit} lượt / chi nhánh
-                                                </p>
-                                            )}
-
-                                            <div className="flex justify-between gap-2 text-xs mt-2 mb-1">
-                                                <span>TIỀN</span>
-                                                <strong>
-                                                    {formatCurrency(row.budgetUsed)}
-                                                    {" / "}{formatCurrency(row.budget)}
-                                                </strong>
-                                            </div>
-                                            <progress
-                                                aria-label={`Tiến độ ngân sách ${row.code}`}
-                                                className="w-full h-3 accent-emerald-600"
-                                                max={100}
-                                                value={budgetPercent}
-                                            />
-
-                                            <div className="mt-2 p-2 rounded-lg bg-amber-50 text-amber-900 text-xs">
-                                                <strong>{forecastTitle}</strong>
-                                                <p className="mt-1">{forecast.bindingLimitNote}</p>
-                                            </div>
-                                        </td>
-
-                                        <td className="align-top whitespace-normal text-xs">
-                                            <p className="font-semibold">
-                                                {row.stackWithOtherPromo === "exclusive"
-                                                    ? "Độc quyền một mã"
-                                                    : "Cho phép gộp mã"}
-                                            </p>
-                                            <p className="mt-1">
-                                                {row.stackWithMemberTier
-                                                    ? "Cộng dồn hạng thành viên"
-                                                    : "Không cộng dồn hạng thành viên"}
-                                            </p>
-                                            <p className="mt-1">Ưu tiên: {row.priority}/5</p>
-                                            <p className="mt-2 font-semibold">
-                                                Dừng ngay khi hết thời gian HOẶC đủ lượt
-                                                HOẶC hết ngân sách.
-                                            </p>
-                                        </td>
-
-                                        <td className="align-top whitespace-normal text-xs">
-                                            <p>{formatDate(row.startDate)}</p>
-                                            <p>→ {formatDate(row.endDate)}</p>
-                                            <p className="mt-1">{row.hourFrom}–{row.hourTo}</p>
-                                            <p className="mt-2">
-                                                {row.branchMode === "all"
-                                                    ? "Toàn chuỗi"
-                                                    : `${row.branchMode === "exclude" ? "Trừ " : ""}${row.branchIds.join(", ") || "Không có CN"}`}
-                                            </p>
-                                            <p className="mt-1">
-                                                {row.channel === "all"
-                                                    ? "Mọi kênh"
-                                                    : channelLabels[row.channel]}
-                                            </p>
-                                            <p>
-                                                {row.shift === "all"
-                                                    ? "Mọi ca"
-                                                    : shiftLabels[row.shift]}
-                                            </p>
-                                        </td>
-
-                                        {isChainAdmin && (
-                                            <td className="align-top">
-                                                <div className="flex flex-col gap-2">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-secondary btn-sm"
-                                                        title={`Sửa ${row.code}`}
-                                                        aria-label={`Sửa ${row.code}`}
-                                                        disabled={saving}
-                                                        onClick={() => openEdit(row)}
-                                                    >
-                                                        ✎
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-secondary btn-sm"
-                                                        title={
-                                                            row.status === "active" || row.status === "scheduled"
-                                                                ? "Dừng chương trình"
-                                                                : "Kích hoạt chương trình"
-                                                        }
-                                                        aria-label={`Đổi trạng thái ${row.code}`}
-                                                        disabled={saving}
-                                                        onClick={() => void togglePromotionStatus(row.id)}
-                                                    >
-                                                        {row.status === "active" || row.status === "scheduled"
-                                                            ? "Ⅱ"
-                                                            : "▶"}
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        )}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </DataTable>
->>>>>>> Stashed changes
-            </section>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
+    </DataTable>
+</section>
 
             {/* Modal Tạo chương trình khuyến mãi mới */}
             <Modal
@@ -981,10 +1065,10 @@ export default function PromotionsPage() {
                     </div>
                 }
             >
-                <form id="promotion-create-form" onSubmit={saveDraft} className="space-y-4">
+                <form id="promotion-create-form" onSubmit={saveDraft} className="promotion-form space-y-4">
                     {/* Phần 1: Thông tin & Thời gian */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                        <div className="form-panel">
                             <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">1. Thông tin chương trình</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <PromotionInput
@@ -1021,7 +1105,7 @@ export default function PromotionsPage() {
                             </div>
                         </div>
 
-                        <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                        <div className="form-panel">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="font-bold text-sm text-[var(--heading-color)]">2. Thời gian áp dụng</h3>
                                 <span className="text-xs text-[var(--muted)]">Giờ Việt Nam (UTC+7)</span>
@@ -1068,7 +1152,7 @@ export default function PromotionsPage() {
                     </div>
 
                     {/* Phần 2: Phạm vi áp dụng (Kênh, ca & chi nhánh) */}
-                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                    <div className="form-panel">
                         <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">3. Phạm vi & Kênh bán</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                             <div>
@@ -1171,7 +1255,7 @@ export default function PromotionsPage() {
                     </div>
 
                     {/* Phần 3: Món & Ngân sách */}
-                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                    <div className="form-panel">
                         <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">4. Món áp dụng, Ngân sách & Giới hạn</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <div>
@@ -1240,7 +1324,7 @@ export default function PromotionsPage() {
                             />
                         </div>
 
-                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                    <div className="form-panel">
                         <h3 className="font-bold text-sm mb-3">
                             Quy định, mức ưu đãi & Ràng buộc
                         </h3>
@@ -1446,6 +1530,6 @@ export default function PromotionsPage() {
                     </div>
                 </form>
             </Modal>
-        </>
+        </div>
     );
 }

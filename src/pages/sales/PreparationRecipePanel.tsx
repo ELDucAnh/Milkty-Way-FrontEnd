@@ -28,8 +28,8 @@ function PreparationOptions({ item }: { item: SalesOrderItem }) {
         <div>Topping: {item.toppings.join(", ")}</div>
       )}
       {item.note && (
-        <div className="mt-1 whitespace-pre-wrap font-medium text-amber-700">
-          Ghi chú ly: {item.note}
+        <div className="mt-1 whitespace-pre-wrap text-[var(--text)]">
+          <strong className="text-[var(--danger)]">Ghi chú:</strong> {item.note}
         </div>
       )}
     </div>
@@ -58,43 +58,18 @@ function PreparationCupList({
           Xem tùy chọn và công thức cho từng ly.
       </p>
 
-      {Array.from({ length: count }, (_, offset) => {
+      <div className="kds-cup-grid">{Array.from({ length: count }, (_, offset) => {
         const index = start + offset;
         const cup = getPreparationCup(group, index);
-
         if (!cup) return null;
-
-        const cupLabel =
-          `Ly ${index + 1}/${group.quantity}` +
-          ` · dòng ${cup.sourceIndex + 1} (${cup.item.id})` +
-          ` · ly ${cup.cupNumber} của dòng`;
-
-        return (
-          <div
-            key={`${cup.sourceIndex}-${cup.cupNumber}`}
-            className="rounded border border-[var(--border)] p-2"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-medium">{cupLabel}</span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() =>
-                  onSelect({
-                    orderId,
-                    groupKey: group.key,
-                    quantity: 1,
-                    cupLabel,
-                  })
-                }
-              >
-                Công thức 1 ly
-              </button>
-            </div>
-            <PreparationOptions item={cup.item} />
-          </div>
-        );
-      })}
+        const cupLabel = `Ly ${index + 1}/${group.quantity} · Dòng ${cup.sourceIndex + 1} · Ly ${cup.cupNumber} của dòng`;
+        return <button key={`${cup.sourceIndex}-${cup.cupNumber}`} type="button" className="btn btn-secondary kds-cup-card" onClick={() => onSelect({orderId, groupKey:group.key, quantity:1, cupLabel})}>
+          <strong>Ly {index + 1}/{group.quantity}</strong>
+          <small>Dòng {cup.sourceIndex + 1} · Ly {cup.cupNumber} của dòng</small>
+          <small>{cup.item.size} · {cup.item.sugar} đường · {cup.item.ice}</small>
+          <small>Công thức 1 ly</small>
+        </button>;
+      })}</div>
 
       {pageCount > 1 && (
         <div className="flex items-center gap-2 text-xs">
@@ -124,94 +99,158 @@ function PreparationCupList({
 }
 
 export function PreparationGroupedItems({
-  order,
-  onSelect,
+    order,
+    onSelect,
+    compact = false,
 }: {
-  order: KdsOrder;
-  onSelect: (selection: PreparationSelection) => void;
+    order: KdsOrder;
+    onSelect: (selection: PreparationSelection) => void;
+    compact?: boolean;
 }) {
-  return (
-    <div className="min-w-[240px] space-y-3">
-      {order.orderNote && (
-        <div className="whitespace-pre-wrap rounded bg-amber-50 p-2 text-xs font-semibold text-amber-800">
-          Ghi chú toàn đơn: {order.orderNote}
+    const totalQuantity = order.groups.reduce(
+        (total, group) => total + group.quantity,
+        0,
+    );
+
+    let previousQuantity = 0;
+
+    return (
+        <div className="min-w-0 space-y-3">
+            {order.orderNote && (
+                <div className="whitespace-pre-wrap text-xs text-[var(--text)]">
+                    <strong className="text-[var(--danger)]">Ghi chú toàn đơn:</strong> {order.orderNote}
+                </div>
+            )}
+
+            {order.groups.length === 0 && (
+                <p className="text-xs text-[var(--muted)]">
+                    Không có nhóm ly để hiển thị.
+                </p>
+            )}
+
+            {order.groups.map(group => {
+                const firstCup = previousQuantity + 1;
+                previousQuantity += group.quantity;
+                const lastCup = previousQuantity;
+
+                return (
+                    <div
+                        key={group.key}
+                        className={
+                            compact
+                                ? "min-w-0 border-b border-[var(--border)] pb-3 last:border-b-0 last:pb-0"
+                                : "min-w-0 rounded-lg border border-[var(--border)] p-3"
+                        }
+                    >
+                        <div className="flex items-start gap-2.5">
+                            {compact && (
+                                <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--background)] px-1.5 text-xs font-semibold">
+                                    {group.quantity}
+                                </span>
+                            )}
+
+                            <div className="min-w-0 flex-1 space-y-1">
+                                <div className="break-words text-sm font-semibold">
+                                    {!compact && `${group.quantity} × `}
+                                    {group.item.name}
+
+                                    {!compact && (
+                                        <span className="ml-2 text-xs font-normal text-[var(--muted)]">
+                                            [Ly {firstCup}
+                                            {group.quantity > 1 &&
+                                                `–${lastCup}`}
+                                            /{totalQuantity}]
+                                        </span>
+                                    )}
+                                </div>
+
+                                {!compact && (
+                                    <div className="text-xs text-[var(--muted)]">
+                                        SKU: {group.sku ?? "Chưa có mapping"}
+                                        {" · "}
+                                        {group.sources.length} dòng gốc
+                                    </div>
+                                )}
+
+                                <PreparationOptions item={group.item} />
+
+                                {group.mappingError && (
+                                    <p className="text-xs text-amber-700">
+                                        {group.mappingError}
+                                    </p>
+                                )}
+                            </div>
+
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm shrink-0"
+                                aria-label={`Công thức ${group.item.name}`}
+                                title={`Công thức ${group.item.name}`}
+                                onClick={() =>
+                                    onSelect({
+                                        orderId: order.id,
+                                        groupKey: group.key,
+                                        quantity: group.quantity,
+                                    })
+                                }
+                            >
+                                {compact ? (
+                                    <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M12 5v16" />
+                                        <path d="M3 4c4-1 6 0 9 2 3-2 5-3 9-2v15c-4-1-6 0-9 2-3-2-5-3-9-2V4Z" />
+                                    </svg>
+                                ) : (
+                                    "Công thức"
+                                )}
+                            </button>
+                        </div>
+
+                        {!compact && (
+                            <details className="mt-3 border-t border-[var(--border)] pt-2">
+                                <summary className="cursor-pointer text-xs font-medium text-[var(--primary-dark)]">
+                                    Tách xem từng ly ({group.quantity})
+                                </summary>
+
+                                <PreparationCupList
+                                    orderId={order.id}
+                                    group={group}
+                                    onSelect={onSelect}
+                                />
+                            </details>
+                        )}
+                    </div>
+                );
+            })}
         </div>
-      )}
-
-      {order.groups.map((group, groupIndex) => (
-        <div
-          key={group.key}
-          className="rounded-lg border border-[var(--border)] p-3"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <div className="text-sm font-semibold">
-                {group.quantity} × {group.item.name}
-                <span className="ml-2 text-xs font-normal text-[var(--muted)]">
-                  [Ly {order.groups.slice(0, groupIndex).reduce((sum, item) => sum + item.quantity, 0) + 1}
-                  {group.quantity > 1 && `–${order.groups.slice(0, groupIndex + 1).reduce((sum, item) => sum + item.quantity, 0)}`}
-                  /{order.groups.reduce((sum, item) => sum + item.quantity, 0)}]
-                </span>
-              </div>
-              <div className="text-xs text-[var(--muted)]">
-                SKU: {group.sku ?? "Chưa có mapping"}
-                {" · "}
-                {group.sources.length} dòng gốc
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() =>
-                onSelect({
-                  orderId: order.id,
-                  groupKey: group.key,
-                  quantity: group.quantity,
-                })
-              }
-            >
-              Công thức
-            </button>
-          </div>
-
-          <PreparationOptions item={group.item} />
-
-          {group.mappingError && (
-            <p className="mt-1 text-xs text-amber-700">
-              {group.mappingError}
-            </p>
-          )}
-
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs font-medium text-[var(--primary)]">
-              Tách xem từng ly ({group.quantity})
-            </summary>
-            <PreparationCupList
-              orderId={order.id}
-              group={group}
-              onSelect={onSelect}
-            />
-          </details>
-        </div>
-      ))}
-    </div>
-  );
+    );
 }
 
 export default function PreparationRecipePanel({
-  order,
-  group,
-  selection,
-  onQuantityChange,
-  onClose,
+    order,
+    group,
+    selection,
+    onQuantityChange,
+    onClose,
+    embedded = false,
 }: {
-  order: KdsOrder | null;
-  group: PreparationGroup | null;
-  selection: PreparationSelection | null;
-  onQuantityChange: (quantity: number) => void;
-  onClose: () => void;
+    order: KdsOrder | null;
+    group: PreparationGroup | null;
+    selection: PreparationSelection | null;
+    onQuantityChange: (quantity: number) => void;
+    onClose: () => void;
+    embedded?: boolean;
 }) {
+
   if (!order || !group || !selection) {
     return (
       <aside
@@ -230,7 +269,7 @@ export default function PreparationRecipePanel({
 
   return (
     <aside
-      className="card min-w-0 self-start space-y-4 xl:sticky xl:top-4"
+      className={embedded ? "min-w-0 space-y-4" : "card min-w-0 self-start space-y-4 xl:sticky xl:top-4"}
       aria-labelledby="kds-recipe-title"
     >
       <div className="flex items-start justify-between gap-3">
@@ -242,13 +281,13 @@ export default function PreparationRecipePanel({
             {order.id} · {order.branchId} · {group.sku ?? "Thiếu SKU"}
           </p>
         </div>
-        <button
+        {!embedded && <button
           type="button"
           className="btn btn-secondary btn-sm"
           onClick={onClose}
         >
           Đóng
-        </button>
+        </button>}
       </div>
 
       <div>
@@ -260,13 +299,13 @@ export default function PreparationRecipePanel({
           </p>
         )}
         {order.orderNote && (
-          <p className="mt-2 whitespace-pre-wrap text-sm text-amber-700">
-            Ghi chú toàn đơn: {order.orderNote}
+          <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text)]">
+            <strong className="text-[var(--danger)]">Ghi chú toàn đơn:</strong> {order.orderNote}
           </p>
         )}
       </div>
 
-      <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+      <details className="kds-recipe-rules text-xs text-[var(--muted)]"><summary className="cursor-pointer">Quy tắc định lượng demo</summary>
         <strong>Công thức mô phỏng.</strong> Dùng cho bản demo, chưa phải
         định mức được duyệt để pha chế thực tế.
         <div className="mt-1">
@@ -277,9 +316,9 @@ export default function PreparationRecipePanel({
           Topping là định mức mock cho một phần/ly, không tăng theo size.
           Hãy đọc thêm ghi chú riêng của khách trước khi pha.
         </div>
-      </div>
+      </details>
 
-      <div>
+      {!embedded && <div>
         <label className="form-label" htmlFor="kds-recipe-quantity">
           Số ly cần đong — tối đa {group.quantity}
         </label>
@@ -305,7 +344,7 @@ export default function PreparationRecipePanel({
         <p className="mt-1 text-xs text-[var(--muted)]">
           Thay đổi số ly để xem lượng nguyên liệu tương ứng.
         </p>
-      </div>
+      </div>}
 
       {recipe.errors.length > 0 && (
         <div role="status" className="rounded bg-amber-50 p-3 text-sm text-amber-800">
@@ -320,7 +359,7 @@ export default function PreparationRecipePanel({
 
       {recipe.rows.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="data-table kds-recipe-table">
             <caption className="pb-2 text-left font-semibold">
               Định mức nguyên liệu F0/F1
             </caption>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { products, isPosProductAvailable } from "../../data/sales/products";
 import { currentStaff, scopedBranch } from "../../utils/auth";
 import { formatCurrency } from "../../utils/format";
@@ -26,6 +26,7 @@ export function ReturnOrderSearch({
 }: {
   onSelect: (order: SalesOrder, scope: ReturnScope) => void;
 }) {
+  const searchId = useId();
   const [query, setQuery] = useState("");
 
   const result = (() => {
@@ -71,11 +72,12 @@ export function ReturnOrderSearch({
 
   return (
     <div className="space-y-3">
-      <label className="form-label">
-        Tìm nhanh đơn hàng cần xử lý đổi trả / khiếu nại
+      <label className="form-label" htmlFor={searchId}>
+        Tìm đơn hàng để tạo yêu cầu mới
       </label>
 
       <input
+        id={searchId}
         type="search"
         className="form-input w-full"
         placeholder="Nhập mã đơn DH-..., mã hóa đơn hoặc SĐT khách hàng..."
@@ -128,15 +130,7 @@ export function ReturnOrderSearch({
                   disabled={!eligible}
                   onClick={() => onSelect(order, "single-item")}
                 >
-                  Đổi / Hoàn một hoặc vài món
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={!eligible}
-                  onClick={() => onSelect(order, "full-order")}
-                >
-                  Đổi / Hoàn toàn bộ đơn
+                  Chọn đơn hàng này
                 </button>
               </div>
             )}
@@ -225,7 +219,7 @@ export default function SalesReturnForm({
   const [orderId, setOrderId] = useState(initialOrderId ?? "");
   const [scope, setScope] = useState<ReturnScope>(initialScope);
   const [resolutionType, setResolutionType] =
-    useState<ReturnSelection["resolutionType"] | ComplaintResolution>("refund");
+    useState<ReturnSelection["resolutionType"] | ComplaintResolution | null>(null);
   const [recordMode, setRecordMode] =
     useState<ReturnSelection["recordMode"]>("amend-original");
   const [lines, setLines] = useState<ReturnSelection["selectedLines"]>([]);
@@ -251,7 +245,7 @@ export default function SalesReturnForm({
 
   const selectionResult = useMemo(() => {
     try {
-      if (isComplaintResolution(resolutionType)) return { selection: null, preview: null, error: "" };
+      if (!resolutionType || isComplaintResolution(resolutionType)) return { selection: null, preview: null, error: "" };
       const selectedLines = scope === "full-order" && order
         ? order.items.flatMap(item => {
             const count = remainingReturnQuantity(item);
@@ -300,7 +294,7 @@ export default function SalesReturnForm({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (busy || !order) return;
+    if (busy || !order || !resolutionType) return;
 
     setBusy(true);
     try {
@@ -325,37 +319,68 @@ export default function SalesReturnForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <ReturnOrderSearch onSelect={(value, nextScope) => {
+      {!order && <ReturnOrderSearch onSelect={(value, nextScope) => {
         setOrderId(value.id);
         setScope(nextScope);
+        setResolutionType(null);
         setLines([]);
-      }} />
+      }} />}
 
       {source.error && <p role="alert" className="text-red-600">{source.error}</p>}
 
       {order && (
         <>
-          <div className="font-semibold">
-            Đơn đã chọn: {order.id} · {order.branchId} · {order.customer}
+          <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <strong>Đơn đã chọn: {order.id}</strong>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={busy}
+                onClick={() => {
+                  setOrderId("");
+                  setResolutionType(null);
+                  setLines([]);
+                  setScope(initialScope);
+                  setRecordMode("amend-original");
+                }}>Chọn đơn khác</button>
+            </div>
+            <p className="text-sm text-[var(--muted)]">
+              {order.branchId} · {order.customer} · {order.phone}
+            </p>
+            <p className="text-sm">
+              Tổng gốc: {formatCurrency(order.total)} · Thực thu: {formatCurrency(order.netTotal ?? order.total)}
+            </p>
+            <ul className="text-sm space-y-1">
+              {order.items.map(item => <li key={item.id}>
+                {item.quantity} × {item.name} · {item.size} · Đường {item.sugar} · {item.ice}
+              </li>)}
+            </ul>
           </div>
 
-          <label className="block">
-            <span className="form-label">Hướng xử lý</span>
-            <select
-              className="form-input form-select"
-              value={resolutionType}
-              onChange={event =>
-                setResolutionType(event.target.value as typeof resolutionType)
-              }
-            >
-              <option value="refund">Hoàn tiền</option>
-              <option value="exchange">Đổi món mới</option>
-              <option>Bù voucher</option>
-              <option>Hủy trước pha</option>
-            </select>
-          </label>
+          <fieldset className="space-y-2" disabled={busy}>
+            <legend className="form-label">Chọn hướng xử lý</legend>
+            <div className="flex flex-wrap gap-3">
+              {([{ value: "exchange", label: "Đổi trả / đổi món" }, { value: "refund", label: "Hoàn tiền" }] as const).map(option => (
+                <button key={option.value} type="button"
+                  className={`btn ${resolutionType === option.value ? "btn-primary" : "btn-secondary"}`}
+                  aria-pressed={resolutionType === option.value}
+                  onClick={() => { setResolutionType(option.value); setLines([]); }}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <details>
+              <summary className="text-sm text-[var(--muted)] cursor-pointer">Hướng xử lý khác</summary>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(["Bù voucher", "Hủy trước pha"] as const).map(value => (
+                  <button key={value} type="button"
+                    className={`btn btn-sm ${resolutionType === value ? "btn-primary" : "btn-secondary"}`}
+                    aria-pressed={resolutionType === value}
+                    onClick={() => { setResolutionType(value); setLines([]); }}>{value}</button>
+                ))}
+              </div>
+            </details>
+          </fieldset>
 
-          {!isComplaintResolution(resolutionType) && <>
+          {resolutionType && !isComplaintResolution(resolutionType) && <>
           <fieldset className="space-y-2">
             <legend className="form-label">Phạm vi xử lý</legend>
             <label className="flex gap-2">
@@ -507,6 +532,7 @@ export default function SalesReturnForm({
         </>
       )}
 
+      {order && resolutionType && <>
       <label className="block">
         <span className="form-label">Lý do / ghi chú chi tiết</span>
         <textarea
@@ -527,6 +553,7 @@ export default function SalesReturnForm({
           {busy ? "Đang gửi..." : "Gửi yêu cầu duyệt"}
         </button>
       </div>
+      </>}
     </form>
   );
 }

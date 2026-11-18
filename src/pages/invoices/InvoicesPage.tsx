@@ -1,10 +1,6 @@
-<<<<<<< Updated upstream
-import { useMemo, useState } from "react";
-=======
 import { RETURNS_CHANGED } from "../shared/sales-returns-store";
 import { can, homePath, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
 import { useEffect, useMemo, useState } from "react";
->>>>>>> Stashed changes
 import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
@@ -46,7 +42,7 @@ export default function InvoicesPage() {
     };
   }, []);
   const [search, setSearch] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState(scopedBranch() ?? "");
   const [selectedType, setSelectedType] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
 
@@ -159,7 +155,8 @@ export default function InvoicesPage() {
         item.customerName.toLowerCase().includes(q) ||
         item.customerPhone.includes(q);
 
-      const matchBranch = !selectedBranch || item.branch.includes(selectedBranch);
+      const branchScope = scopedBranch();
+      const matchBranch = branchScope ? item.branch.startsWith(branchScope) : !selectedBranch || item.branch.includes(selectedBranch);
       const matchType = !selectedType || item.type === selectedType;
       const matchStatus = !selectedStatus || item.status === selectedStatus;
 
@@ -173,7 +170,7 @@ export default function InvoicesPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Hóa đơn</span>
           </nav>
@@ -183,7 +180,7 @@ export default function InvoicesPage() {
           </p>
         </div>
         <div className="page-header-actions">
-          <button
+          {!isCashier() && <><button
             type="button"
             className="btn btn-secondary"
             onClick={() => toast.info("Đang xuất danh sách hóa đơn ra Excel...", { title: "Xuất File" })}
@@ -195,22 +192,22 @@ export default function InvoicesPage() {
             </svg>
             Xuất Excel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Lập Hóa Đơn Mới
-          </button>
+            {can("order.create") && <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Lập Hóa Đơn Mới
+            </button>}</>}
         </div>
       </div>
 
       {/* Thẻ thống kê */}
-      <section aria-label="Thống kê hóa đơn">
+      {!isBranchScoped() && <section aria-label="Thống kê hóa đơn">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Hóa Đơn"
@@ -264,7 +261,7 @@ export default function InvoicesPage() {
             }
           />
         </div>
-      </section>
+      </section>}
 
       {/* Bộ lọc */}
       {invoiceLoadError && (
@@ -289,7 +286,7 @@ export default function InvoicesPage() {
         <select
           className="form-input form-select h-[38px] text-[13px] min-w-[140px]"
           aria-label="Lọc theo chi nhánh"
-          value={selectedBranch}
+          disabled={isBranchScoped()} value={scopedBranch() ?? selectedBranch}
           onChange={(e) => setSelectedBranch(e.target.value)}
         >
           <option value="">Toàn Chuỗi</option>
@@ -413,7 +410,7 @@ export default function InvoicesPage() {
                           <Link to={`/invoices/${inv.id}`} className="btn btn-secondary btn-sm">
                             Xem
                           </Link>
-                          <button
+                          {!isCashier() && <button
                             type="button"
                             className="btn btn-secondary btn-icon-sm"
                             aria-label="In biên lai"
@@ -427,7 +424,7 @@ export default function InvoicesPage() {
                               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                               <rect x="6" y="14" width="12" height="8" />
                             </svg>
-                          </button>
+                          </button>}
                         </div>
                       </td>
                     </tr>

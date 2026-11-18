@@ -1,3 +1,4 @@
+import { homePath } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
@@ -184,7 +185,7 @@ export default function UsersPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/users">Người dùng</Link>
             <span className="sep">/</span>

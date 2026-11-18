@@ -1,8 +1,3 @@
-<<<<<<< Updated upstream
-import { useState, useMemo } from "react";
-import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
-=======
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -10,7 +5,6 @@ import {
     currentStaff,
     STAFF_SESSION_CHANGED,
 } from "../../utils/auth";
->>>>>>> Stashed changes
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
@@ -46,79 +40,6 @@ export {
 } from "../shared/cash-shifts-store";
 export type { CashShift } from "../shared/cash-shifts-store";
 
-<<<<<<< Updated upstream
-interface CashShift {
-    id: string;
-    branchId: string;
-    counterId: string;
-    counterName: string;
-    staffName: string;
-    openedAt: string;
-    closedAt: string | null;
-    openingCash: number;
-    expectedCash: number | null;
-    countedCash: number | null;
-    recipientId: string | null;
-    handoverNote: string;
-    pendingOrders: readonly string[];
-    status: ShiftStatus;
-}
-
-interface OpenShiftForm {
-    branchId: string;
-    counterId: string;
-    openingCash: string;
-}
-
-interface CloseShiftForm {
-    countedCash: string;
-    recipientId: string;
-    note: string;
-}
-
-interface CloseShiftRequest {
-    shiftId: string;
-    countedCash: number;
-    recipientId: string;
-    note: string;
-}
-
-const initialShifts: readonly CashShift[] = [
-    {
-        id: "CA-001",
-        branchId: "CN01",
-        counterId: "POS01",
-        counterName: "Quầy 01",
-        staffName: "Nguyễn An",
-        openedAt: "2026-10-28T07:00:00+07:00",
-        closedAt: null,
-        openingCash: 500000,
-        expectedCash: null,
-        countedCash: null,
-        recipientId: null,
-        handoverNote: "",
-        pendingOrders: ["DH-00125 · Đang pha chế"],
-        status: "open",
-    },
-];
-
-const STORAGE_SHIFTS = "miltyway_shifts_v1";
-
-const RECIPIENT_NAMES: Record<string, string> = {
-    NV02: "Trần Bình",
-    NV03: "Lê Quốc Tuấn",
-    NV04: "Vũ Minh Khoa",
-};
-
-function getRecipientName(id: string | null | undefined): string {
-    return (id && RECIPIENT_NAMES[id]) || "Trần Bình";
-}
-
-function parseCash(value: string): number | null {
-    if (!value.trim()) return null;
-    const amount = Number(value);
-    return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
-=======
 function readSnapshot(): {
     shifts: CashShift[];
     error: string | null;
@@ -136,7 +57,6 @@ function readSnapshot(): {
                 : "Không đọc được dữ liệu ca.",
         };
     }
->>>>>>> Stashed changes
 }
 
 export default function ShiftsPage() {
@@ -147,78 +67,6 @@ export default function ShiftsPage() {
     const [selectedId, setSelectedId] = useState(() => searchParams.get("shiftId") ?? "");
     const [revision, setRevision] = useState(0);
 
-<<<<<<< Updated upstream
-    const [shifts, setShiftsState] = useState<CashShift[]>(() => {
-        try {
-            const raw = localStorage.getItem(STORAGE_SHIFTS);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-            }
-        } catch {
-            // ignore
-        }
-        return [...initialShifts];
-    });
-
-    function setShifts(updater: (current: CashShift[]) => CashShift[]) {
-        setShiftsState((current) => {
-            const next = updater(current);
-            try {
-                localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(next));
-            } catch {
-                // ignore
-            }
-            return next;
-        });
-    }
-    const [selectedId, setSelectedId] = useState("CA-001");
-    const [openingForm, setOpeningForm] = useState<OpenShiftForm>({
-        branchId: "CN01",
-        counterId: "POS01",
-        openingCash: "",
-    });
-    const [closingForm, setClosingForm] = useState<CloseShiftForm>({
-        countedCash: "",
-        recipientId: "",
-        note: "",
-    });
-    const [pendingRequest, setPendingRequest] = useState<CloseShiftRequest | null>(null);
-
-    const selectedShift = shifts.find((shift) => shift.id === selectedId);
-    const countedCash = parseCash(closingForm.countedCash);
-
-    const cashFromSales = useMemo(() => {
-        try {
-            const orders = loadOrders();
-            const targetBranch = selectedShift?.branchId ?? "CN01";
-            return orders
-                .filter(o => o.branchId === targetBranch && o.paymentMethod === "cash" && o.payment === "paid")
-                .reduce((sum, o) => sum + o.total, 0);
-        } catch {
-            return 0;
-        }
-    }, [shifts, selectedShift?.branchId]);
-
-    const effectiveExpectedCash = selectedShift?.expectedCash ?? ((selectedShift?.openingCash ?? 500000) + cashFromSales);
-    const difference = countedCash !== null ? countedCash - effectiveExpectedCash : null;
-
-    function openShift(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-
-        const openingCash = parseCash(openingForm.openingCash);
-        if (openingCash === null) {
-            toast.warning("Tiền đầu ca phải là số nguyên không âm.");
-            return;
-        }
-
-        const occupied = shifts.some(
-            (shift) =>
-                shift.branchId === openingForm.branchId &&
-                shift.counterId === openingForm.counterId &&
-                shift.status !== "closed",
-        );
-=======
     const staff = currentStaff();
 
     const shifts = !staff?.loginRole
@@ -256,7 +104,6 @@ export default function ShiftsPage() {
         }
 
         window.addEventListener("storage", refreshFromStorage);
->>>>>>> Stashed changes
 
         window.addEventListener(CASH_SHIFTS_CHANGED, refresh);
         window.addEventListener(STAFF_SESSION_CHANGED, refresh);
@@ -269,95 +116,12 @@ export default function ShiftsPage() {
             window.removeEventListener(CASH_SHIFTS_CHANGED, refresh);
             window.removeEventListener(STAFF_SESSION_CHANGED, refresh);
 
-<<<<<<< Updated upstream
-        const shift: CashShift = {
-            id: `CA-MP-${crypto.randomUUID()}`,
-            branchId: openingForm.branchId,
-            counterId: openingForm.counterId,
-            counterName: openingForm.counterId === "POS02" ? "Quầy 02" : openingForm.counterId === "POS03" ? "Quầy 03" : "Quầy 01",
-            staffName: "Nguyễn An",
-            openedAt: new Date().toISOString(),
-            closedAt: null,
-            openingCash,
-            expectedCash: null,
-            countedCash: null,
-            recipientId: null,
-            handoverNote: "",
-            pendingOrders: [],
-            status: "open",
-=======
->>>>>>> Stashed changes
         };
     }, []);
 
-<<<<<<< Updated upstream
-        setShifts((current) => [shift, ...current]);
-        setSelectedId(shift.id);
-        setOpeningForm((current) => ({ ...current, openingCash: "" }));
-        setClosingForm({ countedCash: "", recipientId: "", note: "" });
-        toast.success("Đã mở ca.");
-    }
-
-    function requestClose(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-
-        if (!selectedShift || selectedShift.status !== "open") {
-            toast.warning("Vui lòng chọn ca đang mở.");
-            return;
-        }
-
-        if (countedCash === null || !closingForm.recipientId.trim()) {
-            toast.warning("Nhập tiền thực đếm và chọn người nhận bàn giao.");
-            return;
-        }
-
-        if (
-            (selectedShift.pendingOrders.length > 0 || (difference !== null && difference !== 0)) &&
-            !closingForm.note.trim()
-        ) {
-            toast.warning("Cần ghi nội dung bàn giao hoặc lý do chênh lệch.");
-            return;
-        }
-
-        setPendingRequest({
-            shiftId: selectedShift.id,
-            countedCash,
-            recipientId: closingForm.recipientId,
-            note: closingForm.note.trim(),
-        });
-    }
-
-    function confirmCloseRequest() {
-        if (!pendingRequest) return;
-
-        const target = shifts.find((shift) => shift.id === pendingRequest.shiftId);
-        if (!target || target.status !== "open") {
-            setPendingRequest(null);
-            toast.warning("Ca không còn ở trạng thái đang mở.");
-            return;
-        }
-
-        setShifts((current) => current.map((shift) =>
-            shift.id === pendingRequest.shiftId && shift.status === "open"
-                ? {
-                    ...shift,
-                    status: "closing-requested",
-                    countedCash: pendingRequest.countedCash,
-                    recipientId: pendingRequest.recipientId,
-                    handoverNote: pendingRequest.note,
-                }
-                : shift,
-        ));
-
-        setPendingRequest(null);
-        toast.success(
-            "Đã ghi nhận yêu cầu đóng ca.",
-        );
-=======
     function onSaved(message: string) {
         refresh();
         toast.success(message);
->>>>>>> Stashed changes
     }
 
     function selectShift(id: string) {
@@ -456,100 +220,12 @@ export default function ShiftsPage() {
                 parent={{ label: "Bán hàng", to: "/sales" }}
                 description="Theo dõi quầy, nhân viên, tiền mặt và các nội dung cần bàn giao."
                 actions={
-                    <Link to="/sales/pos" className="btn btn-secondary">
+                    can("pos.use") && <Link to="/sales/pos" className="btn btn-secondary">
                         Về POS
                     </Link>
                 }
             />
 
-<<<<<<< Updated upstream
-            <section className="card mb-6">
-                <h2 className="card-title mb-4">Thông tin mở ca</h2>
-                <form onSubmit={openShift}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="form-label" htmlFor="shift-branch">
-                                Chi nhánh
-                            </label>
-                            <select
-                                id="shift-branch"
-                                className="form-input form-select"
-                                value={openingForm.branchId}
-                                onChange={(event) => setOpeningForm((current) => ({
-                                    ...current, branchId: event.target.value,
-                                }))}
-                            >
-                                <option value="CN01">Chi nhánh 01 (CN01 - Bến Nghé)</option>
-                                <option value="CN02">Chi nhánh 02 (CN02 - Bàn Cờ)</option>
-                                <option value="CN03">Chi nhánh 03 (CN03 - Chợ Lớn)</option>
-                                <option value="CN04">Chi nhánh 04 (CN04 - Tân Hưng)</option>
-                                <option value="CN05">Chi nhánh 05 (CN05 - Hàng Xanh)</option>
-                                <option value="CN06">Chi nhánh 06 (CN06 - Làng Đại Học)</option>
-                                <option value="CN07">Chi nhánh 07 (CN07 - Bảy Hiền)</option>
-                                <option value="CN08">Chi nhánh 08 (CN08 - Cityland)</option>
-                                <option value="CN09">Chi nhánh 09 (CN09 - Phan Xích Long)</option>
-                                <option value="CN10">Chi nhánh 10 (CN10 - Bắc Hải)</option>
-                                <option value="CN11">Chi nhánh 11 (CN11 - Lãnh Binh Thăng)</option>
-                                <option value="CN12">Chi nhánh 12 (CN12 - Kênh Nước Đen)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-counter">
-                                Quầy
-                            </label>
-                            <select
-                                id="shift-counter"
-                                className="form-input form-select"
-                                value={openingForm.counterId}
-                                onChange={(event) => setOpeningForm((current) => ({
-                                    ...current, counterId: event.target.value,
-                                }))}
-                            >
-                                <option value="POS01">Quầy 01</option>
-                                <option value="POS02">Quầy 02</option>
-                                <option value="POS03">Quầy 03</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-staff">
-                                Nhân viên
-                            </label>
-                            <input
-                                id="shift-staff"
-                                className="form-input"
-                                value="Nguyễn An"
-                                readOnly
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-opening-cash">
-                                Tiền đầu ca (đ)
-                            </label>
-                            <input
-                                id="shift-opening-cash"
-                                className="form-input"
-                                type="number"
-                                min="0"
-                                step="1000"
-                                placeholder="500000"
-                                required
-                                value={openingForm.openingCash}
-                                onChange={(event) => setOpeningForm((current) => ({
-                                    ...current, openingCash: event.target.value,
-                                }))}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-4">
-                        <button type="submit" className="btn btn-primary btn-sm shrink-0">
-                            Mở ca
-                        </button>
-                    </div>
-                    
-                </form>
-            </section>
-=======
             {shiftSnapshot.error && (
     <div className="card mb-6" role="alert">
         <p className="text-sm text-red-600">
@@ -657,7 +333,6 @@ if (
 
             {staff?.loginRole === "owner" && <div className="card mb-6">Việc mở ca, kiểm đếm và ký chốt ca chỉ thực hiện tại chi nhánh. Chủ chuỗi xem biên bản và hậu kiểm tại <Link to="/stores/shift-reconciliation" className="text-[var(--primary)]">Đối soát ca</Link>.</div>}
             {!shiftSnapshot.error && <OpenCashShiftForm key={`open:${staff?.staffId}`} onSaved={onSaved} disabledCounters={disabledCounters} />}
->>>>>>> Stashed changes
 
             <section className="card mb-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -718,11 +393,7 @@ if (
                         className="btn btn-secondary mt-3"
                         onClick={refresh}
                     >
-<<<<<<< Updated upstream
-                        Gửi yêu cầu đóng ca
-=======
                         Tải lại dữ liệu
->>>>>>> Stashed changes
                     </button>
 
                     <p className="text-xs text-[var(--muted)] mt-2">

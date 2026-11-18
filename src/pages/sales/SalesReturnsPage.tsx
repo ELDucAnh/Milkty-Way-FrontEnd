@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-import { useState, useMemo } from "react";
-=======
 import {
     can,
     canAtBranch,
@@ -10,7 +7,6 @@ import {
     scopedBranch,
 } from "../../utils/auth";
 import { useEffect, useState } from "react";
->>>>>>> Stashed changes
 import { Link } from "react-router-dom";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
@@ -72,57 +68,11 @@ export default function SalesReturnsPage() {
     const [initialScope, setInitialScope] = useState<ReturnScope>("single-item");
     const [formVersion, setFormVersion] = useState(0);
 
-<<<<<<< Updated upstream
-    // Form tạo khiếu nại mới
-    const availableOrders = useMemo(() => loadOrders(), [open]);
-    const [formOrderId, setFormOrderId] = useState("");
-    const [formReason, setFormReason] = useState("Sai mức đường / đá");
-    const [formResolution, setFormResolution] = useState("Hoàn tiền");
-    const [formAmount, setFormAmount] = useState("45000");
-    const [formNote, setFormNote] = useState("");
-
-    const selected = reviewState.requests.find(request => request.id === selectedId);
-    const visibleRequests = reviewState.requests.filter(request =>
-        (!status || request.status === status) &&
-        `${request.id} ${request.orderId} ${request.customer}`.toLocaleLowerCase("vi-VN").includes(query.trim().toLocaleLowerCase("vi-VN")));
-
-    function reviewRequest(decision: "Approved" | "Rejected") {
-        if (!selected) return;
-        if (decision === "Rejected" && !reviewNote.trim()) {
-            toast.warning("Vui lòng nhập lý do từ chối giải quyết khiếu nại.");
-            return;
-        }
-
-        const isRefund = decision === "Approved" && selected.resolution === "Hoàn tiền" && selected.amount > 0;
-        const entry: ReviewEntry = {
-            requestId: selected.id,
-            reviewer: "Nguyễn Hoàng Long (Quản Trị Viên)",
-            memberId: selected.memberId,
-            refundedAmount: isRefund ? selected.amount : 0,
-            pointsChange: isRefund && selected.memberId ? selected.points : 0,
-            reviewedAt: new Date().toISOString(),
-            decision,
-            note: reviewNote.trim() || (decision === "Approved" ? "Đã duyệt xử lý theo đúng quy trình." : "Từ chối."),
-        };
-
-        const updatedRequests = reviewState.requests.map(request =>
-            request.id === entry.requestId ? { ...request, status: decision as RequestStatus } : request
-        );
-        const updatedHistory = [entry, ...reviewState.history];
-
-        setReviewState({
-            requests: updatedRequests,
-            history: updatedHistory,
-        });
-
-        saveReturns(updatedRequests);
-=======
     const actorStaffId = currentStaff()?.staffId ?? "";
     const canCreate = currentStaff()?.loginRole === "cashier";
     const canReview = currentStaff()?.loginRole === "manager" && can("payment.refundReview");
 
     function refresh() {
->>>>>>> Stashed changes
         try {
             const nextRequests = loadReturns();
             const nextOrders = loadOrders();
@@ -220,7 +170,7 @@ export default function SalesReturnsPage() {
             <div className="page-header">
                 <div>
                     <div className="breadcrumb">
-                        <Link to="/dashboard">Tổng quan</Link>
+                        <Link to={homePath()}>Tổng quan</Link>
                         <span className="sep">/</span>
                         <Link to="/sales">Đơn hàng</Link>
                         <span className="sep">/</span>
@@ -229,17 +179,6 @@ export default function SalesReturnsPage() {
                     <h1 className="page-title">Khiếu nại và hoàn tiền</h1>
                     <p className="page-subtitle">Theo dõi đổi món, hủy trước pha, bù mã ưu đãi và hoàn tiền toàn chuỗi.</p>
                 </div>
-<<<<<<< Updated upstream
-                <div className="flex gap-2.5 flex-wrap">
-                    <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                        Tạo yêu cầu xử lý
-                    </button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-=======
                 {canCreate && (
                     <div className="flex gap-2.5 flex-wrap">
                         <button className="btn btn-primary" type="button" onClick={() => openCreate()}>
@@ -262,7 +201,6 @@ export default function SalesReturnsPage() {
                 />
             </section>}
             {!isCashier() && (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
->>>>>>> Stashed changes
                 <div className="card p-4">
                     <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng yêu cầu</div>
                     <div className="text-[26px] font-extrabold text-[var(--text)] mt-1">{reviewState.requests.length}</div>
@@ -289,18 +227,21 @@ export default function SalesReturnsPage() {
                     </div>
                     <div className="text-[11px] text-[var(--muted)] mt-0.5">Cần quản lý xác nhận</div>
                 </div>
-            </div>
+            </div>)}
 
             <div className="card mb-6">
+                <label htmlFor="return-request-search" className="form-label">Tìm trong các yêu cầu đã tạo</label>
                 <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
                     <input
+                        id="return-request-search"
                         type="search"
                         className="form-input w-full sm:w-80 h-11"
-                        placeholder="Tìm kiếm mã yêu cầu, mã đơn, khách hàng..."
+                        placeholder="Mã yêu cầu, mã đơn hoặc khách hàng..."
                         value={query}
                         onChange={e => setQuery(e.target.value)}
                     />
                     <select
+                        aria-label="Trạng thái yêu cầu đã tạo"
                         className="form-input form-select w-full sm:w-48 h-11"
                         value={status}
                         onChange={e => setStatus(e.target.value)}
@@ -358,14 +299,10 @@ export default function SalesReturnsPage() {
                                             </span>
                                         </td>
                                         <td>
-<<<<<<< Updated upstream
-                                            <button
-=======
                                             {canReview && canAtBranch(
                                                 "payment.refundReview",
                                                 orders.find(order => order.id === r.orderId)?.branchId ?? "",
                                             ) ? <button
->>>>>>> Stashed changes
                                                 className="btn btn-secondary btn-sm"
                                                 onClick={() => {
                                                     setSelectedId(r.id);
@@ -375,7 +312,7 @@ export default function SalesReturnsPage() {
                                                 }}
                                             >
                                                 Xem xét
-                                            </button>
+                                            </button> : "-"}
                                         </td>
                                     </tr>
                                 ))
@@ -387,7 +324,7 @@ export default function SalesReturnsPage() {
 
             {/* Modal Xem xét & Duyệt */}
             <Modal
-                open={!!selected}
+                open={canReview && !!selected}
                 onClose={() => setSelectedId(null)}
                 title={`Chi Tiết Yêu Cầu ${selected?.id || ""}`}
                 size="lg"

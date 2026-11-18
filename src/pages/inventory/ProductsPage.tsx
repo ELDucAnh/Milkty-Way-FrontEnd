@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 import {
   can,
   canAtBranch,
@@ -10,13 +8,13 @@ import {
   scopedBranch,
 } from "../../utils/auth";
 import { productStatusAtStore } from "../shared/product-branch-status";
->>>>>>> Stashed changes
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import StatCard from "../../components/common/StatCard";
+import { useToast } from "../../components/common/useToast";
 import KpiIcon from "../shared/KpiIcon";
 import { formatCurrency } from "../shared/formatters";
 import { getIngredient } from "../shared/business-demo";
@@ -49,7 +47,8 @@ const STATUS_VARIANT = {
 
 export default function ProductsPage() {
   const navigate = useNavigate();
-  const [data] = useDemoState();
+  const toast = useToast();
+  const [data, setData] = useDemoState();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all");
@@ -79,6 +78,7 @@ function visibleStatus(product: Product): ProductStatus {
   const filtered = useMemo(
     () =>
       data.products.filter((product) => {
+        if (isCashier() && product.status !== "active" && product.status !== "branch-locked") return false;
         const query = applied.search.trim().toLocaleLowerCase("vi-VN");
         return (
           (!query ||
@@ -137,8 +137,6 @@ const lockedCount = data.products.filter(
       .map((variant) => `${variant.size} ${formatCurrency(variant.price)}`)
       .join(" · ");
   }
-<<<<<<< Updated upstream
-=======
 const canManageProducts = can("product.manage");
 
 const canLockAtBranch = Boolean(
@@ -259,14 +257,13 @@ function toggleBranchLock(product: Product) {
     );
   }
 }
->>>>>>> Stashed changes
 
   return (
     <div>
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span>Menu &amp; nguyên liệu</span>
             <span className="sep">/</span>
@@ -281,7 +278,7 @@ function toggleBranchLock(product: Product) {
         <span className="text-xs text-[var(--muted)]">Dữ liệu demo</span>
       </div>
 
-      <section className="page-section mb-6" aria-label="Thống kê menu">
+      {!isCashier() && (<section className="page-section mb-6" aria-label="Thống kê menu">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             label="Món đang bán"
@@ -312,16 +309,16 @@ function toggleBranchLock(product: Product) {
             icon={<KpiIcon kind="currency" />}
           />
         </div>
-      </section>
+      </section>)}
 
-      <section className="card mb-6 border-l-4 border-[var(--info)]">
+      {!isCashier() && (<section className="card mb-6 border-l-4 border-[var(--info)]">
         <h2 className="text-sm font-bold mb-1">Quy tắc menu chuỗi</h2>
         <p className="text-sm text-[var(--muted)]">
           Giá chuẩn dùng chung toàn chuỗi và chỉ thay đổi qua phiên bản được
           duyệt. Cửa hàng có thể tạm khóa món/topping khi không đủ nguyên liệu,
           không tự sửa giá.
         </p>
-      </section>
+      </section>)}
 
       <section className="card mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
@@ -402,12 +399,12 @@ function toggleBranchLock(product: Product) {
               Giá niêm yết, COGS theo size và tình trạng kinh doanh.
             </p>
           </div>
-          <button
+          {canManageProducts && (<button
             className="btn btn-primary"
             onClick={() => navigate("/inventory/products/new")}
           >
             Khai báo món mới
-          </button>
+          </button>)}
         </div>
         <DataTable>
           <table className="w-full text-sm text-left">
@@ -418,7 +415,7 @@ function toggleBranchLock(product: Product) {
                   "Nhóm món",
                   "Size",
                   "Giá bán",
-                  "COGS",
+                  ...(!isCashier() ? ["COGS"] : []),
                   "Trạng thái",
                 ].map((label) => (
                   <th key={label} className="px-4 py-3 font-semibold">
@@ -444,7 +441,7 @@ function toggleBranchLock(product: Product) {
                     className="border-t border-[var(--border)] hover:bg-[var(--background)]"
                   >
                     <td className="px-4 py-3">
-                      <button
+                      {!canManageProducts ? <span><strong>{product.code}</strong><br />{product.name}</span> : <button
                         className="text-left"
                         onClick={() =>
                           navigate(`/inventory/products/${product.id}`)
@@ -455,7 +452,7 @@ function toggleBranchLock(product: Product) {
                         </span>
                         <br />
                         {product.name}
-                      </button>
+                      </button>}
                     </td>
                     <td className="px-4 py-3">
                       {data.categories.find(
@@ -466,32 +463,24 @@ function toggleBranchLock(product: Product) {
                     <td className="px-4 py-3 whitespace-nowrap">
                       {prices(product)}
                     </td>
-                    <td className="px-4 py-3">
+                    {!isCashier() && <td className="px-4 py-3">
                       {Object.values(product.cogsBySize).some(
                         (value) => value !== null,
                       )
                         ? Object.entries(product.cogsBySize)
-                            .map(([size, value]) =>
-                              value === null
-                                ? null
-                                : `${size} ${formatCurrency(value)}`,
-                            )
-                            .filter(Boolean)
-                            .join(" · ")
+                          .map(([size, value]) =>
+                            value === null
+                              ? null
+                              : `${size} ${formatCurrency(value)}`,
+                          )
+                          .filter(Boolean)
+                          .join(" · ")
                         : "Chưa có định mức"}
-                    </td>
+                    </td>}
                     <td className="px-4 py-3">
-<<<<<<< Updated upstream
-                      <button onClick={() => setSelected(product)}>
-                        <Badge variant={STATUS_VARIANT[product.status]}>
-                          {product.status === "branch-locked"
-                            ? `${product.lockedStoreIds.join(", ")} tạm khóa`
-                            : STATUS_LABEL[product.status]}
-=======
                       <button onClick={() => setSelectedId(product.id)}>
                         <Badge variant={branchVariant(product)}>
                           {branchLabel(product)}
->>>>>>> Stashed changes
                         </Badge>
                       </button>
                     </td>
@@ -573,9 +562,6 @@ function toggleBranchLock(product: Product) {
               )}
             </div>
             <p className="text-sm text-[var(--muted)]">{selected.note}</p>
-<<<<<<< Updated upstream
-            <div className="flex justify-end">
-=======
             <div className="flex justify-end gap-2">
               {canReportShortage && (
                 <button
@@ -601,7 +587,6 @@ function toggleBranchLock(product: Product) {
                     : `Khóa bán tại ${branchId}`}
                 </button>
               )}
->>>>>>> Stashed changes
               <button
                 className="btn btn-secondary"
                 onClick={() => setSelectedId(null)}

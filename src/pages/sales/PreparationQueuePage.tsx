@@ -1,21 +1,17 @@
-<<<<<<< Updated upstream
-import { useState } from "react";
-import type { FormEvent } from "react";
-=======
 import { RETURNS_CHANGED } from "../shared/sales-returns-store";
 import { can, homePath, isBranchScoped, scopedBranch, currentStaff, STAFF_SESSION_CHANGED } from "../../utils/auth";
 import { useEffect, useState } from "react";
->>>>>>> Stashed changes
 import { Link } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
-import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
 import { useToast } from "../../components/common/useToast";
 import { salesBranches } from "../../data/sales/branches";
 import { formatDateTime } from "../../utils/format";
 import { loadPreparationQueue, changePreparation, canManagePreparation, type KdsOrder, type PreparationAction } from "../shared/sales-preparation";
-import PreparationRecipePanel, { PreparationGroupedItems, type PreparationSelection } from "./PreparationRecipePanel";
+import PreparationQueueWorkspace, {
+    PreparationQueueSummary,
+} from "./PreparationQueueWorkspace";
 import type { PreparationChannel, PreparationStatus } from "../shared/sales-orders-store";
 
 interface StatusDisplay {
@@ -53,80 +49,12 @@ const channelDisplay: Record<PreparationChannel, StatusDisplay> = {
     },
 };
 
-<<<<<<< Updated upstream
-function getOrdersFromStore(): PreparationOrder[] {
-    const orders = loadOrders();
-    return orders.filter(o => o.items && o.items.length > 0).map(o => {
-        const itemSummary = o.items.map(it => `${it.quantity} × ${it.name} (Size ${it.size})`).join(" + ");
-        const optionSummary = o.items.map(it => `Đường ${it.sugar} · ${it.ice}${it.toppings.length ? ` · Topping: ${it.toppings.join(", ")}` : ""}`).join(" | ");
-        const note = o.items.map(it => it.note).filter(Boolean).join("; ") || "Không có";
-        const status = o.preparation || "waiting";
-        const elapsedMinutes = Math.max(1, Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000)) || 3;
-        const waitingMinutes = status === "ready" ? 0 : elapsedMinutes;
-        return {
-            id: o.id,
-            branchId: o.branchId || "CN01",
-            channel: o.channel || "counter",
-            receivedAt: o.createdAt,
-            waitingMinutes,
-            itemSummary,
-            optionSummary,
-            note,
-            status,
-        };
-    });
-}
-
 export default function PreparationQueuePage() {
     const toast = useToast();
     const [pageSize, setPageSize] = useState(10);
-    const [orders, setOrders] = useState<PreparationOrder[]>(() => getOrdersFromStore());
-
-    const [draftFilters, setDraftFilters] = useState<{ branchId: string; status: string }>({
-        branchId: "CN01",
-        status: "",
-    });
-
-    const [appliedFilters, setAppliedFilters] = useState<{ branchId: string; status: string }>({
-        branchId: "CN01",
-        status: "",
-    });
-
-    const visibleOrders = orders.filter((order) => {
-        const matchesBranch =
-            !appliedFilters.branchId ||
-            order.branchId === appliedFilters.branchId;
-
-        const matchesStatus =
-            !appliedFilters.status ||
-            order.status === appliedFilters.status;
-
-        return matchesBranch && matchesStatus;
-    });
-
-    function handleApplyFilters(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        setAppliedFilters({ ...draftFilters });
-    }
-
-    function handleResetFilters() {
-        const emptyFilters = {
-            branchId: "",
-            status: "",
-=======
-export default function PreparationQueuePage() {
-    const toast = useToast();
-    const [pageSize, setPageSize] = useState(10);
-    const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+    const [viewMode, setViewMode] = useState<"table" | "cards">("cards");
     const [orders, setOrders] = useState<KdsOrder[]>([]);
     const [loadError, setLoadError] = useState("");
-    const [selection, setSelection] = useState<PreparationSelection | null>(null);
-    const [panelClosed, setPanelClosed] = useState(false);
-    function selectRecipe(next: PreparationSelection) {
-        setPanelClosed(false);
-        setSelection(next);
-    }
-
     // ID tại lần render dùng để phát hiện đổi người đăng nhập trước lúc ghi.
     const actorStaffId = currentStaff()?.staffId ?? "";
 
@@ -159,7 +87,6 @@ export default function PreparationQueuePage() {
             window.removeEventListener("focus", refresh);
             window.removeEventListener(RETURNS_CHANGED, refresh);
             window.removeEventListener(STAFF_SESSION_CHANGED, refresh);
->>>>>>> Stashed changes
         };
     }, []);
 
@@ -173,17 +100,6 @@ export default function PreparationQueuePage() {
         (!statusFilter || (statusFilter === "overdue" ? order.waitingMinutes > 10 : order.status === statusFilter)) &&
         (!query || order.id.toLocaleLowerCase("vi-VN").includes(query) || order.groups.some(group => group.item.name.toLocaleLowerCase("vi-VN").includes(query)))
     );
-    const fallbackOrder = panelClosed ? undefined : visibleOrders.find(order => order.status === "preparing" && order.groups.length);
-    const chosenOrder = visibleOrders.find(order => order.id === selection?.orderId);
-    const chosenGroup = chosenOrder?.groups.find(group => group.key === selection?.groupKey);
-    const selectedOrder = chosenGroup ? chosenOrder! : fallbackOrder ?? null;
-    const selectedGroup = chosenGroup ?? selectedOrder?.groups[0] ?? null;
-    const activeSelection: PreparationSelection | null = selectedOrder && selectedGroup ? {
-        orderId: selectedOrder.id,
-        groupKey: selectedGroup.key,
-        quantity: chosenGroup && selection ? Math.min(Math.max(1, selection.quantity), selectedGroup.quantity) : selectedGroup.quantity,
-        cupLabel: chosenGroup ? selection?.cupLabel : undefined,
-    } : null;
     const counters = [
         { value: "", label: "Tất cả", count: branchOrders.length },
         ...(["waiting", "preparing", "ready"] as const).map(status => ({ value: status, label: statusDisplay[status].label, count: branchOrders.filter(order => order.status === status).length })),
@@ -287,7 +203,7 @@ export default function PreparationQueuePage() {
         {
             id: "itemSummary",
             header: "Nhóm ly / tùy chọn",
-            render: order => <PreparationGroupedItems order={order} onSelect={selectRecipe} />,
+            render: order => <PreparationQueueSummary order={order} />,
         },
         {
             id: "status",
@@ -302,51 +218,6 @@ export default function PreparationQueuePage() {
             },
         },
         {
-<<<<<<< Updated upstream
-            id: "actions",
-            header: "Thao tác quầy",
-            render: (order) => (
-                <div className="flex flex-wrap gap-1.5">
-                    {order.status === "waiting" && (
-                        <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            onClick={() => handleAdvanceStatus(order.id)}
-                        >
-                            Pha chế
-                        </button>
-                    )}
-                    {order.status === "preparing" && (
-                        <button
-                            type="button"
-                            className="btn btn-success btn-sm !bg-emerald-600 !text-white"
-                            onClick={() => handleAdvanceStatus(order.id)}
-                        >
-                            Món đã sẵn sàng
-                        </button>
-                    )}
-                    {order.status === "ready" && (
-                        <span className="text-xs text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg">
-                            Đã hoàn tất
-                        </span>
-                    )}
-                    {order.status !== "ready" && (
-                        <button
-                            type="button"
-                            className="btn btn-secondary btn-sm !text-rose-600"
-                            onClick={() =>
-                                toast.warning(
-                                    `Đã phát cảnh báo thiếu nguyên liệu cho đơn ${order.id} tới Quầy thu ngân & Quản lý ${order.branchId}!`,
-                                    { title: "Báo Thiếu Nguyên Liệu" }
-                                )
-                            }
-                        >
-                            Báo thiếu
-                        </button>
-                    )}
-                </div>
-            ),
-=======
             id: "actions",header: "Thao tác quầy",
             render: (order) => {
                 const editable =
@@ -414,7 +285,6 @@ export default function PreparationQueuePage() {
                     </div>
                 );
             },
->>>>>>> Stashed changes
         },
     ];
 
@@ -423,7 +293,7 @@ export default function PreparationQueuePage() {
             <div className="page-header">
                 <div>
                     <nav className="breadcrumb" aria-label="Đường dẫn trang">
-                        <Link to="/dashboard">Trang chủ</Link>
+                        <Link to={homePath()}>Trang chủ</Link>
                         <span className="sep">/</span>
                         <Link to="/sales">Bán hàng</Link>
                         <span className="sep">/</span>
@@ -440,7 +310,7 @@ export default function PreparationQueuePage() {
                         Màn hình điều phối thứ tự pha chế cho Barista quầy bar, theo dõi trạng thái và công thức pha chế.
                     </p>
                 </div>
-                <div className="page-header-actions">
+                <div className="page-header-actions" style={{ alignSelf: "center" }}>
                     <button
                         type="button"
                         className="btn btn-secondary"
@@ -452,102 +322,158 @@ export default function PreparationQueuePage() {
                         </svg>
                         Làm mới hàng đợi
                     </button>
-                    <Link to="/sales/pos" className="btn btn-primary">
+                    {can("pos.use") && <Link to="/sales/pos" className="btn btn-primary">
                         Về quầy POS
-                    </Link>
+                    </Link>}
                 </div>
             </div>
 
-            <section className="card flex flex-wrap items-center gap-3" aria-label="Bộ lọc hàng đợi">
-                <div className="flex gap-1" aria-label="Cách xem hàng đợi">
-                    <button type="button" className={`btn btn-sm ${viewMode === "table" ? "btn-primary" : "btn-secondary"}`} aria-pressed={viewMode === "table"} onClick={() => setViewMode("table")}>Bảng gọn</button>
-                    <button type="button" className={`btn btn-sm ${viewMode === "cards" ? "btn-primary" : "btn-secondary"}`} aria-pressed={viewMode === "cards"} onClick={() => setViewMode("cards")}>Thẻ KDS gọn</button>
-                </div>
-                <div className="flex flex-wrap gap-2" aria-label="Trạng thái pha chế">
-                    {counters.map(counter => <button key={counter.value} type="button" aria-pressed={statusFilter === counter.value} className={`btn btn-sm ${statusFilter === counter.value ? "btn-primary" : "btn-secondary"}`} onClick={() => setStatusFilter(counter.value)}>{counter.label} ({counter.count})</button>)}
-                </div>
-                <input aria-label="Tìm mã đơn hoặc tên món" placeholder="Tìm mã đơn / tên món" className="form-input min-w-[180px] flex-1" value={search} onChange={event => setSearch(event.target.value)} />
-                <select aria-label="Chi nhánh" disabled={isBranchScoped()} className="form-input form-select !w-auto max-w-full" value={activeBranchId} onChange={event => setBranchFilter(event.target.value)}>
-                    <option value="">Tất cả chi nhánh</option>
-                    {salesBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.id} — {branch.name}</option>)}
-                </select>
-                <select aria-label="Số dòng hiển thị" className="form-input form-select !w-auto" value={pageSize} onChange={event => setPageSize(Number(event.target.value))}>
-                    <option value={5}>5 đơn/trang</option><option value={10}>10 đơn/trang</option><option value={20}>20 đơn/trang</option>
-                </select>
-            </section>
+<section
+    className="card overflow-hidden !p-0"
+    aria-label="Bộ lọc hàng đợi"
+>
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-5">
+        <div
+            className="flex flex-wrap gap-2"
+            aria-label="Trạng thái pha chế"
+        >
+            {counters.map(counter => (
+                <button
+                    key={counter.value}
+                    type="button"
+                    aria-pressed={statusFilter === counter.value}
+                    className={`btn btn-sm ${
+                        statusFilter === counter.value
+                            ? "btn-primary"
+                            : "btn-secondary"
+                    }`}
+                    onClick={() => setStatusFilter(counter.value)}
+                >
+                    {counter.label}
+
+                    <span
+                        className={`inline-flex min-w-5 items-center justify-center rounded px-1.5 py-0.5 text-[11px] ${
+                            statusFilter === counter.value
+                                ? "bg-white/20"
+                                : "bg-[var(--border)]"
+                        }`}
+                    >
+                        {counter.count}
+                    </span>
+                </button>
+            ))}
+        </div>
+
+        <div
+            className="flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--background)] p-1"
+            aria-label="Cách xem hàng đợi"
+        >
+            <button
+                type="button"
+                className={`btn btn-sm ${
+                    viewMode === "table"
+                        ? "btn-primary"
+                        : "btn-secondary"
+                }`}
+                aria-pressed={viewMode === "table"}
+                onClick={() => setViewMode("table")}
+            >
+                Bảng gọn
+            </button>
+
+            <button
+                type="button"
+                className={`btn btn-sm ${
+                    viewMode === "cards"
+                        ? "btn-primary"
+                        : "btn-secondary"
+                }`}
+                aria-pressed={viewMode === "cards"}
+                onClick={() => setViewMode("cards")}
+            >
+                Thẻ KDS gọn
+            </button>
+        </div>
+    </div>
+
+    <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] bg-[var(--background)] px-4 py-3 md:px-5">
+        <div className="search-box min-w-0 flex-[1_1_240px]">
+            <svg
+                className="search-icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m16 16 4 4" />
+            </svg>
+
+            <input
+                aria-label="Tìm mã đơn hoặc tên món"
+                placeholder="Tìm mã đơn / tên món"
+                className="form-input"
+                type="search"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+            />
+        </div>
+
+        <select
+            aria-label="Chi nhánh"
+            disabled={isBranchScoped()}
+            className="form-input form-select !w-auto max-w-full flex-[1_1_220px] md:flex-none"
+            value={activeBranchId}
+            onChange={event => setBranchFilter(event.target.value)}
+        >
+            <option value="">Tất cả chi nhánh</option>
+
+            {salesBranches.map(branch => (
+                <option key={branch.id} value={branch.id}>
+                    {branch.id} — {branch.name}
+                </option>
+            ))}
+        </select>
+
+        <select
+            aria-label="Số dòng hiển thị"
+            className="form-input form-select !w-auto"
+            value={pageSize}
+            onChange={event =>
+                setPageSize(Number(event.target.value))
+            }
+        >
+            <option value={5}>5 đơn/trang</option>
+            <option value={10}>10 đơn/trang</option>
+            <option value={20}>20 đơn/trang</option>
+        </select>
+    </div>
+</section>
             {loadError && (<div
                     role="alert"
                     className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
                 >
-<<<<<<< Updated upstream
-                    <div>
-                        <label className="form-label" htmlFor="kds-branch">
-                            Chi nhánh
-                        </label>
-                        <select
-                            id="kds-branch"
-                            className="form-input form-select"
-                            value={draftFilters.branchId}
-                            onChange={(event) =>
-                                setDraftFilters((current) => ({
-                                    ...current,
-                                    branchId: event.target.value,
-                                }))
-                            }
-                        >
-                            <option value="">Tất cả chi nhánh</option>
-                            {salesBranches.map((b) => (
-                                <option key={b.id} value={b.id}>
-                                    {b.id} — {b.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-=======
                     Không cập nhật được hàng đợi: {loadError}
                     {" "}Dữ liệu đang hiển thị có thể đã cũ. Các nút ghi tạm thời bị khóa.
                 </div>
             )}
->>>>>>> Stashed changes
 
-            <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-12">
-                <section
-                    className="card min-w-0 overflow-hidden p-0 lg:col-span-8"
-                    aria-label="Bảng hàng đợi pha chế"
-                >
-                    {viewMode === "cards" ? <div className="grid gap-3 p-3 xl:grid-cols-2">
-                        {visibleOrders.length === 0 && <p className="p-3 text-sm text-[var(--muted)]">Không có đơn phù hợp.</p>}
-                        {visibleOrders.map(order => <article key={order.id} className="min-w-0 rounded-lg border border-[var(--border)] p-3 space-y-3">
-                            <div className="flex flex-wrap justify-between gap-2">{columns[0].render?.(order)}{columns[2].render?.(order)}</div>
-                            <PreparationGroupedItems order={order} onSelect={selectRecipe} />
-                            {columns[3].render?.(order)}
-                        </article>)}
-                    </div> : <div className="overflow-x-auto">
-                        <DataTable
-                            columns={columns}
-                            data={visibleOrders}
-                            rowKey={order => order.id}
-                            caption="Hàng đợi pha chế chi nhánh MilktyWay"
-                            pagination
-                            pageSize={pageSize}
-                        />
-                    </div>}
-                </section>
-
-                <div className="min-w-0 lg:col-span-4 lg:sticky lg:top-4"><PreparationRecipePanel
-                    order={selectedOrder}
-                    group={selectedGroup}
-                    selection={activeSelection}
-                    onQuantityChange={quantity =>
-                        setSelection(() =>
-                            activeSelection
-                                ? { ...activeSelection, quantity, cupLabel: undefined }
-                                : null,
-                        )
-                    }
-                    onClose={() => { setSelection(null); setPanelClosed(true); }}
-                /></div>
-            </div>
+<PreparationQueueWorkspace
+    orders={visibleOrders}
+    columns={columns}
+    viewMode={viewMode}
+    pageSize={pageSize}
+    filterKey={JSON.stringify([
+        activeBranchId,
+        statusFilter,
+        search,
+    ])}
+/>
 
         </div>
     );

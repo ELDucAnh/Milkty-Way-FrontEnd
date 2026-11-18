@@ -10,11 +10,12 @@ export default function MainLayout() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const { pathname } = useLocation();
     const isPos = pathname === "/sales/pos";
-    const [posFocus, setPosFocus] = useState(() => { try { return localStorage.getItem("milktyway_pos_sidebar_hidden_v1") === "1"; } catch { return false; } });
-    const toggleFocus = () => setPosFocus(previous => { const next = !previous; try { localStorage.setItem("milktyway_pos_sidebar_hidden_v1", next ? "1" : "0"); } catch { /* Preference still works for this visit. */ } return next; });
+    const [posFocus, setPosFocus] = useState(true);
+    const toggleFocus = () => setPosFocus(previous => !previous);
+    useEffect(() => { if (isPos) setPosFocus(true); }, [isPos]);
     useEffect(() => {
       if (!isPos) return;
-      const toggle = () => { if (window.matchMedia("(min-width: 1024px)").matches) toggleFocus(); else setMobileOpen(v => !v); };
+      const toggle = () => { setMobileOpen(false); toggleFocus(); };
       const key = (e: KeyboardEvent) => {
         if (e.repeat || e.isComposing || e.metaKey || e.altKey || document.querySelector('[role="dialog"]')) return;
         const alias = e.ctrlKey && e.key.toLowerCase() === "b";

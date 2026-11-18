@@ -1,5 +1,4 @@
-<<<<<<< Updated upstream
-=======
+import Modal from "../../components/common/Modal";
 import { assertPosCheckoutEditable } from "../shared/sales-orders-store";
 import {
     canAtBranch,
@@ -11,19 +10,14 @@ import {
     normalizeCounterId,
     sameCounter,
 } from "../../utils/counters";
->>>>>>> Stashed changes
 import { useToast } from "../../components/common/useToast";
 import "./pos-template.css";
 import { products, isPosProductAvailable } from "../../data/sales/products";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-<<<<<<< Updated upstream
-import { Link } from "react-router-dom";
-=======
 import { loadCashShifts } from "../shared/cash-shifts-store";
 import type { CashShift } from "../shared/cash-shifts-store";
 import { Navigate, Link } from "react-router-dom";
->>>>>>> Stashed changes
 import PosCart from "../../components/sales/PosCart";
 import type { PosCartItem } from "../../components/sales/PosCart";
 import { formatCurrency } from "./sales-support";
@@ -76,14 +70,14 @@ function AssignedPosTerminal({
  counterId,
 }: AssignedPosTerminalProps) {
  const toast = useToast();
+ const [customizerOpen, setCustomizerOpen] = useState(false);
+ const [helpOpen, setHelpOpen] = useState(false);
  const searchRef = useRef<HTMLInputElement>(null);
  useEffect(() => {
   const focusSearch = (event: KeyboardEvent) => {
    if (event.repeat || event.isComposing || event.metaKey || event.altKey || document.querySelector('[role="dialog"]')) return;
    const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select'));
-   const help = document.getElementById('pos-shortcut-help') as HTMLDetailsElement | null;
-   if (!event.ctrlKey && event.key === 'Escape' && help?.open) { help.open = false; return; }
-   if (!event.ctrlKey && !typing && event.key === '?' && help) { event.preventDefault(); help.open = !help.open; return; }
+   if (!event.ctrlKey && !typing && event.key === '?') { event.preventDefault(); setHelpOpen(true); return; }
    const alias = event.ctrlKey && event.key.toLowerCase() === 'k';
    if (alias || (event.key === '/' && !event.ctrlKey && !(event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input, textarea, select'))))) {
     event.preventDefault(); searchRef.current?.focus(); searchRef.current?.select();
@@ -94,7 +88,6 @@ function AssignedPosTerminal({
  }, []);
  const [product, setProduct] = useState(products[0]);
  const [category, setCategory] = useState("");
- const sizeRef = useRef<HTMLSelectElement>(null);
  const [search, setSearch] = useState("");
  const [items, setItems] = useState<PosCartItem[]>([]);
  const [size, setSize] = useState<"M" | "L">("M");
@@ -171,6 +164,7 @@ function AssignedPosTerminal({
      unitPrice,
     },
    ]);
+   setCustomizerOpen(false);
   } catch (error) {
    toast.warning(
     error instanceof Error
@@ -179,10 +173,6 @@ function AssignedPosTerminal({
    );
   }
  }
-<<<<<<< Updated upstream
- return <>
-      <div className="page-header mb-5">
-=======
  function reportShortage() {
   try {
    requireOpenAssignedShift();
@@ -249,7 +239,6 @@ function AssignedPosTerminal({
  }
  return <div className="pos-page">
       <div className="page-header pos-page-header">
->>>>>>> Stashed changes
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
             <Link to="/dashboard">Trang chủ</Link>
@@ -267,8 +256,8 @@ function AssignedPosTerminal({
           </div>
         </div>
         <div className="flex gap-2.5 items-center">
-          <button type="button" className="btn btn-secondary" onClick={() => window.dispatchEvent(new Event("milktyway:toggle-pos-focus"))}>Ẩn/hiện menu · ~</button>
-          <details id="pos-shortcut-help" className="pos-shortcut-help"><summary className="btn btn-secondary">Phím tắt [?]</summary><p>/ hoặc Ctrl+K: Tìm món · ~ hoặc Ctrl+B: Ẩn menu · Alt+D: Đưa đủ · Alt+H: Giữ đơn · Ctrl+Enter: Thanh toán · Esc: Đóng hướng dẫn</p></details>
+          <button type="button" className="btn btn-secondary" onClick={() => window.dispatchEvent(new Event("milktyway:toggle-pos-focus"))}>Hiện khung / Tập trung · ~</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setHelpOpen(true)}>Phím tắt [?]</button>
           <Link to="/sales" className="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
             Danh sách đơn
@@ -301,37 +290,26 @@ function AssignedPosTerminal({
      <input ref={searchRef} id="pos-search" aria-label="Tìm món" className="w-full h-11 pl-11 pr-10 rounded-xl border border-[var(--border)] bg-[var(--background)] text-[var(--text)] text-sm font-medium placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all" placeholder="Quét mã hoặc nhập tên / mã món..." value={search} onChange={e => setSearch(e.target.value)} />
      <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)]">/</kbd>
     </div>
-    <select aria-label="Nhóm món" className="form-input form-select h-11 !w-auto min-w-[160px]" value={category} onChange={e => setCategory(e.target.value)}><option value="">Tất cả nhóm món</option><option value="hot">🔥 Hot Sale</option><option value="milk-tea">Trà sữa</option><option value="fruit-tea">Trà trái cây</option><option value="seasonal">Món theo mùa</option></select>
+    <div className="pos-category-tabs" aria-label="Nhóm món">{[["", "Tất cả"], ["hot", "Hot Sale"], ["milk-tea", "Trà sữa"], ["fruit-tea", "Trà trái cây"], ["seasonal", "Theo mùa"]].map(([value, label]) => <button key={value} type="button" aria-pressed={category === value} className={`btn ${category === value ? "btn-primary" : "btn-secondary"}`} onClick={() => setCategory(value)}>{label}<small className="pos-filter-count">{products.filter(p => isPosProductAvailable(p, branchId) && (!value || (value === "hot" ? p.isHotSale : p.category === value))).length}</small></button>)}</div>
     </div></section>
-    <div className="pos-product-grid grid grid-cols-2 sm:grid-cols-3 gap-3">{products.filter(p => isPosProductAvailable(p, branchId) && (!category || (category === "hot" ? p.isHotSale : p.category === category)) && `${p.name} ${p.sku}`.toLocaleLowerCase("vi-VN").includes(search.trim().toLocaleLowerCase("vi-VN"))).sort((a,b) => category === "hot" ? (a.hotRank ?? 99) - (b.hotRank ?? 99) : a.id - b.id).map(p => <button key={p.id} type="button" aria-pressed={product.id === p.id} className={`pos-product-card min-w-0 text-left ${product.id === p.id ? "in-cart" : ""}`} onClick={() => { setProduct(p); setSelected([]); setSize("M"); sizeRef.current?.focus(); }}><span className="flex items-center justify-center h-[100px] rounded-[10px] mb-2.5 bg-[var(--background)]"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M7 7h10l-1 14H8L7 7ZM6 7h12M14 7l2-6"/><circle cx="11" cy="17" r="1"/><circle cx="14" cy="14" r="1"/></svg></span>{p.isHotSale && <span className="pos-hot-badge" title={`${p.soldToday} ly hôm nay (demo)`}>🔥 HOT SALE</span>}<span className="block truncate text-xs font-semibold mb-1">{p.name}</span><span className="block text-[11px] text-[var(--muted)] mb-1.5">{p.sku}</span><span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><span className="text-[13px] font-bold text-[var(--primary)]">{formatCurrency(p.price)}</span><span className="text-[10px] whitespace-nowrap">Còn: {p.stock}</span></span></button>)}</div>
+    <div className="pos-product-grid grid grid-cols-2 sm:grid-cols-3 gap-3">{products.filter(p => isPosProductAvailable(p, branchId) && (!category || (category === "hot" ? p.isHotSale : p.category === category)) && `${p.name} ${p.sku}`.toLocaleLowerCase("vi-VN").includes(search.trim().toLocaleLowerCase("vi-VN"))).sort((a,b) => category === "hot" ? (a.hotRank ?? 99) - (b.hotRank ?? 99) : a.id - b.id).map(p => <button key={p.id} type="button" aria-pressed={product.id === p.id} className={`pos-product-card min-w-0 text-left ${product.id === p.id ? "in-cart" : ""}`} onClick={() => { setProduct(p); setSelected([]); setSize("M"); setQuantity("1"); setNote(""); setCustomizerOpen(true); }}><span className="flex items-center justify-center h-[100px] rounded-[10px] mb-2.5 bg-[var(--background)]"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M7 7h10l-1 14H8L7 7ZM6 7h12M14 7l2-6"/><circle cx="11" cy="17" r="1"/><circle cx="14" cy="14" r="1"/></svg></span>{p.isHotSale && <span className="pos-hot-badge" title={`${p.soldToday} ly hôm nay (demo)`}>🔥 HOT SALE</span>}<span className="block truncate text-xs font-semibold mb-1">{p.name}</span><span className="block text-[11px] text-[var(--muted)] mb-1.5">{p.sku}</span><span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><span className="text-[13px] font-bold text-[var(--primary)]">{formatCurrency(p.price)}</span><span className="text-[10px] whitespace-nowrap">Còn: {p.stock}</span></span></button>)}</div>
 </div>
-   <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId={branchId} staffId={staffId} counterId={counterId} shiftId={activeShift.id} onRestore={setItems} onQuantity={(id, quantity) => setItems(current => current.map(item => item.id === id ? {...item, quantity} : item))} customizer={    <section className="card"><details open className="pos-customizer"><summary className="card-title mb-3">Tùy chọn · {product.name}</summary>
+   <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId={branchId} staffId={staffId} counterId={counterId} shiftId={activeShift.id} onRestore={setItems} onQuantity={(id, quantity) => setItems(current => current.map(item => item.id === id ? {...item, quantity} : item))} customizer={null} />
+   <Modal open={customizerOpen} onClose={() => setCustomizerOpen(false)} title={`Tùy chọn · ${product.name}`} size="lg">
 
-    <form onSubmit={add} className="flex flex-col gap-4"><div className="grid grid-cols-2 gap-3">
-     <label className="form-label">Cỡ ly<select ref={sizeRef} id="pos-size" className="form-input" value={size} onChange={e => setSize(e.target.value === "L" ? "L" : "M")}><option value="M">Size M (Tiêu chuẩn)</option><option value="L">Size L (+6.000 ₫)</option></select></label>
-     <label className="form-label">Số lượng<input className="form-input" type="number" min="1" max="999" step="1" required value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
-     <label className="form-label">Đường<select className="form-input" value={sugar} onChange={e => setSugar(e.target.value)}>{["0%", "30%", "50%", "70%", "100%"].map(v => <option key={v}>{v}</option>)}</select></label>
-     <label className="form-label">Đá<select className="form-input" value={ice} onChange={e => setIce(e.target.value)}>{["Không đá", "Ít đá", "Vừa đá", "Bình thường"].map(v => <option key={v}>{v}</option>)}</select></label>
+    <form onSubmit={add} className="pos-item-form flex flex-col gap-4"><div className="pos-option-grid">
+     <fieldset><legend className="form-label">Cỡ ly</legend><div className="pos-option-buttons">{(["M", "L"] as const).map(value => <button key={value} type="button" aria-pressed={size === value} className={`btn ${size === value ? "btn-primary" : "btn-secondary"}`} onClick={() => setSize(value)}><span>Size {value}<small className="block font-normal">{value === "M" ? "Tiêu chuẩn" : "+6.000 ₫"}</small></span></button>)}</div></fieldset>
+     <fieldset><legend className="form-label">Lượng đường</legend><div className="pos-option-buttons">{["0%", "30%", "50%", "70%", "100%"].map(value => <button key={value} type="button" aria-pressed={sugar === value} className={`btn ${sugar === value ? "btn-primary" : "btn-secondary"}`} onClick={() => setSugar(value)}>{value}</button>)}</div></fieldset>
+     <fieldset className="pos-option-full"><legend className="form-label">Lượng đá</legend><div className="pos-option-buttons">{["Không đá", "Ít đá", "Vừa đá", "Bình thường"].map(value => <button key={value} type="button" aria-pressed={ice === value} className={`btn ${ice === value ? "btn-primary" : "btn-secondary"}`} onClick={() => setIce(value)}>{value}</button>)}</div></fieldset>
      </div><fieldset><legend className="form-label">Món thêm / Topping (mỗi ly)</legend><div className="grid grid-cols-2 gap-2">{toppings.map(t => <label key={t.id} className="flex items-center gap-2 text-xs cursor-pointer"><input className="accent-[var(--primary)]" type="checkbox" checked={selected.includes(t.id)} onChange={e => setSelected(current => e.target.checked ? [...current, t.id] : current.filter(id => id !== t.id))} /><span>{t.name} · +{formatCurrency(t.price)}</span></label>)}</div></fieldset>
      <label className="form-label">Ghi chú pha chế<textarea className="form-input" placeholder="Ví dụ: Ít đá, mang đi ngay..." value={note} onChange={e => setNote(e.target.value)} /></label>
-<<<<<<< Updated upstream
-     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button><button type="button" className="btn btn-secondary" onClick={() => toast.info(`Đã tạm khóa món ${product.name} tại chi nhánh CN01 do hết nguyên liệu.`)}>Khóa món tại quầy</button></div>
+     <div className="flex items-center justify-between gap-3 text-sm"><span>Đơn giá tùy chọn: <strong className="text-[var(--primary)]">{formatCurrency(unitPrice)}</strong></span>{canAtBranch("order.reportShortage", branchId) && <button type="button" className="btn btn-ghost btn-sm" onClick={reportShortage}>Báo hết nguyên liệu</button>}</div>
+     <div className="pos-item-actions"><div className="pos-quantity-stepper"><button type="button" aria-label="Giảm số lượng" disabled={Number(quantity) <= 1} onClick={() => setQuantity(String(Math.max(1, Number(quantity) - 1)))}>−</button><input aria-label="Số lượng" type="number" min="1" max="999" step="1" required value={quantity} onChange={e => setQuantity(e.target.value)} /><button type="button" aria-label="Tăng số lượng" disabled={Number(quantity) >= 999} onClick={() => setQuantity(String(Math.min(999, Number(quantity) + 1)))}>+</button></div><button className="btn btn-primary" type="submit"><span>+ Thêm vào đơn</span><strong>{formatCurrency(unitPrice * (Number(quantity) || 0))}</strong></button></div>
     </form>
-   </section></div>
-   <PosCart items={items} onRemove={id => setItems(current => current.filter(item => item.id !== id))} onClear={() => setItems([])} branchId="CN01" />
-=======
-     <div className="flex flex-wrap gap-2 mt-4"><button className="btn btn-primary" type="submit">Thêm vào giỏ · {formatCurrency(unitPrice)}/ly</button>{canAtBranch("order.reportShortage", branchId) && (
- <button
-  type="button"
-  className="btn btn-secondary"
-  onClick={reportShortage}
- >
-  Báo hết nguyên liệu
- </button>
-)}</div>
-    </form></details>
-   </section>} />
->>>>>>> Stashed changes
+   </Modal>
+   <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Phím tắt bán hàng">
+    <div className="space-y-4">{[["Tìm món", "/ hoặc Ctrl+K"], ["Hiện khung / Tập trung", "~ hoặc Ctrl+B"], ["Đưa đủ tiền mặt", "Alt+D"], ["Giữ đơn", "Alt+H"], ["Hoàn tất bán hàng", "Ctrl+Enter"]].map(([label, key]) => <div key={key} className="flex justify-between gap-4"><span>{label}</span><kbd>{key}</kbd></div>)}</div>
+   </Modal>
   </div>
  </div>;
 }

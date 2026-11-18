@@ -1,3 +1,4 @@
+import { homePath } from "../utils/auth";
 import { Link, useLocation } from "react-router-dom";
 import Badge from "../components/common/Badge";
 import { navigationItems } from "../routes/navigation";
@@ -16,7 +17,7 @@ export default function ModulePendingPage() {
                     <nav className="breadcrumb" aria-label="Đường dẫn trang">
                         {pathname !== "/dashboard" && (
                             <>
-                                <Link to="/dashboard">Trang chủ</Link>
+                                <Link to={homePath()}>Trang chủ</Link>
                                 <span className="sep" aria-hidden="true">
                                     /
                                 </span>

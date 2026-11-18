@@ -1,8 +1,5 @@
-<<<<<<< Updated upstream
-=======
 import { RETURNS_CHANGED } from "../shared/sales-returns-store";
 import { can, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
->>>>>>> Stashed changes
 import { useToast } from "../../components/common/useToast";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -59,7 +56,7 @@ export default function SalesListPage() {
     const [filters, setFilters] = useState<Record<string, string>>({});
 
     const groups = [
-        { key: "branchId", label: "Chi nhánh", options: branches.map(b => [b.id, b.name]) },
+        { key: "branchId", label: "Chi nhánh", options: branches.filter(b => !scopedBranch() || b.id === scopedBranch()).map(b => [b.id, b.name]) },
         { key: "shift", label: "Ca làm việc", options: Object.entries(shiftLabels) },
         { key: "channel", label: "Kênh bán", options: Object.entries(channelLabels) },
         ...[
@@ -73,7 +70,7 @@ export default function SalesListPage() {
         })),
     ];
 
-    const rows = allOrders.filter(row =>
+    const rows = allOrders.filter(row => (!scopedBranch() || row.branchId === scopedBranch()) &&
         `${row.id} ${row.customer} ${row.phone}`.toLocaleLowerCase("vi-VN").includes(appliedQuery.trim().toLocaleLowerCase("vi-VN")) &&
         groups.every(g => !appliedFilters[g.key] || row[g.key as keyof SalesOrder] === appliedFilters[g.key])
     );
@@ -203,7 +200,7 @@ export default function SalesListPage() {
                 description="Tra cứu và điều phối đơn hàng tại quầy, mang đi và trực tuyến trên toàn chuỗi 12 chi nhánh."
                 actions={
                     <>
-                        <button
+                        {!isCashier() && <button
                             className="btn btn-secondary"
                             onClick={() => toast.success("Đã xuất danh sách đơn hàng ra tệp Excel (.xlsx) thành công!", { title: "Xuất Dữ Liệu" })}
                         >
@@ -213,19 +210,19 @@ export default function SalesListPage() {
                                 <line x1="12" y1="3" x2="12" y2="15" />
                             </svg>
                             Xuất dữ liệu
-                        </button>
-                        <button className="btn btn-primary" onClick={() => navigate("/sales/pos")}>
+                        </button>}
+                        {can("order.create") && <button className="btn btn-primary" onClick={() => navigate("/sales/pos")}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19" />
                                 <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
                             Tạo đơn mới (POS)
-                        </button>
+                        </button>}
                     </>
                 }
             />
 
-            <section aria-label="Thống kê đơn hàng">
+            {!isBranchScoped() && (<section aria-label="Thống kê đơn hàng">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
                     <div className="stat-card">
                         <div className="stat-card-icon icon-bg-primary">
@@ -284,7 +281,7 @@ export default function SalesListPage() {
                         </div>
                     </div>
                 </div>
-            </section>
+            </section>)}
 
             <section className="card mb-6" aria-labelledby="sales-filter-title">
                 <h2 id="sales-filter-title" className="card-title mb-4">Bộ lọc đơn hàng</h2>
