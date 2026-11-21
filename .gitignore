@@ -60,5 +60,6 @@ Thumbs.db
 dist/
 
 # Python Playwright output
+/.venv/
 /test-results/
 /scripts/__pycache__/
