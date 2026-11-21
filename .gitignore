@@ -58,3 +58,7 @@ Thumbs.db
 *.md
 # Build output
 dist/
+
+# Python Playwright output
+/test-results/
+/scripts/__pycache__/
