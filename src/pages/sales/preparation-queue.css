@@ -1,0 +1,22 @@
+.modal-box.kds-detail-dialog {
+  max-width: 860px;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.kds-detail-dialog > .modal-header,
+.kds-detail-dialog > .modal-footer { flex-shrink: 0; padding: 16px 20px; }
+.kds-detail-dialog > .modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px; }
+.kds-cup-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 8px; }
+.kds-cup-grid .kds-cup-card { display: flex; flex-direction: column; gap: 7px; padding: 14px 10px; white-space: normal; font-size: 12px; font-weight: 400; }
+.kds-cup-card small { color: var(--muted); font-size: 10px; }
+.kds-cup-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.kds-recipe-table { font-size: 12px; }
+.kds-recipe-table th { background: var(--background); }
+.kds-recipe-table td:last-child { color: var(--primary); background: var(--primary-light); font-weight: 700; }
+.kds-recipe-rules { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+@media (max-width: 560px) {
+  .kds-detail-dialog > .modal-body { padding: 14px; }
+  .kds-detail-dialog > .modal-header, .kds-detail-dialog > .modal-footer { padding: 12px 14px; }
+}

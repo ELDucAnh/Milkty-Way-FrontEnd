@@ -1,8 +1,11 @@
-import { useState, useMemo } from "react";
-import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+    can, canAtBranch, isCashier, scopedBranch,
+    currentStaff,
+    STAFF_SESSION_CHANGED,
+} from "../../utils/auth";
 import Badge from "../../components/common/Badge";
-import ConfirmDialog from "../../components/common/ConfirmDialog";
 import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
 import { useToast } from "../../components/common/useToast";
@@ -11,277 +14,137 @@ import {
     formatDateTime,
     SalesPageHeader,
 } from "./sales-support";
-import { loadOrders } from "../shared/sales-orders-store";
+import {
+    loadCashShifts,
+    STORAGE_SHIFTS,
+} from "../shared/cash-shifts-store";
+import type { CashShift } from "../shared/cash-shifts-store";
+import {
+    CASH_SHIFTS_CHANGED, getShiftCashSummary,
+} from "../shared/cash-shift-workflow";
+import {
+    STORAGE_ORDERS,
+} from "../shared/sales-orders-store";
+import {
+    DEMO_STORAGE_KEY,
+} from "../shared/business-demo";
+import {
+    CashShiftHandover,
+    OpenCashShiftForm,
+} from "./CashShiftActions";
 
-type ShiftStatus = "open" | "closing-requested" | "closed";
+export {
+    loadCashShifts,
+    initialShifts,
+    STORAGE_SHIFTS,
+} from "../shared/cash-shifts-store";
+export type { CashShift } from "../shared/cash-shifts-store";
 
-interface CashShift {
-    id: string;
-    branchId: string;
-    counterId: string;
-    counterName: string;
-    staffName: string;
-    openedAt: string;
-    closedAt: string | null;
-    openingCash: number;
-    expectedCash: number | null;
-    countedCash: number | null;
-    recipientId: string | null;
-    handoverNote: string;
-    pendingOrders: readonly string[];
-    status: ShiftStatus;
-}
-
-interface OpenShiftForm {
-    branchId: string;
-    counterId: string;
-    openingCash: string;
-}
-
-interface CloseShiftForm {
-    countedCash: string;
-    recipientId: string;
-    note: string;
-}
-
-interface CloseShiftRequest {
-    shiftId: string;
-    countedCash: number;
-    recipientId: string;
-    note: string;
-}
-
-const initialShifts: readonly CashShift[] = [
-    {
-        id: "CA-001",
-        branchId: "CN01",
-        counterId: "POS01",
-        counterName: "Quầy 01",
-        staffName: "Nguyễn An",
-        openedAt: "2026-10-28T07:00:00+07:00",
-        closedAt: null,
-        openingCash: 500000,
-        expectedCash: null,
-        countedCash: null,
-        recipientId: null,
-        handoverNote: "",
-        pendingOrders: ["DH-00125 · Đang pha chế"],
-        status: "open",
-    },
-];
-
-const STORAGE_SHIFTS = "miltyway_shifts_v1";
-
-const RECIPIENT_NAMES: Record<string, string> = {
-    NV02: "Trần Bình",
-    NV03: "Lê Quốc Tuấn",
-    NV04: "Vũ Minh Khoa",
-};
-
-function getRecipientName(id: string | null | undefined): string {
-    return (id && RECIPIENT_NAMES[id]) || "Trần Bình";
-}
-
-function parseCash(value: string): number | null {
-    if (!value.trim()) return null;
-    const amount = Number(value);
-    return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
+function readSnapshot(): {
+    shifts: CashShift[];
+    error: string | null;
+} {
+    try {
+        return {
+            shifts: loadCashShifts(),
+            error: null,
+        };
+    } catch (error) {
+        return {
+            shifts: [],
+            error: error instanceof Error
+                ? error.message
+                : "Không đọc được dữ liệu ca.",
+        };
+    }
 }
 
 export default function ShiftsPage() {
     const toast = useToast();
     const [pageSize, setPageSize] = useState(10);
-    const [handoverId, setHandoverId] = useState<string | null>(null);
+    const [shiftSnapshot, setShiftSnapshot] = useState(readSnapshot);
+    const [searchParams] = useSearchParams();
+    const [selectedId, setSelectedId] = useState(() => searchParams.get("shiftId") ?? "");
+    const [revision, setRevision] = useState(0);
 
-    const [shifts, setShiftsState] = useState<CashShift[]>(() => {
-        try {
-            const raw = localStorage.getItem(STORAGE_SHIFTS);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-            }
-        } catch {
-            // ignore
-        }
-        return [...initialShifts];
-    });
+    const staff = currentStaff();
 
-    function setShifts(updater: (current: CashShift[]) => CashShift[]) {
-        setShiftsState((current) => {
-            const next = updater(current);
-            try {
-                localStorage.setItem(STORAGE_SHIFTS, JSON.stringify(next));
-            } catch {
-                // ignore
-            }
-            return next;
-        });
+    const shifts = !staff?.loginRole
+        ? []
+        : staff.loginRole === "owner"
+            ? shiftSnapshot.shifts
+            : (
+                staff.loginRole === "cashier" ||
+                staff.loginRole === "manager"
+            ) && staff.branchId
+                ? shiftSnapshot.shifts.filter(
+                    shift => shift.branchId === staff.branchId,
+                )
+                : [];
+
+    const selectedShift = selectedId
+        ? shifts.find(shift => shift.id === selectedId)
+        : shifts[0];
+
+    function refresh() {
+        setShiftSnapshot(readSnapshot());
+        setRevision(current => current + 1);
     }
-    const [selectedId, setSelectedId] = useState("CA-001");
-    const [openingForm, setOpeningForm] = useState<OpenShiftForm>({
-        branchId: "CN01",
-        counterId: "POS01",
-        openingCash: "",
-    });
-    const [closingForm, setClosingForm] = useState<CloseShiftForm>({
-        countedCash: "",
-        recipientId: "",
-        note: "",
-    });
-    const [pendingRequest, setPendingRequest] = useState<CloseShiftRequest | null>(null);
 
-    const selectedShift = shifts.find((shift) => shift.id === selectedId);
-    const countedCash = parseCash(closingForm.countedCash);
-
-    const cashFromSales = useMemo(() => {
-        try {
-            const orders = loadOrders();
-            const targetBranch = selectedShift?.branchId ?? "CN01";
-            return orders
-                .filter(o => o.branchId === targetBranch && o.paymentMethod === "cash" && o.payment === "paid")
-                .reduce((sum, o) => sum + o.total, 0);
-        } catch {
-            return 0;
-        }
-    }, [shifts, selectedShift?.branchId]);
-
-    const effectiveExpectedCash = selectedShift?.expectedCash ?? ((selectedShift?.openingCash ?? 500000) + cashFromSales);
-    const difference = countedCash !== null ? countedCash - effectiveExpectedCash : null;
-
-    function openShift(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-
-        const openingCash = parseCash(openingForm.openingCash);
-        if (openingCash === null) {
-            toast.warning("Tiền đầu ca phải là số nguyên không âm.");
-            return;
+    useEffect(() => {
+        function refreshFromStorage(event: StorageEvent) {
+            if (
+                event.key === null ||
+                event.key === STORAGE_SHIFTS ||
+                event.key === STORAGE_ORDERS ||
+                event.key === DEMO_STORAGE_KEY
+            ) {
+                refresh();
+            }
         }
 
-        const occupied = shifts.some(
-            (shift) =>
-                shift.branchId === openingForm.branchId &&
-                shift.counterId === openingForm.counterId &&
-                shift.status !== "closed",
-        );
+        window.addEventListener("storage", refreshFromStorage);
 
-        if (occupied) {
-            toast.warning("Quầy này đang có ca mở hoặc đang chờ xử lý đóng ca.");
-            return;
-        }
+        window.addEventListener(CASH_SHIFTS_CHANGED, refresh);
+        window.addEventListener(STAFF_SESSION_CHANGED, refresh);
 
-        const shift: CashShift = {
-            id: `CA-MP-${crypto.randomUUID()}`,
-            branchId: openingForm.branchId,
-            counterId: openingForm.counterId,
-            counterName: openingForm.counterId === "POS02" ? "Quầy 02" : openingForm.counterId === "POS03" ? "Quầy 03" : "Quầy 01",
-            staffName: "Nguyễn An",
-            openedAt: new Date().toISOString(),
-            closedAt: null,
-            openingCash,
-            expectedCash: null,
-            countedCash: null,
-            recipientId: null,
-            handoverNote: "",
-            pendingOrders: [],
-            status: "open",
+
+
+        return () => {
+            window.removeEventListener("storage", refreshFromStorage);
+
+            window.removeEventListener(CASH_SHIFTS_CHANGED, refresh);
+            window.removeEventListener(STAFF_SESSION_CHANGED, refresh);
+
         };
+    }, []);
 
-        setShifts((current) => [shift, ...current]);
-        setSelectedId(shift.id);
-        setOpeningForm((current) => ({ ...current, openingCash: "" }));
-        setClosingForm({ countedCash: "", recipientId: "", note: "" });
-        toast.success("Đã mở ca.");
-    }
-
-    function requestClose(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-
-        if (!selectedShift || selectedShift.status !== "open") {
-            toast.warning("Vui lòng chọn ca đang mở.");
-            return;
-        }
-
-        if (countedCash === null || !closingForm.recipientId.trim()) {
-            toast.warning("Nhập tiền thực đếm và chọn người nhận bàn giao.");
-            return;
-        }
-
-        if (
-            (selectedShift.pendingOrders.length > 0 || (difference !== null && difference !== 0)) &&
-            !closingForm.note.trim()
-        ) {
-            toast.warning("Cần ghi nội dung bàn giao hoặc lý do chênh lệch.");
-            return;
-        }
-
-        setPendingRequest({
-            shiftId: selectedShift.id,
-            countedCash,
-            recipientId: closingForm.recipientId,
-            note: closingForm.note.trim(),
-        });
-    }
-
-    function confirmCloseRequest() {
-        if (!pendingRequest) return;
-
-        const target = shifts.find((shift) => shift.id === pendingRequest.shiftId);
-        if (!target || target.status !== "open") {
-            setPendingRequest(null);
-            toast.warning("Ca không còn ở trạng thái đang mở.");
-            return;
-        }
-
-        setShifts((current) => current.map((shift) =>
-            shift.id === pendingRequest.shiftId && shift.status === "open"
-                ? {
-                    ...shift,
-                    status: "closing-requested",
-                    countedCash: pendingRequest.countedCash,
-                    recipientId: pendingRequest.recipientId,
-                    handoverNote: pendingRequest.note,
-                }
-                : shift,
-        ));
-
-        setPendingRequest(null);
-        toast.success(
-            "Đã ghi nhận yêu cầu đóng ca.",
-        );
+    function onSaved(message: string) {
+        refresh();
+        toast.success(message);
     }
 
     function selectShift(id: string) {
-        const shift = shifts.find(item => item.id === id);
-        if (!shift) return;
         setSelectedId(id);
-        setPendingRequest(null);
-        setHandoverId(null);
-        setClosingForm({
-            countedCash: shift.countedCash === null ? "" : String(shift.countedCash),
-            recipientId: shift.recipientId ?? "",
-            note: shift.handoverNote,
-        });
+        setRevision(current => current + 1);
     }
 
-    function confirmHandover() {
-        const shift = shifts.find(item => item.id === handoverId);
-        if (!shift || shift.status !== "closing-requested") {
-            setHandoverId(null);
-            return;
+    const [disabledCounters, setDisabledCounters] = useState<string[]>([]);
+    const mayManageCounters = staff?.loginRole === "manager" && !!staff.branchId && canAtBranch("shift.openBranch", staff.branchId);
+    let cashFromSales: number | null = null;
+    let effectiveExpectedCash: number | null = null;
+    if (selectedShift) {
+        if (selectedShift.status === "open") {
+            try {
+                const summary = getShiftCashSummary(selectedShift);
+                cashFromSales = summary.cashSales;
+                effectiveExpectedCash = summary.expectedCash;
+            } catch { /* The detail panel displays the sales data error. */ }
+        } else {
+            cashFromSales = selectedShift.audit?.handover?.cashSales ?? null;
+            effectiveExpectedCash = selectedShift.expectedCash;
         }
-        setShifts(current => current.map(item => item.id === shift.id && item.status === "closing-requested"
-            ? {...item, status: "closed", closedAt: new Date().toISOString()} : item));
-        setHandoverId(null);
-        toast.success("Đã đóng ca và ghi nhận bàn giao trong phiên làm việc.");
     }
-
-    function withdrawCloseRequest() {
-        if (!selectedShift || selectedShift.status !== "closing-requested") return;
-        setShifts(current => current.map(item => item.id === selectedShift.id && item.status === "closing-requested"
-            ? {...item, status: "open"} : item));
-        toast.info("Đã rút yêu cầu. Bạn có thể sửa thông tin bàn giao.");
-    }
-
     const columns: readonly DataTableColumn<CashShift>[] = [
         {
             id: "id",
@@ -291,7 +154,7 @@ export default function ShiftsPage() {
                     type="button"
                     className="text-[var(--primary)] font-semibold"
                     aria-label={`Chọn ca ${shift.id}`}
-                    aria-pressed={selectedId === shift.id}
+                    aria-pressed={selectedShift?.id === shift.id}
                     onClick={() => selectShift(shift.id)}
                 >
                     {shift.id}
@@ -357,98 +220,119 @@ export default function ShiftsPage() {
                 parent={{ label: "Bán hàng", to: "/sales" }}
                 description="Theo dõi quầy, nhân viên, tiền mặt và các nội dung cần bàn giao."
                 actions={
-                    <Link to="/sales/pos" className="btn btn-secondary">
+                    can("pos.use") && <Link to="/sales/pos" className="btn btn-secondary">
                         Về POS
                     </Link>
                 }
             />
 
-            <section className="card mb-6">
-                <h2 className="card-title mb-4">Thông tin mở ca</h2>
-                <form onSubmit={openShift}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="form-label" htmlFor="shift-branch">
-                                Chi nhánh
-                            </label>
-                            <select
-                                id="shift-branch"
-                                className="form-input form-select"
-                                value={openingForm.branchId}
-                                onChange={(event) => setOpeningForm((current) => ({
-                                    ...current, branchId: event.target.value,
-                                }))}
-                            >
-                                <option value="CN01">Chi nhánh 01 (CN01 - Bến Nghé)</option>
-                                <option value="CN02">Chi nhánh 02 (CN02 - Bàn Cờ)</option>
-                                <option value="CN03">Chi nhánh 03 (CN03 - Chợ Lớn)</option>
-                                <option value="CN04">Chi nhánh 04 (CN04 - Tân Hưng)</option>
-                                <option value="CN05">Chi nhánh 05 (CN05 - Hàng Xanh)</option>
-                                <option value="CN06">Chi nhánh 06 (CN06 - Làng Đại Học)</option>
-                                <option value="CN07">Chi nhánh 07 (CN07 - Bảy Hiền)</option>
-                                <option value="CN08">Chi nhánh 08 (CN08 - Cityland)</option>
-                                <option value="CN09">Chi nhánh 09 (CN09 - Phan Xích Long)</option>
-                                <option value="CN10">Chi nhánh 10 (CN10 - Bắc Hải)</option>
-                                <option value="CN11">Chi nhánh 11 (CN11 - Lãnh Binh Thăng)</option>
-                                <option value="CN12">Chi nhánh 12 (CN12 - Kênh Nước Đen)</option>
-                            </select>
+            {shiftSnapshot.error && (
+    <div className="card mb-6" role="alert">
+        <p className="text-sm text-red-600">
+            {shiftSnapshot.error}
+        </p>
+        <p className="text-sm text-[var(--muted)] mt-2">
+            Không thể mở hoặc đóng ca cho đến khi dữ liệu được kiểm tra.
+            Không xóa dữ liệu ca nếu chưa sao lưu.
+        </p>
+    </div>
+)}
+            {!isCashier() && (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tổng tiền đầu ca ({scopedBranch() || "Chuỗi"})</div>
+                            <div className="text-[22px] font-extrabold text-[var(--text)] mt-1">
+                                {formatCurrency(shifts.reduce((sum, s) => sum + s.openingCash, 0))}
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">{shifts.filter(s => s.status === "open").length} ca đang mở</div>
                         </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-counter">
-                                Quầy
-                            </label>
-                            <select
-                                id="shift-counter"
-                                className="form-input form-select"
-                                value={openingForm.counterId}
-                                onChange={(event) => setOpeningForm((current) => ({
-                                    ...current, counterId: event.target.value,
-                                }))}
-                            >
-                                <option value="POS01">Quầy 01</option>
-                                <option value="POS02">Quầy 02</option>
-                                <option value="POS03">Quầy 03</option>
-                            </select>
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Doanh thu tiền mặt ca chọn</div>
+                            <div className="text-[22px] font-extrabold text-[var(--primary)] mt-1">
+                                {cashFromSales === null ? "Chưa có số liệu" : formatCurrency(cashFromSales)}
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">Ca {selectedShift?.id || "—"}</div>
                         </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-staff">
-                                Nhân viên
-                            </label>
-                            <input
-                                id="shift-staff"
-                                className="form-input"
-                                value="Nguyễn An"
-                                readOnly
-                            />
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Tiền chốt ca dự kiến</div>
+                            <div className="text-[22px] font-extrabold text-[var(--info)] mt-1">
+                                {effectiveExpectedCash === null ? "Chưa có số liệu" : formatCurrency(effectiveExpectedCash)}
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">Đầu ca + thu tiền mặt</div>
                         </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-opening-cash">
-                                Tiền đầu ca (đ)
-                            </label>
-                            <input
-                                id="shift-opening-cash"
-                                className="form-input"
-                                type="number"
-                                min="0"
-                                step="1000"
-                                placeholder="500000"
-                                required
-                                value={openingForm.openingCash}
-                                onChange={(event) => setOpeningForm((current) => ({
-                                    ...current, openingCash: event.target.value,
-                                }))}
-                            />
+                        <div className="card p-4">
+                            <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Quầy POS hoạt động</div>
+                            <div className="text-[22px] font-extrabold text-[var(--text)] mt-1">
+                                {3 - disabledCounters.length} / 3 quầy
+                            </div>
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">Tại {scopedBranch() || selectedShift?.branchId || "CN01"}</div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-4">
-                        <button type="submit" className="btn btn-primary btn-sm shrink-0">
-                            Mở ca
-                        </button>
-                    </div>
-                    
-                </form>
-            </section>
+                    <section className="card mb-6">
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                            <div>
+                                <h2 className="card-title">Quản lý quầy POS tại chi nhánh ({scopedBranch() || selectedShift?.branchId || "CN01"})</h2>
+                                <p className="text-xs text-[var(--muted)]">Bật/tắt trạng thái vận hành các quầy thu ngân thuộc chi nhánh quản lý.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {[
+                                { id: "Q1", name: "Quầy 01 (Chính)", desc: "Quầy thu ngân & nhận đơn tại chỗ" },
+                                { id: "Q2", name: "Quầy 02 (Phụ)", desc: "Quầy tăng cường giờ cao điểm" },
+                                { id: "Q3", name: "Quầy 03 (Take-away)", desc: "Quầy ưu tiên khách mang đi" },
+                            ].map((counter) => {
+                                const isDisabled = disabledCounters.includes(counter.id);
+                                const activeShift = shifts.find(s => s.counterId === counter.id && s.status !== "closed");
+                                return (
+                                    <div key={counter.id} className="p-3.5 rounded-lg border border-[var(--border)] flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="font-bold text-sm flex items-center gap-2">
+                                                {counter.name}
+                                                <Badge variant={isDisabled ? "gray" : activeShift ? "success" : "info"}>
+                                                    {isDisabled ? "Tạm ngưng" : activeShift ? `Đang mở (${activeShift.id})` : "Sẵn sàng"}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xs text-[var(--muted)] mt-0.5">{counter.desc}</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={!mayManageCounters}
+                                            className={`btn btn-sm ${isDisabled ? "btn-primary" : "btn-secondary"}`}
+                                            onClick={() => {
+                                                const branchId = currentStaff()?.branchId;
+
+if (
+    !branchId ||
+    currentStaff()?.loginRole !== "manager" ||
+    !canAtBranch("shift.openBranch", branchId)
+) {
+    toast.warning("Bạn không có quyền thay đổi trạng thái quầy.");
+    return;
+}
+                                                if (!isDisabled && activeShift) {
+                                                    toast.warning(`Không thể tạm ngưng ${counter.name} khi đang có ca mở (${activeShift.id}).`);
+                                                    return;
+                                                }
+                                                setDisabledCounters(prev =>
+                                                    prev.includes(counter.id) ? prev.filter(id => id !== counter.id) : [...prev, counter.id]
+                                                );
+                                                toast.success(`Đã ${isDisabled ? "kích hoạt lại" : "tạm ngưng"} ${counter.name}.`);
+                                            }}
+                                        >
+                                            {isDisabled ? "Kích hoạt" : "Tạm ngưng"}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                </>
+            )}
+
+            {staff?.loginRole === "owner" && <div className="card mb-6">Việc mở ca, kiểm đếm và ký chốt ca chỉ thực hiện tại chi nhánh. Chủ chuỗi xem biên bản và hậu kiểm tại <Link to="/stores/shift-reconciliation" className="text-[var(--primary)]">Đối soát ca</Link>.</div>}
+            {!shiftSnapshot.error && <OpenCashShiftForm key={`open:${staff?.staffId}`} onSaved={onSaved} disabledCounters={disabledCounters} />}
 
             <section className="card mb-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -470,143 +354,65 @@ export default function ShiftsPage() {
                 />
             </section>
 
-            <section className="card">
-                <label className="form-label" htmlFor="selected-shift">Chọn ca để xem và bàn giao</label>
-                <select id="selected-shift" className="form-input form-select mb-4" value={selectedId} onChange={e => selectShift(e.target.value)}>
-                    {shifts.map(shift => <option key={shift.id} value={shift.id}>{shift.id} · {shift.counterName} · {shift.status === "open" ? "Đang mở" : shift.status === "closing-requested" ? "Chờ xử lý đóng ca" : "Đã đóng"}</option>)}
-                </select>
-                <h2 className="card-title mb-4">
-                    Đóng ca {selectedShift?.id ?? ""} và bàn giao
-                </h2>
+{!shiftSnapshot.error && (
+                <section className="card mb-4">
+                    <label
+                        className="form-label"
+                        htmlFor="selected-shift"
+                    >
+                        Chọn ca để xem và bàn giao
+                    </label>
 
-                <form onSubmit={requestClose}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="form-label" htmlFor="shift-expected-cash">
-                                Tiền mặt dự kiến
-                            </label>
-                            <input
-                                id="shift-expected-cash"
-                                className="form-input"
-                                value={formatCurrency(effectiveExpectedCash)}
-                                readOnly
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-counted-cash">
-                                Tiền thực đếm (đ)
-                            </label>
-                            <input
-                                id="shift-counted-cash"
-                                className="form-input"
-                                type="number"
-                                min="0"
-                                step="1000"
-                                required
-                                disabled={selectedShift?.status !== "open"}
-                                value={closingForm.countedCash}
-                                onChange={(event) => setClosingForm((current) => ({
-                                    ...current, countedCash: event.target.value,
-                                }))}
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-difference">
-                                Chênh lệch tiền
-                            </label>
-                            <input
-                                id="shift-difference"
-                                className="form-input"
-                                value={difference === null
-                                    ? "Chưa đối chiếu"
-                                    : formatCurrency(difference)}
-                                readOnly
-                            />
-                        </div>
-                        <div>
-                            <label className="form-label" htmlFor="shift-recipient">
-                                Người nhận bàn giao
-                            </label>
-                            <select
-                                id="shift-recipient"
-                                className="form-input form-select"
-                                required
-                                disabled={selectedShift?.status !== "open"}
-                                value={closingForm.recipientId}
-                                onChange={(event) => setClosingForm((current) => ({
-                                    ...current, recipientId: event.target.value,
-                                }))}
-                            >
-                                <option value="">-- Chọn nhân viên nhận ca --</option>
-                                <option value="NV02">Trần Bình (Thu ngân Ca chiều)</option>
-                                <option value="NV03">Lê Quốc Tuấn (Trưởng ca)</option>
-                                <option value="NV04">Vũ Minh Khoa (Thủ kho / Thu ngân)</option>
-                            </select>
-                        </div>
-                    </div>
+                    <select
+                        id="selected-shift"
+                        className="form-input form-select"
+                        value={selectedShift?.id ?? ""}
+                        disabled={shifts.length === 0}
+                        onChange={event => selectShift(event.target.value)}
+                    >
+                        {shifts.length === 0 && (
+                            <option value="">Chưa có ca</option>
+                        )}
 
-                    <div className="mt-4">
-                        <label className="form-label" htmlFor="shift-handover">
-                            Đơn chưa xong, nguyên liệu và lý do chênh lệch
-                        </label>
-                        <textarea
-                            id="shift-handover"
-                            className="form-input form-textarea"
-                            rows={3}
-                            placeholder="Ghi mã đơn cần bàn giao và tình trạng nguyên liệu"
-                            disabled={selectedShift?.status !== "open"}
-                            value={closingForm.note}
-                            onChange={(event) => setClosingForm((current) => ({
-                                ...current, note: event.target.value,
-                            }))}
-                        />
-                    </div>
-
-                    <p className="text-sm text-[var(--muted)] mt-4">
-                        Đơn chưa xong: {selectedShift?.pendingOrders.join("; ") || "Không có trong dữ liệu mẫu"}.
-                        
-                    </p>
-                    
+                        {shifts.map(shift => (
+                            <option key={shift.id} value={shift.id}>
+                                {shift.id}
+                                {" · "}{shift.branchId}
+                                {" · "}
+                                {shift.status === "open"
+                                    ? "Đang mở"
+                                    : shift.status === "closing-requested"
+                                        ? "Chờ quản lý duyệt"
+                                        : "Đã đóng"}
+                            </option>
+                        ))}
+                    </select>
 
                     <button
-                        type="submit"
-                        className="btn btn-primary mt-4"
-                        disabled={selectedShift?.status !== "open"}
+                        type="button"
+                        className="btn btn-secondary mt-3"
+                        onClick={refresh}
                     >
-                        Gửi yêu cầu đóng ca
+                        Tải lại dữ liệu
                     </button>
-                </form>
-                {selectedShift?.status === "closing-requested" && <div className="flex flex-wrap gap-2 mt-4">
-                    <button type="button" className="btn btn-primary" onClick={() => setHandoverId(selectedShift.id)}>Xác nhận bàn giao và đóng ca</button>
-                    <button type="button" className="btn btn-secondary" onClick={withdrawCloseRequest}>Rút yêu cầu để chỉnh sửa</button>
-                </div>}
-                {selectedShift?.status === "closed" && <p className="mt-4" role="status">Đã đóng lúc {formatDateTime(selectedShift.closedAt!)} · Người nhận: {getRecipientName(selectedShift.recipientId)}.</p>}
-            </section>
 
-            <ConfirmDialog
-                open={handoverId !== null}
-                title="Xác nhận bàn giao và đóng ca?"
-                message={<>Ca {handoverId} · Người nhận: {getRecipientName(shifts.find(s => s.id === handoverId)?.recipientId)}. Xác nhận đã bàn giao tiền và các đơn chưa xong. Thao tác này ghi nhận đóng ca trong phiên hiện tại, chưa xác nhận đối soát tiền với máy chủ.</>}
-                confirmText="Xác nhận đóng ca"
-                variant="warning"
-                onCancel={() => setHandoverId(null)}
-                onConfirm={confirmHandover}
-            />
-            <ConfirmDialog
-                open={pendingRequest !== null}
-                title="Gửi yêu cầu đóng ca?"
-                message={
-                    <>
-                        Ca {pendingRequest?.shiftId} · Tiền thực đếm: {formatCurrency(pendingRequest?.countedCash ?? 0)} · Người nhận: {getRecipientName(pendingRequest?.recipientId)}.
-                        {pendingRequest?.note && <p>Nội dung bàn giao: {pendingRequest.note}</p>}
-                        
-                    </>
-                }
-                confirmText="Gửi yêu cầu"
-                variant="warning"
-                onCancel={() => setPendingRequest(null)}
-                onConfirm={confirmCloseRequest}
-            />
+                    <p className="text-xs text-[var(--muted)] mt-2">
+                        Tải lại sẽ xóa phần kiểm kê chưa gửi.
+                    </p>
+                </section>
+            )}
+
+            {!shiftSnapshot.error && selectedId && !selectedShift && (
+                <p role="status">Không tìm thấy biên bản ca trong phạm vi của bạn.</p>
+            )}
+            {!shiftSnapshot.error && selectedShift && (
+                <CashShiftHandover
+                    key={`${staff?.staffId ?? "guest"}:${selectedShift.id}:${revision}`}
+                    shift={selectedShift}
+                    onSaved={onSaved}
+                />
+            )}
+
         </>
     );
 }

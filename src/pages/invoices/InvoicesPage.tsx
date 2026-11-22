@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { RETURNS_CHANGED } from "../shared/sales-returns-store";
+import { can, homePath, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
@@ -9,138 +11,38 @@ import { formatCurrency } from "../shared/formatters";
 import { loadInvoices, saveInvoices } from "../shared/sales-orders-store";
 import type { InvoiceRecord, SalesOrderItem } from "../shared/sales-orders-store";
 
-export interface InvoiceItem {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  tier: "Member" | "Silver" | "Gold" | "VIP";
-  initials: string;
-  avatarBg: string;
-  branch: string;
-  type: "Bán Lẻ" | "Đơn Sỉ B2B" | "Giao Hàng" | "Hoàn Tiền";
-  typeVariant: BadgeVariant;
-  date: string;
-  total: number;
-  paid: number;
-  status: "Đã Thanh Toán" | "Thanh Toán 50%" | "Chờ Thanh Toán" | "Đã Hoàn Tiền";
-  statusVariant: BadgeVariant;
-}
-
-const INITIAL_INVOICES: InvoiceItem[] = [
-  {
-    id: "HD-CN05-001247",
-    customerName: "Trần Văn An",
-    customerPhone: "0908.123.456",
-    tier: "Gold",
-    initials: "TA",
-    avatarBg: "var(--primary)",
-    branch: "CN05 - Hàng Xanh",
-    type: "Bán Lẻ",
-    typeVariant: "info",
-    date: "28/10/2026 14:32",
-    total: 89000,
-    paid: 89000,
-    status: "Đã Thanh Toán",
-    statusVariant: "success",
-  },
-  {
-    id: "HD-CN01-003814",
-    customerName: "Nguyễn Thị Lan",
-    customerPhone: "0912.345.678",
-    tier: "Silver",
-    initials: "NL",
-    avatarBg: "var(--info)",
-    branch: "CN01 - Bến Nghé",
-    type: "Bán Lẻ",
-    typeVariant: "info",
-    date: "28/10/2026 11:15",
-    total: 125000,
-    paid: 125000,
-    status: "Đã Thanh Toán",
-    statusVariant: "success",
-  },
-  {
-    id: "SI-CN08-000042",
-    customerName: "Cty TNHH Tech Valley",
-    customerPhone: "0987.654.321",
-    tier: "VIP",
-    initials: "CT",
-    avatarBg: "var(--warning)",
-    branch: "CN08 - Cityland",
-    type: "Đơn Sỉ B2B",
-    typeVariant: "warning",
-    date: "27/10/2026 09:00",
-    total: 12600000,
-    paid: 6300000,
-    status: "Thanh Toán 50%",
-    statusVariant: "warning",
-  },
-  {
-    id: "RT-CN03-000089",
-    customerName: "Phạm Quốc Hùng",
-    customerPhone: "0971.234.567",
-    tier: "Member",
-    initials: "PH",
-    avatarBg: "var(--danger)",
-    branch: "CN03 - Chợ Lớn",
-    type: "Hoàn Tiền",
-    typeVariant: "danger",
-    date: "26/10/2026 16:45",
-    total: 45000,
-    paid: -45000,
-    status: "Đã Hoàn Tiền",
-    statusVariant: "danger",
-  },
-  {
-    id: "HD-CN09-002156",
-    customerName: "Lê Thị Hoa",
-    customerPhone: "0943.876.543",
-    tier: "VIP",
-    initials: "LH",
-    avatarBg: "var(--success)",
-    branch: "CN09 - Phan Xích Long",
-    type: "Giao Hàng",
-    typeVariant: "success",
-    date: "28/10/2026 19:20",
-    total: 178000,
-    paid: 178000,
-    status: "Đã Thanh Toán",
-    statusVariant: "success",
-  },
-];
-
 export default function InvoicesPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [invoices, setInvoices] = useState<InvoiceItem[]>(() => {
-    try {
-      const stored = loadInvoices();
-      if (stored && stored.length > 0) {
-        return stored.map((inv) => ({
-          id: inv.id,
-          customerName: inv.customerName,
-          customerPhone: inv.customerPhone,
-          tier: inv.tier,
-          initials: inv.initials,
-          avatarBg: inv.avatarBg,
-          branch: inv.branch,
-          type: inv.type,
-          typeVariant: inv.typeVariant,
-          date: inv.date,
-          total: inv.total,
-          paid: inv.paid,
-          status: inv.status,
-          statusVariant: inv.statusVariant,
-        }));
+  const [invoiceLoadError, setInvoiceLoadError] = useState("");
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+
+  useEffect(() => {
+    function refreshInvoices() {
+      try {
+        setInvoices(loadInvoices());
+        setInvoiceLoadError("");
+      } catch (error) {
+        setInvoiceLoadError(
+          error instanceof Error ? error.message : "Không đọc được hóa đơn.",
+        );
       }
-    } catch (e) {
-      console.warn(e);
     }
-    return INITIAL_INVOICES;
-  });
+
+    refreshInvoices();
+    window.addEventListener("focus", refreshInvoices);
+    window.addEventListener("storage", refreshInvoices);
+    window.addEventListener(RETURNS_CHANGED, refreshInvoices);
+
+    return () => {
+      window.removeEventListener("focus", refreshInvoices);
+      window.removeEventListener("storage", refreshInvoices);
+      window.removeEventListener(RETURNS_CHANGED, refreshInvoices);
+    };
+  }, []);
   const [search, setSearch] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState(scopedBranch() ?? "");
   const [selectedType, setSelectedType] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
 
@@ -235,24 +137,7 @@ export default function InvoicesPage() {
       console.error(err);
     }
 
-    const newItem: InvoiceItem = {
-      id: invoiceId,
-      customerName: createCustomer.trim(),
-      customerPhone: createPhone.trim() || "0900.000.000",
-      tier: createTier,
-      initials: newRecord.initials,
-      avatarBg: "var(--primary)",
-      branch: createBranch,
-      type: createType,
-      typeVariant: typeVar,
-      date: newRecord.date,
-      total,
-      paid: paidAmount,
-      status: createPaymentStatus,
-      statusVariant: statusVar,
-    };
-
-    setInvoices(prev => [newItem, ...prev]);
+    setInvoices(prev => [newRecord, ...prev]);
     setShowCreateModal(false);
     setCreateCustomer("");
     setCreatePhone("");
@@ -270,7 +155,8 @@ export default function InvoicesPage() {
         item.customerName.toLowerCase().includes(q) ||
         item.customerPhone.includes(q);
 
-      const matchBranch = !selectedBranch || item.branch.includes(selectedBranch);
+      const branchScope = scopedBranch();
+      const matchBranch = branchScope ? item.branch.startsWith(branchScope) : !selectedBranch || item.branch.includes(selectedBranch);
       const matchType = !selectedType || item.type === selectedType;
       const matchStatus = !selectedStatus || item.status === selectedStatus;
 
@@ -284,7 +170,7 @@ export default function InvoicesPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Hóa đơn</span>
           </nav>
@@ -294,7 +180,7 @@ export default function InvoicesPage() {
           </p>
         </div>
         <div className="page-header-actions">
-          <button
+          {!isCashier() && <><button
             type="button"
             className="btn btn-secondary"
             onClick={() => toast.info("Đang xuất danh sách hóa đơn ra Excel...", { title: "Xuất File" })}
@@ -306,22 +192,22 @@ export default function InvoicesPage() {
             </svg>
             Xuất Excel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Lập Hóa Đơn Mới
-          </button>
+            {can("order.create") && <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Lập Hóa Đơn Mới
+            </button>}</>}
         </div>
       </div>
 
       {/* Thẻ thống kê */}
-      <section aria-label="Thống kê hóa đơn">
+      {!isBranchScoped() && <section aria-label="Thống kê hóa đơn">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Hóa Đơn"
@@ -375,9 +261,14 @@ export default function InvoicesPage() {
             }
           />
         </div>
-      </section>
+      </section>}
 
       {/* Bộ lọc */}
+      {invoiceLoadError && (
+        <div role="alert" className="card text-red-600">
+          {invoiceLoadError}
+        </div>
+      )}
       <div className="filter-bar mb-5">
         <div className="search-box flex-1 min-w-[200px]">
           <svg className="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -395,7 +286,7 @@ export default function InvoicesPage() {
         <select
           className="form-input form-select h-[38px] text-[13px] min-w-[140px]"
           aria-label="Lọc theo chi nhánh"
-          value={selectedBranch}
+          disabled={isBranchScoped()} value={scopedBranch() ?? selectedBranch}
           onChange={(e) => setSelectedBranch(e.target.value)}
         >
           <option value="">Toàn Chuỗi</option>
@@ -429,7 +320,8 @@ export default function InvoicesPage() {
           <option value="Đã Thanh Toán">Đã Thanh Toán</option>
           <option value="Thanh Toán 50%">Thanh Toán 50%</option>
           <option value="Chờ Thanh Toán">Chờ Thanh Toán</option>
-          <option value="Đã Hoàn Tiền">Đã Hoàn Tiền</option>
+          <option value="Hoàn Một Phần / Đã Điều Chỉnh">Hoàn Một Phần / Đã Điều Chỉnh</option>
+              <option value="Đã Hoàn Tiền">Đã Hoàn Tiền</option>
         </select>
       </div>
 
@@ -494,6 +386,18 @@ export default function InvoicesPage() {
                       <td className="text-xs text-[var(--muted)]">{inv.date}</td>
                       <td className="text-[13px] font-bold text-[var(--text)]">
                         {inv.total.toLocaleString("vi-VN")} đ
+                        {inv.netTotal !== undefined && (
+                          <div className="text-xs font-normal text-[var(--muted)]">
+                            Sau điều chỉnh: {formatCurrency(inv.netTotal)}
+                          </div>
+                        )}
+
+                        {inv.parentOrderId && (
+                          <div className="text-xs font-normal text-[var(--muted)]">
+                            Chuyển tiếp từ {inv.parentOrderId}
+                          </div>
+                        )}
+
                       </td>
                       <td className="text-[13px] font-semibold text-[var(--primary)]">
                         {inv.paid.toLocaleString("vi-VN")} đ
@@ -506,7 +410,7 @@ export default function InvoicesPage() {
                           <Link to={`/invoices/${inv.id}`} className="btn btn-secondary btn-sm">
                             Xem
                           </Link>
-                          <button
+                          {!isCashier() && <button
                             type="button"
                             className="btn btn-secondary btn-icon-sm"
                             aria-label="In biên lai"
@@ -520,7 +424,7 @@ export default function InvoicesPage() {
                               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                               <rect x="6" y="14" width="12" height="8" />
                             </svg>
-                          </button>
+                          </button>}
                         </div>
                       </td>
                     </tr>

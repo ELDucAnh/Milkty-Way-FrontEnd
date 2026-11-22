@@ -1,49 +1,42 @@
-import { useRef, useState } from "react";
+import "./promotions.css";
+import ProgressBar from "../../components/common/ProgressBar";
+import { Link } from "react-router-dom";
+import { homePath } from "../../utils/auth";
+import { can, checkLogin, scopedBranch } from "../../utils/auth";
+import { useEffect, useState } from "react";
 import type { FormEvent, InputHTMLAttributes } from "react";
 import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
-import type { DataTableColumn } from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
 import {
-    branches,
     channelLabels,
     formatCurrency,
     formatDate,
     parseVietnameseDate,
-    SalesPageHeader,
     shiftLabels,
 } from "./sales-support";
-import type { SalesChannel, SalesShift } from "./sales-support";
-
-type PromotionStatus = "draft" | "scheduled" | "active" | "ended";
-type PromotionChannel = SalesChannel | "all";
-type PromotionShift = SalesShift | "all";
-
-export interface Promotion {
-    id: string;
-    code: string;
-    name: string;
-    version: number;
-    branchIds: readonly string[];
-    branchMode: "include" | "exclude";
-    channel: PromotionChannel;
-    shift: PromotionShift;
-    startDate: string;
-    endDate: string;
-    hourFrom: string;
-    hourTo: string;
-    budget: number;
-    usageLimit: number;
-    status: PromotionStatus;
-    description: string;
-    productId: string | null;
-    minQuantity: number | null;
-    benefit: string | null;
-    giftProductId: string | null;
-    stackable: boolean | null;
-}
+import {
+    getSalesBranches,
+} from "../../data/sales/branches";
+import { products } from "../../data/sales/products";
+import {
+    listScopedPromotions,
+    upsertPromotion,
+    setPromotionStatus,
+    getPromotionStatus,
+    getPromotionForecast,
+    promotionUsageCapacity,
+    findPromotionConflicts,
+    PROMOTIONS_CHANGED,
+    STORAGE_PROMOTIONS,
+    type Promotion,
+    type PromotionStatus,
+    type PromotionChannel,
+    type PromotionShift,
+    type PromotionDiscountType,
+} from "../shared/promotions-store";
 
 interface PromotionForm {
     name: string;
@@ -55,7 +48,18 @@ interface PromotionForm {
     hourTo: string;
     channel: PromotionChannel;
     shift: PromotionShift;
-    branchMode: "include" | "exclude";
+    branchMode: "all" | "include" | "exclude";
+    naturalRuleText: string;
+    stackWithMemberTier: boolean;
+    priority: string;
+    discountType: PromotionDiscountType;
+    discountValue: string;
+    buyQuantity: string;
+    giftQuantity: string;
+    usageScope: Promotion["usageScope"];
+    oncePerMember: boolean;
+    productCategory: string;
+
     branchIds: string[];
     productId: string;
     minQuantity: string;
@@ -106,113 +110,16 @@ const statusVariants: Record<PromotionStatus, BadgeVariant> = {
     ended: "gray",
 };
 
-export const initialPromotions: readonly Promotion[] = [
-    {
-        id: "KM-001",
-        code: "KM-001",
-        name: "Mua 2 ly tặng trân châu",
-        version: 1,
-        branchIds: ["CN01", "CN02"],
-        branchMode: "include",
-        channel: "online",
-        shift: "afternoon",
-        startDate: "2026-10-28",
-        endDate: "2026-10-31",
-        hourFrom: "14:00",
-        hourTo: "17:00",
-        budget: 2000000,
-        usageLimit: 200,
-        status: "active",
-        description: "",
-        productId: null,
-        minQuantity: null,
-        benefit: null,
-        giftProductId: null,
-        stackable: null,
-    },
-    {
-        id: "KM-002",
-        code: "KM-002",
-        name: "Ưu đãi đầu tháng",
-        version: 1,
-        branchIds: branches.map((branch) => branch.id),
-        branchMode: "include",
-        channel: "all",
-        shift: "all",
-        startDate: "2026-11-01",
-        endDate: "2026-11-07",
-        hourFrom: "08:00",
-        hourTo: "22:00",
-        budget: 5000000,
-        usageLimit: 500,
-        status: "scheduled",
-        description: "",
-        productId: null,
-        minQuantity: null,
-        benefit: null,
-        giftProductId: null,
-        stackable: null,
-    },
-    {
-        id: "KM-003",
-        code: "KM-003",
-        name: "Quà tặng cuối tuần",
-        version: 1,
-        branchIds: ["CN03", "CN04"],
-        branchMode: "include",
-        channel: "counter",
-        shift: "evening",
-        startDate: "2026-10-31",
-        endDate: "2026-11-01",
-        hourFrom: "18:00",
-        hourTo: "21:00",
-        budget: 1000000,
-        usageLimit: 100,
-        status: "draft",
-        description: "",
-        productId: null,
-        minQuantity: null,
-        benefit: null,
-        giftProductId: null,
-        stackable: null,
-    },
-];
-
-export const STORAGE_PROMOTIONS = "miltyway_promotions_v1";
-
-export function loadPromotions(): Promotion[] {
-    try {
-        const raw = localStorage.getItem(STORAGE_PROMOTIONS);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-    } catch {
-        // ignore
-    }
-    return [...initialPromotions];
-}
-
-export function savePromotions(promotions: Promotion[]): void {
-    try {
-        localStorage.setItem(STORAGE_PROMOTIONS, JSON.stringify(promotions));
-    } catch {
-        // ignore
-    }
-}
-
 const emptyFilters: PromotionFilters = {
     search: "",
     status: "",
     channel: "",
 };
 
-const promotionProducts = [
-    { id: "TS01", name: "Trà sữa trân châu" },
-    { id: "TS02", name: "Trà sữa ô long" },
-    { id: "TT01", name: "Trà đào" },
-    { id: "TT02", name: "Trà vải" },
-] as const;
+const promotionProducts = products.map(product => ({
+    id: product.sku,
+    name: product.name,
+}));
 
 function createForm(): PromotionForm {
     return {
@@ -234,6 +141,17 @@ function createForm(): PromotionForm {
         budget: "",
         usageLimit: "",
         stackable: false,
+        naturalRuleText: "",
+        stackWithMemberTier: false,
+        priority: "1",
+        discountType: "percent",
+        discountValue: "10",
+        buyQuantity: "2",
+        giftQuantity: "1",
+        usageScope: "chain",
+        oncePerMember: false,
+        productCategory: "",
+
     };
 }
 
@@ -247,11 +165,86 @@ function isShift(value: string): value is PromotionShift {
         value === "afternoon" || value === "evening";
 }
 
+type PromotionIconName = "edit" | "pause" | "play" | "clock" | "alert";
+
+function PromotionIcon({ name }: { name: PromotionIconName }) {
+    return (
+        <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.65"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+        >
+            {name === "edit" && (
+                <>
+                    <path d="m15 5 4 4" />
+                    <path d="m4 20 4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z" />
+                </>
+            )}
+
+            {name === "pause" && <path d="M9 6v12M15 6v12" />}
+
+            {name === "play" && <path d="m8 5 11 7-11 7Z" />}
+
+            {name === "clock" && (
+                <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                </>
+            )}
+
+            {name === "alert" && (
+                <>
+                    <path d="m12 3 10 18H2Z" />
+                    <path d="M12 9v4m0 4h.01" />
+                </>
+            )}
+        </svg>
+    );
+}
+
 export default function PromotionsPage() {
     const toast = useToast();
-    const listRef = useRef<HTMLElement>(null);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [rows, setRows] = useState<Promotion[]>(() => loadPromotions());
+    const isChainAdmin = checkLogin() === "owner" && can("promotion.manage");
+    const userBranch = scopedBranch();
+    const [editing, setEditing] = useState<Promotion | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [dataError, setDataError] = useState("");
+    const [rows, setRows] = useState<Promotion[]>([]);
+    const [branches, setBranches] = useState<ReturnType<typeof getSalesBranches>>([]);
+
+    function reload() {
+        try {
+            setRows(listScopedPromotions());
+            setBranches(getSalesBranches());
+            setDataError("");
+        } catch (error) {
+            setDataError(error instanceof Error ? error.message : "Không đọc được dữ liệu.");
+        }
+    }
+
+    useEffect(() => {
+        reload();
+        const refresh = () => reload();
+        const storage = (event: StorageEvent) => {
+            if (event.key === STORAGE_PROMOTIONS || event.key === null) reload();
+        };
+        const timer = window.setInterval(refresh, 30000);
+        window.addEventListener(PROMOTIONS_CHANGED, refresh);
+        window.addEventListener("storage", storage);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener(PROMOTIONS_CHANGED, refresh);
+            window.removeEventListener("storage", storage);
+        };
+    }, [userBranch, isChainAdmin]);
+
     const [form, setForm] = useState<PromotionForm>(createForm);
     const [draftFilters, setDraftFilters] = useState<PromotionFilters>(emptyFilters);
     const [filters, setFilters] = useState<PromotionFilters>(emptyFilters);
@@ -273,324 +266,775 @@ export default function PromotionsPage() {
     }
 
     const query = filters.search.trim().toLocaleLowerCase("vi-VN");
-    const visibleRows = rows.filter((row) =>
-        `${row.code} ${row.name}`.toLocaleLowerCase("vi-VN").includes(query) &&
-        (!filters.status || row.status === filters.status) &&
+
+    const visibleRows = rows.filter(row =>
+        `${row.code} ${row.name} ${row.naturalRuleText}`
+            .toLocaleLowerCase("vi-VN").includes(query) &&
+        (!filters.status || getPromotionStatus(row) === filters.status) &&
         (!filters.channel || row.channel === "all" || row.channel === filters.channel)
     );
+    function openEdit(row: Promotion) {
+        if (!isChainAdmin) return;
+        const asVietnameseDate = (date: string) => date.split("-").reverse().join("/");
 
-    function saveDraft(event: FormEvent<HTMLFormElement>) {
+        setEditing(row);
+        setForm({
+            name: row.name,
+            code: row.code,
+            description: row.description,
+            startDate: asVietnameseDate(row.startDate),
+            endDate: asVietnameseDate(row.endDate),
+            hourFrom: row.hourFrom,
+            hourTo: row.hourTo,
+            channel: row.channel,
+            shift: row.shift,
+            branchMode: row.branchMode,
+            branchIds: [...row.branchIds],
+            productId: row.productId ?? "",
+            productCategory: row.productCategory ?? "",
+            minQuantity: String(row.minQuantity ?? 1),
+            benefit: row.benefit ?? "",
+            giftProductId: row.giftProductId ?? "",
+            budget: String(row.budget),
+            usageLimit: String(row.usageLimit),
+            stackable: row.stackWithOtherPromo === "stackable",
+            naturalRuleText: row.naturalRuleText,
+            stackWithMemberTier: row.stackWithMemberTier,
+            priority: String(row.priority),
+            discountType: row.discountType,
+            discountValue: String(row.discountValue),
+            buyQuantity: String(row.buyQuantity),
+            giftQuantity: String(row.giftQuantity),
+            usageScope: row.usageScope,
+            oncePerMember: row.oncePerMember,
+        });
+        setIsCreateOpen(true);
+    }
+    async function saveDraft(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (!isChainAdmin || saving || dataError) return;
 
-        const startDate = parseVietnameseDate(form.startDate);
-        const endDate = parseVietnameseDate(form.endDate);
-        const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
-        const budget = Number(form.budget);
-        const usageLimit = Number(form.usageLimit);
-        const minQuantity = Number(form.minQuantity);
+        setSaving(true);
 
-        if (!form.name.trim() || !form.benefit.trim()) {
-            toast.warning("Nhập tên chương trình và nội dung ưu đãi.");
-            return;
+        try {
+            const startDate = parseVietnameseDate(form.startDate);
+            const endDate = parseVietnameseDate(form.endDate);
+
+            if (!startDate || !endDate || startDate > endDate) {
+                throw new Error("Khoảng ngày không hợp lệ. Nhập dd/MM/yyyy.");
+            }
+
+            const budget = Number(form.budget);
+            const usageLimit = Number(form.usageLimit);
+            const minQuantity = Number(form.minQuantity);
+            const priority = Number(form.priority);
+            const discountValue = Number(form.discountValue);
+            const buyQuantity = Number(form.buyQuantity);
+            const giftQuantity = Number(form.giftQuantity);
+
+            if (!form.name.trim() || !form.naturalRuleText.trim()) {
+                throw new Error("Nhập tên chương trình và quy định áp dụng.");
+            }
+
+            if (
+                !form.budget.trim() ||
+                !form.usageLimit.trim() ||
+                !form.minQuantity.trim() ||
+                !Number.isSafeInteger(budget) || budget < 1 ||
+                !Number.isSafeInteger(usageLimit) || usageLimit < 1 ||
+                !Number.isSafeInteger(minQuantity) || minQuantity < 1 ||
+                !Number.isSafeInteger(priority) || priority < 1 || priority > 5 ||
+                !Number.isSafeInteger(discountValue) || discountValue < 0 ||
+                !Number.isSafeInteger(buyQuantity) || buyQuantity < 1 ||
+                !Number.isSafeInteger(giftQuantity) || giftQuantity < 1
+            ) {
+                throw new Error("Kiểm tra ngân sách, số lượt, số ly và mức ưu đãi.");
+            }
+
+            if (
+                form.discountType === "none" ||
+                (form.discountType !== "buy_x_get_y" && discountValue < 1) ||
+                (form.discountType === "percent" && discountValue > 100)
+            ) {
+                throw new Error("Chọn loại ưu đãi và mức giảm hợp lệ.");
+            }
+
+            if (
+                form.productId &&
+                !promotionProducts.some(product => product.id === form.productId)
+            ) {
+                throw new Error("SKU áp dụng không tồn tại.");
+            }
+
+            const appliedBranchCount = branches.filter(branch =>
+                form.branchMode === "all" ||
+                (
+                    form.branchMode === "exclude"
+                        ? !form.branchIds.includes(branch.id)
+                        : form.branchIds.includes(branch.id)
+                )
+            ).length;
+
+            if (!appliedBranchCount) {
+                throw new Error("Phải áp dụng tại ít nhất một chi nhánh.");
+            }
+
+            const id = editing?.id ?? crypto.randomUUID();
+            const code = form.code.trim().toUpperCase() ||
+                `KM-${id.slice(0, 8).toUpperCase()}`;
+
+            const promotion: Promotion = {
+                id,
+                code,
+                name: form.name.trim(),
+                version: editing?.version ?? 1,
+                branchIds: form.branchMode === "all" ? [] : [...form.branchIds],
+                branchMode: form.branchMode,
+                channel: form.channel,
+                shift: form.shift,
+                startDate,
+                endDate,
+                hourFrom: form.hourFrom,
+                hourTo: form.hourTo,
+                budget,
+                budgetUsed: editing?.budgetUsed ?? 0,
+                usageLimit,
+                usageCount: editing?.usageCount ?? 0,
+                usageScope: form.usageScope,
+                oncePerMember: form.oncePerMember,
+                branchUsage: editing?.branchUsage ?? {},
+                status: editing?.status ?? "draft",
+                description: form.description.trim(),
+                productId: form.productId || null,
+                productCategory: form.productCategory || null,
+                minQuantity,
+                benefit: form.benefit.trim() || null,
+                giftProductId: form.giftProductId.trim() || null,
+                stackable: form.stackable,
+                naturalRuleText: form.naturalRuleText.trim(),
+                stackWithMemberTier: form.stackWithMemberTier,
+                stackWithOtherPromo: form.stackable ? "stackable" : "exclusive",
+                priority,
+                terminationRule: "whichever_first",
+                discountType: form.discountType,
+                discountValue,
+                buyQuantity,
+                giftQuantity,
+            };
+
+            await upsertPromotion(promotion, editing?.version ?? null);
+
+            setIsCreateOpen(false);
+            setEditing(null);
+            setForm(createForm());
+            reload();
+            toast.success("Đã lưu chương trình khuyến mãi.");
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : "Không lưu được chương trình.",
+            );
+        } finally {
+            setSaving(false);
         }
-
-        if (!startDate || !endDate || startDate > endDate) {
-            toast.warning("Khoảng ngày không hợp lệ. Vui lòng nhập dd/MM/yyyy.");
-            return;
-        }
-
-        if (
-            !timePattern.test(form.hourFrom) ||
-            !timePattern.test(form.hourTo) ||
-            form.hourFrom >= form.hourTo
-        ) {
-            toast.warning("Giờ bắt đầu phải trước giờ kết thúc trong cùng ngày.");
-            return;
-        }
-
-        const appliedBranchCount = form.branchMode === "include"
-            ? form.branchIds.length
-            : branches.length - form.branchIds.length;
-
-        if (appliedBranchCount === 0) {
-            toast.warning("Chương trình phải áp dụng tại ít nhất một chi nhánh.");
-            return;
-        }
-
-        if (
-            !promotionProducts.some((product) => product.id === form.productId) ||
-            form.budget.trim() === "" ||
-            form.usageLimit.trim() === "" ||
-            form.minQuantity.trim() === "" ||
-            !Number.isSafeInteger(budget) || budget < 0 ||
-            !Number.isSafeInteger(usageLimit) || usageLimit < 1 ||
-            !Number.isSafeInteger(minQuantity) || minQuantity < 1
-        ) {
-            toast.warning("Kiểm tra món, số ly tối thiểu, ngân sách và giới hạn lượt.");
-            return;
-        }
-
-        const id = crypto.randomUUID();
-        const code = form.code.trim().toUpperCase() || `KM-MP-${id}`;
-
-        if (rows.some((row) => row.code.toUpperCase() === code)) {
-            toast.warning("Mã chương trình đã tồn tại.");
-            return;
-        }
-
-        const promotion: Promotion = {
-            id,
-            code,
-            name: form.name.trim(),
-            version: 1,
-            branchIds: [...form.branchIds],
-            branchMode: form.branchMode,
-            channel: form.channel,
-            shift: form.shift,
-            startDate,
-            endDate,
-            hourFrom: form.hourFrom,
-            hourTo: form.hourTo,
-            budget,
-            usageLimit,
-            status: "draft",
-            description: form.description.trim(),
-            productId: form.productId,
-            minQuantity,
-            benefit: form.benefit.trim(),
-            giftProductId: form.giftProductId.trim() || null,
-            stackable: form.stackable,
-        };
-
-        setRows((current) => {
-            const next = [promotion, ...current];
-            savePromotions(next);
-            return next;
-        });
-        setForm(createForm());
-        setFilters(emptyFilters);
-        setDraftFilters(emptyFilters);
-        setIsCreateOpen(false);
-        toast.success("Đã tạo chương trình khuyến mãi mới thành công!", {
-            title: "Khuyến Mãi",
-        });
     }
 
-    function togglePromotionStatus(id: string) {
-        setRows((current) => {
-            const next = current.map((row) => {
-                if (row.id !== id) return row;
-                const nextStatus: PromotionStatus = row.status === "active" ? "ended" : "active";
-                return { ...row, status: nextStatus };
-            });
-            savePromotions(next);
-            return next;
-        });
-        toast.info("Đã cập nhật trạng thái chương trình khuyến mãi.");
+    async function togglePromotionStatus(id: string) {
+        if (!isChainAdmin || saving) return;
+        const row = rows.find(item => item.id === id);
+        if (!row) return;
+
+        setSaving(true);
+        try {
+            await setPromotionStatus(
+                row.id,
+                row.version,
+                row.status === "active" || row.status === "scheduled"
+                    ? "ended"
+                    : "active",
+            );
+            reload();
+            toast.success("Đã cập nhật trạng thái.");
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : "Không cập nhật được trạng thái.",
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+    const candidateStart = parseVietnameseDate(form.startDate);
+    const candidateEnd = parseVietnameseDate(form.endDate);
+
+    const conflictCandidate: Promotion | null =
+        candidateStart && candidateEnd
+            ? {
+                id: editing?.id ?? "__new__",
+                code: form.code,
+                name: form.name,
+                version: editing?.version ?? 1,
+                branchMode: form.branchMode,
+                branchIds: form.branchIds,
+                channel: form.channel,
+                shift: form.shift,
+                startDate: candidateStart,
+                endDate: candidateEnd,
+                hourFrom: form.hourFrom,
+                hourTo: form.hourTo,
+                productId: form.productId || null,
+                productCategory: form.productCategory || null,
+                budget: Number(form.budget) || 0,
+                budgetUsed: editing?.budgetUsed ?? 0,
+                usageLimit: Number(form.usageLimit) || 1,
+                usageCount: editing?.usageCount ?? 0,
+                usageScope: form.usageScope,
+                oncePerMember: form.oncePerMember,
+                branchUsage: editing?.branchUsage ?? {},
+                status: editing?.status ?? "draft",
+                description: form.description,
+                minQuantity: Number(form.minQuantity) || 1,
+                benefit: form.benefit || null,
+                giftProductId: form.giftProductId || null,
+                stackable: form.stackable,
+                naturalRuleText: form.naturalRuleText,
+                stackWithMemberTier: form.stackWithMemberTier,
+                stackWithOtherPromo: form.stackable ? "stackable" : "exclusive",
+                priority: Number(form.priority) || 1,
+                terminationRule: "whichever_first",
+                discountType: form.discountType,
+                discountValue: Number(form.discountValue) || 0,
+                buyQuantity: Number(form.buyQuantity) || 2,
+                giftQuantity: Number(form.giftQuantity) || 1,
+            }
+            : null;
+
+    let conflictCodes: string[] = [];
+    if (conflictCandidate && !dataError) {
+        try {
+            conflictCodes = findPromotionConflicts(conflictCandidate, rows)
+                .map(row => row.code);
+        } catch {
+            // Lỗi danh mục đã được hiển thị tại phần dữ liệu trang.
+        }
     }
 
-    const columns: readonly DataTableColumn<Promotion>[] = [
-        {
-            id: "name",
-            header: "Chương trình",
-            className: "align-top",
-            render: (row) => (
-                <>
-                    <div className="font-semibold name-ellipsis" title={row.name}>
-                        {row.name}
-                    </div>
-                    <div className="text-xs text-[var(--muted)] mt-1">
-                        {row.code} · Phiên bản {row.version}
-                    </div>
-                </>
-            ),
-        },
-        {
-            id: "scope",
-            header: "Phạm vi",
-            className: "align-top",
-            render: (row) => {
-                const allBranches =
-                    (row.branchMode === "include" && row.branchIds.length === branches.length) ||
-                    (row.branchMode === "exclude" && row.branchIds.length === 0);
-
-                return (
-                    <>
-                        <div className="text-sm">
-                            {allBranches ? "Toàn chuỗi"
-                                : `${row.branchMode === "exclude" ? "Loại trừ: " : ""}${row.branchIds.join(", ")}`}
-                        </div>
-                        <div className="text-xs text-[var(--muted)] mt-1">
-                            {row.channel === "all" ? "Tất cả kênh" : channelLabels[row.channel]}
-                            {" · "}
-                            {row.shift === "all" ? "Tất cả ca" : shiftLabels[row.shift]}
-                        </div>
-                    </>
-                );
-            },
-        },
-        {
-            id: "time",
-            header: "Thời gian áp dụng",
-            className: "align-top whitespace-nowrap",
-            render: (row) => (
-                <>
-                    <div>{formatDate(row.startDate)} – {formatDate(row.endDate)}</div>
-                    <div className="text-xs text-[var(--muted)] mt-1">
-                        {row.hourFrom}–{row.hourTo}
-                    </div>
-                </>
-            ),
-        },
-        {
-            id: "budget",
-            header: "Ngân sách / Lượt",
-            className: "align-top whitespace-nowrap",
-            render: (row) => (
-                <>
-                    <div className="font-semibold">{formatCurrency(row.budget)}</div>
-                    <div className="text-xs text-[var(--muted)] mt-1">
-                        Tối đa {row.usageLimit.toLocaleString("vi-VN")} lượt
-                    </div>
-                </>
-            ),
-        },
-        {
-            id: "status",
-            header: "Trạng thái",
-            render: (row) => (
-                <Badge variant={statusVariants[row.status]}>{statusLabels[row.status]}</Badge>
-            ),
-        },
-        {
-            id: "actions",
-            header: "Thao tác",
-            render: (row) => (
-                <button
-                    type="button"
-                    className={`btn btn-sm ${row.status === "active" ? "btn-secondary" : "btn-primary"}`}
-                    onClick={() => togglePromotionStatus(row.id)}
-                >
-                    {row.status === "active" ? "Tạm ngưng" : "Kích hoạt"}
-                </button>
-            ),
-        },
-    ];
-
+    const runningCount = rows.filter(row =>
+        getPromotionStatus(row) === "active"
+    ).length;
+    const totalBudgetUsed = rows.reduce((total, row) => total + row.budgetUsed, 0);
+    const totalUsage = rows.reduce((total, row) => total + row.usageCount, 0);
     return (
-        <>
-            <SalesPageHeader
-                title="Chương trình khuyến mãi & Voucher"
-                breadcrumb="Marketing"
-                parent={{ label: "", to: "" }}
-                description="Thiết lập các chương trình khuyến mãi, voucher ưu đãi và chính sách quà tặng toàn hệ thống MilktyWay."
-                actions={
+        <div className="promotions-page">
+            <div className="page-header mb-6">
+                <div>
+                    <nav className="breadcrumb" aria-label="Đường dẫn trang"><Link to={homePath()}>Tổng quan</Link><span className="sep">/</span><span>Marketing</span><span className="sep">/</span><span className="current">Khuyến mãi & Voucher</span></nav>
+                    <h1 className="page-title">Khuyến mãi & Voucher</h1>
+                    <p className="page-subtitle">
+                        {isChainAdmin ? "Quản lý chương trình, hạn mức và phân bổ khuyến mãi toàn chuỗi." : `Tra cứu thể lệ và ưu đãi áp dụng${userBranch ? ` tại ${userBranch}` : ""}.`}
+                    </p>
+                </div>
+
+                {isChainAdmin && (
                     <button
                         type="button"
                         className="btn btn-primary"
+                        disabled={!!dataError}
                         onClick={() => {
+                            setEditing(null);
                             setForm(createForm());
                             setIsCreateOpen(true);
                         }}
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" strokeWidth="2"
-                            strokeLinecap="round" aria-hidden="true">
-                            <path d="M12 5v14M5 12h14" />
-                        </svg> Tạo chương trình mới
+                        + Tạo chương trình
                     </button>
-                }
+                )}
+            </div>
+
+            {dataError && (
+                <div role="alert" className="card mb-3 text-rose-700">
+                    {dataError}
+                    <button
+                        type="button"
+                        className="btn btn-secondary ml-3"
+                        onClick={reload}
+                    >
+                        Tải lại
+                    </button>
+                </div>
+            )}
+
+            {!isChainAdmin && (
+                <p className="mb-3 text-xs text-[var(--muted)]">
+                    Chỉ xem chương trình khuyến mãi
+                    {userBranch ? ` · ${userBranch}` : ""}.
+                </p>
+            )}
+
+<section
+    aria-label="Danh sách khuyến mãi"
+    className="card data-list-card"
+>
+    <form
+        className="data-list-toolbar"
+        onSubmit={event => {
+            event.preventDefault();
+            setFilters({ ...draftFilters });
+        }}
+    >
+        <div className="data-list-summary">
+            <span>
+                Tổng <strong>{rows.length}</strong>
+            </span>
+
+            <span>
+                <span className="status-dot text-success" aria-hidden="true" />
+                Đang chạy <strong>{runningCount}</strong>
+            </span>
+
+            <span>
+                Đã dùng{" "}
+                <strong className="numeric">
+                    {formatCurrency(totalBudgetUsed)}
+                </strong>
+            </span>
+
+            <span>
+                Lượt{" "}
+                <strong className="numeric">
+                    {totalUsage.toLocaleString("vi-VN")}
+                </strong>
+            </span>
+        </div>
+
+        <div className="search-box data-list-search">
+            <svg
+                className="search-icon"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.65"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path d="m16 16 4 4" />
+            </svg>
+
+            <input
+                aria-label="Tìm khuyến mãi"
+                type="search"
+                className="form-input"
+                placeholder="Mã, tên, quy định..."
+                value={draftFilters.search}
+                onChange={event => setDraftFilters(current => ({
+                    ...current,
+                    search: event.target.value,
+                }))}
             />
+        </div>
 
-            <section ref={listRef} className="card mb-6" aria-labelledby="promotion-list-title">
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                    <h2 id="promotion-list-title" className="card-title">Danh sách chương trình</h2>
-                    <Badge variant="gray">{rows.length} chương trình</Badge>
-                </div>
+        <select
+            aria-label="Lọc trạng thái"
+            className="form-input form-select data-list-status-filter"
+            value={draftFilters.status}
+            onChange={event => setDraftFilters(current => ({
+                ...current,
+                status: event.target.value,
+            }))}
+        >
+            <option value="">Mọi trạng thái</option>
+            {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                    {label}
+                </option>
+            ))}
+        </select>
 
-                <form onSubmit={(event) => {
-                    event.preventDefault();
-                    setFilters({ ...draftFilters });
-                }}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                        <PromotionInput
-                            id="promotion-search"
-                            label="Tìm chương trình"
-                            wrapperClassName="sm:col-span-2 min-w-0"
-                            type="search"
-                            placeholder="Nhập mã hoặc tên chương trình"
-                            value={draftFilters.search}
-                            onChange={(event) => setDraftFilters((current) => ({
-                                ...current, search: event.target.value,
-                            }))}
-                        />
+        <select
+            aria-label="Lọc kênh bán"
+            className="form-input form-select data-list-channel-filter"
+            value={draftFilters.channel}
+            onChange={event => setDraftFilters(current => ({
+                ...current,
+                channel: event.target.value,
+            }))}
+        >
+            <option value="">Mọi kênh</option>
+            {Object.entries(channelLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                    {label}
+                </option>
+            ))}
+        </select>
 
-                        <div className="min-w-0">
-                            <label className="form-label" htmlFor="promotion-status">Trạng thái</label>
-                            <select
-                                id="promotion-status"
-                                className="form-input form-select w-full h-11"
-                                value={draftFilters.status}
-                                onChange={(event) => setDraftFilters((current) => ({
-                                    ...current, status: event.target.value,
-                                }))}
-                            >
-                                <option value="">Tất cả trạng thái</option>
-                                {Object.entries(statusLabels).map(([value, label]) => (
-                                    <option key={value} value={value}>{label}</option>
-                                ))}
-                            </select>
-                        </div>
+        <button type="submit" className="btn btn-primary btn-sm">
+            Lọc
+        </button>
 
-                        <div className="min-w-0">
-                            <label className="form-label" htmlFor="promotion-channel">Kênh bán</label>
-                            <select
-                                id="promotion-channel"
-                                className="form-input form-select w-full h-11"
-                                value={draftFilters.channel}
-                                onChange={(event) => setDraftFilters((current) => ({
-                                    ...current, channel: event.target.value,
-                                }))}
-                            >
-                                <option value="">Tất cả kênh</option>
-                                {Object.entries(channelLabels).map(([value, label]) => (
-                                    <option key={value} value={value}>{label}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+        <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+                setFilters(emptyFilters);
+                setDraftFilters(emptyFilters);
+            }}
+        >
+            Xóa lọc
+        </button>
+    </form>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <button type="submit" className="btn btn-primary h-11">Áp dụng</button>
-                        <button
-                            type="button"
-                            className="btn btn-secondary h-11"
-                            onClick={() => {
-                                setDraftFilters(emptyFilters);
-                                setFilters(emptyFilters);
-                            }}
+    <DataTable>
+        <table className="data-table data-table--detail w-full table-fixed min-w-[1100px]">
+            <caption className="sr-only">
+                Danh sách chương trình khuyến mãi
+            </caption>
+
+            <colgroup>
+                <col style={{ width: isChainAdmin ? "26%" : "29%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: isChainAdmin ? "28%" : "31%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "10%" }} />
+                {isChainAdmin && <col style={{ width: "6%" }} />}
+            </colgroup>
+
+            <thead>
+                <tr>
+                    <th scope="col">Chương trình & Quy định</th>
+                    <th scope="col">Mức ưu đãi</th>
+                    <th scope="col">Tổng / Số lượng / Tiền</th>
+                    <th scope="col">Ràng buộc & Kết thúc</th>
+                    <th scope="col">Thời gian & CN</th>
+                    {isChainAdmin && (
+                        <th scope="col" className="table-actions-heading">
+                            Thao tác
+                        </th>
+                    )}
+                </tr>
+            </thead>
+
+            <tbody>
+                {!visibleRows.length && (
+                    <tr>
+                        <td
+                            colSpan={isChainAdmin ? 6 : 5}
+                            className="table-empty"
                         >
-                            Xóa bộ lọc
-                        </button>
-                    </div>
-                </form>
+                            Không có chương trình phù hợp.
+                        </td>
+                    </tr>
+                )}
 
-                <div className="mt-5">
-                    <DataTable<Promotion> pagination={false}
-                        key={JSON.stringify(filters)}
-                        columns={columns}
-                        data={visibleRows}
-                        rowKey={(row) => row.id}
-                        caption="Danh sách chương trình khuyến mãi"
-                    />
-                </div>
-            </section>
+                {visibleRows.map(row => {
+                    const status = getPromotionStatus(row);
+                    const forecast = getPromotionForecast(row);
+                    const capacity = promotionUsageCapacity(row);
+                    let relatedCodes: string[] = [];
+                    let relationError = false;
+                    try {
+                        relatedCodes = findPromotionConflicts(row, rows).map(other => other.code);
+                    } catch {
+                        relationError = true;
+                    }
+                    const startsAt = Date.parse(`${row.startDate}T${row.hourFrom}:00+07:00`);
+                    const endsAt = Date.parse(`${row.endDate}T${row.hourTo}:00+07:00`);
+                    const timePercent = endsAt > startsAt
+                        ? Math.max(0, Math.min(100, (Date.now() - startsAt) / (endsAt - startsAt) * 100))
+                        : 0;
+
+                    const usagePercent = capacity
+                        ? Math.min(100, row.usageCount / capacity * 100)
+                        : 0;
+
+                    const budgetPercent = row.budget
+                        ? Math.min(100, row.budgetUsed / row.budget * 100)
+                        : 100;
+
+                    const forecastTitle = {
+                        budget: "Chạm trần ngân sách trước",
+                        usage: "Chạm trần số lượt trước",
+                        time: "Chạm trần thời gian trước",
+                    }[forecast.predictedBindingLimit];
+
+                    const isEnabled =
+                        row.status === "active" ||
+                        row.status === "scheduled";
+
+                    return (
+                        <tr key={row.id}>
+                            <td>
+                                <div className="table-item-title">
+                                    {row.name}
+                                </div>
+
+                                <div className="table-item-meta">
+                                    <span className="reference-code">
+                                        {row.code}
+                                    </span>
+
+                                    <Badge
+                                        variant={statusVariants[status]}
+                                        className="badge-subtle badge-with-dot"
+                                    >
+                                        {statusLabels[status]}
+                                    </Badge>
+                                </div>
+
+                                <p className="table-item-rule">
+                                    {row.naturalRuleText}
+                                </p>
+
+                                {row.description && (
+                                    <p className="table-item-description">
+                                        {row.description}
+                                    </p>
+                                )}
+                            </td>
+
+                            <td>
+                                <span
+                                    className={
+                                        row.discountType === "buy_x_get_y"
+                                            ? "benefit-value benefit-value--text"
+                                            : "benefit-value"
+                                    }
+                                >
+                                    {row.discountType === "percent"
+                                        ? `−${row.discountValue}%`
+                                        : row.discountType === "fixed"
+                                            ? `−${formatCurrency(row.discountValue)}`
+                                            : row.discountType === "buy_x_get_y"
+                                                ? `Mua ${row.buyQuantity} tặng ${row.giftQuantity}`
+                                                : "Chưa cấu hình"}
+                                </span>
+
+                                <p className="table-item-line">
+                                    {row.productId
+                                        ? `SKU ${row.productId}`
+                                        : row.productCategory
+                                            ? `Nhóm ${row.productCategory}`
+                                            : "Tất cả món"}
+                                </p>
+
+                                <p className="table-item-description">
+                                    Tối thiểu {row.minQuantity ?? 1} ly
+                                </p>
+
+                                {row.benefit && (
+                                    <p className="table-item-description">
+                                        {row.benefit}
+                                    </p>
+                                )}
+                            </td>
+
+                            <td>
+                                <div className="table-total">
+                                    <span>Tổng đã dùng</span>
+
+                                    <strong className="numeric">
+                                        {row.usageCount.toLocaleString("vi-VN")} lượt
+                                    </strong>
+
+                                    <span aria-hidden="true">·</span>
+
+                                    <strong className="numeric">
+                                        {formatCurrency(row.budgetUsed)}
+                                    </strong>
+                                </div>
+
+                                <div className="table-metric">
+                                    <div className="table-metric-heading">
+                                        <span>Số lượng</span>
+
+                                        <strong className="numeric">
+                                            {row.usageCount.toLocaleString("vi-VN")}
+                                            <span className="table-metric-limit">
+                                                {" / "}
+                                                {capacity.toLocaleString("vi-VN")} lượt
+                                            </span>
+                                        </strong>
+                                    </div>
+
+                                    <ProgressBar
+                                        label={`Tiến độ lượt ${row.code}`}
+                                        value={usagePercent}
+                                        variant="info"
+                                        valueText={
+                                            `${row.usageCount.toLocaleString("vi-VN")}` +
+                                            ` trên ${capacity.toLocaleString("vi-VN")} lượt`
+                                        }
+                                    />
+
+                                    {row.usageScope === "branch" && (
+                                        <p className="table-item-description">
+                                            Trần {row.usageLimit} lượt / chi nhánh
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="table-metric">
+                                    <div className="table-metric-heading">
+                                        <span>Ngân sách</span>
+
+                                        <strong className="numeric">
+                                            {formatCurrency(row.budgetUsed)}
+                                            <span className="table-metric-limit">
+                                                {" / "}
+                                                {formatCurrency(row.budget)}
+                                            </span>
+                                        </strong>
+                                    </div>
+
+                                    <ProgressBar
+                                        label={`Tiến độ ngân sách ${row.code}`}
+                                        value={budgetPercent}
+                                        variant="success"
+                                        valueText={
+                                            `${formatCurrency(row.budgetUsed)}` +
+                                            ` trên ${formatCurrency(row.budget)}`
+                                        }
+                                    />
+                                </div>
+
+                                <div className="table-notice table-notice--warning">
+                                    <PromotionIcon
+                                        name={
+                                            forecast.predictedBindingLimit === "time"
+                                                ? "clock"
+                                                : "alert"
+                                        }
+                                    />
+
+                                    <div>
+                                        <strong>{forecastTitle}</strong>
+                                        <p>{forecast.bindingLimitNote}</p>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td>
+                                <p className="table-item-emphasis">
+                                    {row.stackWithOtherPromo === "exclusive"
+                                        ? "Độc quyền một mã"
+                                        : "Cho phép gộp mã"}
+                                </p>
+
+                                <p className="table-item-description">
+                                    {row.stackWithMemberTier
+                                        ? "Cộng dồn hạng thành viên"
+                                        : "Không cộng dồn hạng thành viên"}
+                                </p>
+
+                                <p className="table-item-description mt-2">
+                                    Ưu tiên:{" "}
+                                    <strong className="table-item-emphasis numeric">
+                                        {row.priority}/5
+                                    </strong>
+                                </p>
+
+                                {relatedCodes.length > 0 && <p className="table-item-description mt-2">
+                                    Trùng phạm vi áp dụng với: <strong>{relatedCodes.join(", ")}</strong>.
+                                    Kiểm tra quy tắc cộng dồn và thứ tự ưu tiên khi áp dụng.
+                                </p>}
+                                {relationError && <p className="table-item-description">Chưa đọc được các chương trình liên quan.</p>}
+                                {row.oncePerMember && <p className="table-item-description">Tối đa 1 lượt / SĐT hội viên.</p>}
+                                {row.usageScope === "daily" && <p className="table-item-description">Giới hạn {row.usageLimit} lượt mỗi ngày.</p>}
+
+                                <p className="table-end-rule">
+                                    Dừng ngay khi hết thời gian, đủ lượt
+                                    hoặc hết ngân sách.
+                                </p>
+                            </td>
+
+                            <td>
+                                <div className="table-date-range">
+                                    <p>{formatDate(row.startDate)}</p>
+                                    <p className="text-muted">
+                                        → {formatDate(row.endDate)}
+                                    </p>
+                                </div>
+
+                                <p className="table-item-description numeric">
+                                    {row.hourFrom}–{row.hourTo}
+                                </p>
+
+                                <ProgressBar label={`Thời gian chương trình ${row.code}`} value={timePercent}
+                                    valueText={`Đã qua ${Math.round(timePercent)}% thời gian chương trình`} />
+
+                                <div className="table-scope">
+                                    <p className="table-item-emphasis">
+                                        {row.branchMode === "all"
+                                            ? "Toàn chuỗi"
+                                            : `${row.branchMode === "exclude" ? "Trừ " : ""}${row.branchIds.join(", ") || "Không có CN"}`}
+                                    </p>
+
+                                    <p>
+                                        {row.channel === "all"
+                                            ? "Mọi kênh"
+                                            : channelLabels[row.channel]}
+                                    </p>
+
+                                    <p>
+                                        {row.shift === "all"
+                                            ? "Mọi ca"
+                                            : shiftLabels[row.shift]}
+                                    </p>
+                                </div>
+                            </td>
+
+                            {isChainAdmin && (
+                                <td>
+                                    <div className="table-row-actions">
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-icon table-action-button"
+                                            title={`Sửa ${row.code}`}
+                                            aria-label={`Sửa ${row.code}`}
+                                            disabled={saving}
+                                            onClick={() => openEdit(row)}
+                                        >
+                                            <PromotionIcon name="edit" />
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-icon table-action-button"
+                                            title={
+                                                isEnabled
+                                                    ? "Dừng chương trình"
+                                                    : "Kích hoạt chương trình"
+                                            }
+                                            aria-label={
+                                                `${isEnabled ? "Dừng" : "Kích hoạt"}` +
+                                                ` chương trình ${row.code}`
+                                            }
+                                            disabled={saving}
+                                            onClick={() => {
+                                                void togglePromotionStatus(row.id);
+                                            }}
+                                        >
+                                            <PromotionIcon
+                                                name={isEnabled ? "pause" : "play"}
+                                            />
+                                        </button>
+                                    </div>
+                                </td>
+                            )}
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
+    </DataTable>
+</section>
 
             {/* Modal Tạo chương trình khuyến mãi mới */}
             <Modal
                 open={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}
-                title="Tạo chương trình khuyến mãi mới"
+                title={editing ? "Sửa chương trình khuyến mãi" : "Tạo chương trình khuyến mãi mới"}
                 size="2xl"
                 footer={
                     <div className="flex items-center justify-between w-full flex-wrap gap-2">
@@ -611,6 +1055,7 @@ export default function PromotionsPage() {
                             </button>
                             <button
                                 type="submit"
+                                disabled={saving || !isChainAdmin || !!dataError}
                                 form="promotion-create-form"
                                 className="btn btn-primary h-10 text-xs"
                             >
@@ -620,10 +1065,10 @@ export default function PromotionsPage() {
                     </div>
                 }
             >
-                <form id="promotion-create-form" onSubmit={saveDraft} className="space-y-4">
+                <form id="promotion-create-form" onSubmit={saveDraft} className="promotion-form space-y-4">
                     {/* Phần 1: Thông tin & Thời gian */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                        <div className="form-panel">
                             <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">1. Thông tin chương trình</h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <PromotionInput
@@ -643,7 +1088,7 @@ export default function PromotionsPage() {
                                     value={form.code}
                                     onChange={(event) => updateForm("code", event.target.value)}
                                 />
-                                <PromotionInput id="promo-version" label="Phiên bản" value="1" readOnly />
+                                <PromotionInput id="promo-version" label="Phiên bản" value={String(editing?.version ?? 1)} readOnly />
                                 <div className="sm:col-span-2">
                                     <label className="form-label" htmlFor="promo-description">
                                         Mô tả và điều kiện áp dụng
@@ -660,7 +1105,7 @@ export default function PromotionsPage() {
                             </div>
                         </div>
 
-                        <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                        <div className="form-panel">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="font-bold text-sm text-[var(--heading-color)]">2. Thời gian áp dụng</h3>
                                 <span className="text-xs text-[var(--muted)]">Giờ Việt Nam (UTC+7)</span>
@@ -707,7 +1152,7 @@ export default function PromotionsPage() {
                     </div>
 
                     {/* Phần 2: Phạm vi áp dụng (Kênh, ca & chi nhánh) */}
-                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                    <div className="form-panel">
                         <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">3. Phạm vi & Kênh bán</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                             <div>
@@ -756,11 +1201,12 @@ export default function PromotionsPage() {
                                     value={form.branchMode}
                                     onChange={(event) => {
                                         const value = event.target.value;
-                                        if (value === "include" || value === "exclude") {
+                                        if (value === "all" || value === "include" || value === "exclude") {
                                             updateForm("branchMode", value);
                                         }
                                     }}
                                 >
+                                    <option value="all">Toàn chuỗi</option>
                                     <option value="include">Áp dụng tại các chi nhánh chọn</option>
                                     <option value="exclude">Loại trừ các chi nhánh chọn</option>
                                 </select>
@@ -809,19 +1255,18 @@ export default function PromotionsPage() {
                     </div>
 
                     {/* Phần 3: Món & Ngân sách */}
-                    <div className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border)]">
+                    <div className="form-panel">
                         <h3 className="font-bold text-sm mb-3 text-[var(--heading-color)]">4. Món áp dụng, Ngân sách & Giới hạn</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <div>
-                                <label className="form-label" htmlFor="promo-product">Món áp dụng *</label>
+                                <label className="form-label" htmlFor="promo-product">Món áp dụng</label>
                                 <select
                                     id="promo-product"
                                     className="form-input form-select w-full h-10 text-xs"
-                                    required
                                     value={form.productId}
                                     onChange={(event) => updateForm("productId", event.target.value)}
                                 >
-                                    <option value="">Chọn món trà sữa / đồ uống</option>
+                                    <option value="">Tất cả món trong phạm vi nhóm đã chọn</option>
                                     {promotionProducts.map((product) => (
                                         <option key={product.id} value={product.id}>{product.name}</option>
                                     ))}
@@ -850,7 +1295,7 @@ export default function PromotionsPage() {
 
                             <PromotionInput
                                 id="promo-gift-code"
-                                label="Món quà tặng (nếu có)"
+                                label="SKU quà cũ (xóa để kích hoạt ưu đãi có cấu trúc)"
                                 placeholder="Mã topping hoặc món phụ"
                                 value={form.giftProductId}
                                 onChange={(event) => updateForm("giftProductId", event.target.value)}
@@ -879,6 +1324,200 @@ export default function PromotionsPage() {
                             />
                         </div>
 
+                    <div className="form-panel">
+                        <h3 className="font-bold text-sm mb-3">
+                            Quy định, mức ưu đãi & Ràng buộc
+                        </h3>
+
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                    updateForm("naturalRuleText", "Áp dụng cho 100 lượt đến trước mỗi ngày");
+                                    updateForm("usageLimit", "100");
+                                    updateForm("usageScope", "daily");
+                                }}
+                            >
+                                100 lượt đến trước mỗi ngày
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                    updateForm("naturalRuleText", "50 lượt đầu tiên tại mỗi chi nhánh");
+                                    updateForm("usageLimit", "50");
+                                    updateForm("usageScope", "branch");
+                                }}
+                            >
+                                50 lượt mỗi chi nhánh
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                    updateForm("naturalRuleText", "Giới hạn 200 lượt trong khung giờ vàng của chương trình");
+                                    updateForm("usageLimit", "200");
+                                    updateForm("usageScope", "chain");
+                                }}
+                            >
+                                200 lượt giờ vàng
+                            </button>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                                updateForm("oncePerMember", true);
+                                updateForm("naturalRuleText", "Tối đa một lượt mỗi SĐT hội viên");
+                            }}>1 lượt mỗi SĐT hội viên</button>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                                updateForm("budget", "10000000");
+                                updateForm("usageLimit", "200");
+                                updateForm("usageScope", "chain");
+                                updateForm("naturalRuleText", "Dừng khi hết 10.000.000 ₫ hoặc đủ 200 lượt");
+                            }}>10 triệu ₫ hoặc 200 lượt</button>
+                        </div>
+
+                        <PromotionInput
+                            id="promo-natural-rule"
+                            label="Quy định dễ hiểu *"
+                            required
+                            value={form.naturalRuleText}
+                            onChange={event => updateForm("naturalRuleText", event.target.value)}
+                        />
+
+                        <p className="text-xs text-[var(--muted)] mt-2 mb-3">
+                            Trần tính theo lượt checkout, không xác minh số người duy nhất.
+                            Lượt theo ngày được tính theo giờ Việt Nam.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <label className="form-label">
+                                Loại ưu đãi
+                                <select
+                                    className="form-input form-select w-full"
+                                    value={form.discountType}
+                                    onChange={event => {
+                                        const value = event.target.value;
+                                        if (
+                                            value === "none" ||
+                                            value === "percent" ||
+                                            value === "fixed" ||
+                                            value === "buy_x_get_y"
+                                        ) updateForm("discountType", value);
+                                    }}
+                                >
+                                    <option value="none">Chưa cấu hình</option>
+                                    <option value="percent">Giảm phần trăm</option>
+                                    <option value="fixed">Giảm số tiền / đơn</option>
+                                    <option value="buy_x_get_y">Mua X tặng Y trong giỏ</option>
+                                </select>
+                            </label>
+
+                            <PromotionInput
+                                id="promo-discount-value"
+                                label={form.discountType === "percent" ? "Mức giảm (%)" : "Mức giảm (₫ / đơn)"}
+                                type="number"
+                                min="0"
+                                max={form.discountType === "percent" ? "100" : undefined}
+                                step="1"
+                                disabled={form.discountType === "buy_x_get_y"}
+                                value={form.discountValue}
+                                onChange={event => updateForm("discountValue", event.target.value)}
+                            />
+
+                            <label className="form-label">
+                                Nhóm món
+                                <select
+                                    className="form-input form-select w-full"
+                                    value={form.productCategory}
+                                    onChange={event => updateForm("productCategory", event.target.value)}
+                                >
+                                    <option value="">Tất cả nhóm</option>
+                                    {[...new Set(products.map(product => product.category))].map(category => (
+                                        <option key={category} value={category}>{category}</option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            {form.discountType === "buy_x_get_y" && (
+                                <>
+                                    <PromotionInput
+                                        id="promo-buy-quantity"
+                                        label="Số ly mua X"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={form.buyQuantity}
+                                        onChange={event => updateForm("buyQuantity", event.target.value)}
+                                    />
+                                    <PromotionInput
+                                        id="promo-gift-quantity"
+                                        label="Số ly tặng Y"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={form.giftQuantity}
+                                        onChange={event => updateForm("giftQuantity", event.target.value)}
+                                    />
+                                </>
+                            )}
+
+                            <label className="form-label">
+                                Phạm vi trần lượt
+                                <select
+                                    className="form-input form-select w-full"
+                                    value={form.usageScope}
+                                    onChange={event => {
+                                        const value = event.target.value;
+                                        if (value === "chain" || value === "branch" || value === "daily") {
+                                            updateForm("usageScope", value);
+                                        }
+                                    }}
+                                >
+                                    <option value="chain">Tổng toàn chương trình</option>
+                                    <option value="branch">Riêng tại mỗi chi nhánh</option>
+                                    <option value="daily">Mỗi ngày (giờ Việt Nam)</option>
+                                </select>
+                            </label>
+
+                            <label className="form-label">
+                                <input type="checkbox" checked={form.oncePerMember}
+                                    onChange={event => updateForm("oncePerMember", event.target.checked)} />
+                                {" "}Tối đa một lượt mỗi SĐT hội viên
+                            </label>
+                            <PromotionInput
+                                id="promo-priority"
+                                label="Ưu tiên (1–5, số lớn ưu tiên trước)"
+                                type="number"
+                                min="1"
+                                max="5"
+                                step="1"
+                                value={form.priority}
+                                onChange={event => updateForm("priority", event.target.value)}
+                            />
+                        </div>
+
+                        <label className="flex items-center gap-2 mt-3 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={form.stackWithMemberTier}
+                                onChange={event => updateForm("stackWithMemberTier", event.target.checked)}
+                            />
+                            Cộng dồn với giảm hạng thành viên
+                        </label>
+
+                        <p className="mt-3 text-xs font-semibold">
+                            Tự động dừng khi hết thời gian HOẶC đủ lượt HOẶC hết ngân sách.
+                        </p>
+
+                        {conflictCodes.length > 0 && (
+                            <div role="status" className="mt-3 p-3 rounded-lg bg-amber-50 text-amber-900 text-sm">
+                                Có phạm vi món, thời gian, kênh và chi nhánh giao nhau với:
+                                {" "}<strong>{conflictCodes.join(", ")}</strong>.
+                                Kiểm tra quy tắc cộng dồn và ưu tiên trước khi kích hoạt.
+                            </div>
+                        )}
+                    </div>
                         <label className="flex items-center gap-2.5 mt-3 text-xs font-medium cursor-pointer">
                             <input
                                 type="checkbox"
@@ -891,6 +1530,6 @@ export default function PromotionsPage() {
                     </div>
                 </form>
             </Modal>
-        </>
+        </div>
     );
 }

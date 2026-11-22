@@ -1,0 +1,541 @@
+/* ============================================
+   Shared — Refined data lists
+   Opt-in: .data-list-card / .data-table--detail
+   ============================================ */
+
+.promotions-page, .promotion-form {
+  --detail-info: #476eab;
+  --detail-info-bg: #eff4fb;
+  --detail-success: #337447;
+  --detail-success-bg: #edf6ef;
+  --detail-warning: #876029;
+  --detail-warning-bg: #fbf6eb;
+  --detail-progress-track: #edf1ef;
+  --detail-progress-success: #70a783;
+}
+
+.dark .promotions-page, .dark .promotion-form {
+  --detail-info: #aac8f2;
+  --detail-info-bg: #263649;
+  --detail-success: #a3d5b0;
+  --detail-success-bg: #263e2c;
+  --detail-warning: #e2c38e;
+  --detail-warning-bg: #382f21;
+  --detail-progress-track: #334155;
+  --detail-progress-success: #83ba96;
+}
+
+.promotions-page .numeric, .promotion-form .numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.promotions-page .text-success, .promotion-form .text-success {
+  color: var(--detail-success);
+}
+
+.promotions-page .status-dot, .promotion-form .status-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.promotions-page .card.data-list-card, .promotion-form .card.data-list-card {
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 2%);
+}
+
+.promotions-page .card.data-list-card:hover, .promotion-form .card.data-list-card:hover {
+  box-shadow: 0 2px 8px rgb(15 23 42 / 2%);
+}
+
+.promotions-page .data-list-toolbar, .promotion-form .data-list-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.promotions-page .data-list-summary, .promotion-form .data-list-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.promotions-page .data-list-summary > span, .promotion-form .data-list-summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.promotions-page .data-list-summary strong, .promotion-form .data-list-summary strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.promotions-page .data-list-search, .promotion-form .data-list-search {
+  width: 205px;
+  min-width: 0;
+}
+
+.promotions-page .data-list-toolbar .form-input, .promotion-form .data-list-toolbar .form-input {
+  height: 36px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.promotions-page .data-list-status-filter, .promotion-form .data-list-status-filter {
+  width: 145px;
+}
+
+.promotions-page .data-list-channel-filter, .promotion-form .data-list-channel-filter {
+  width: 130px;
+}
+
+.promotions-page .data-list-toolbar .btn, .promotion-form .data-list-toolbar .btn {
+  min-height: 36px;
+}
+
+
+/* ============================================
+   Shared — Detail table typography
+   ============================================ */
+
+.promotions-page .data-table.data-table--detail, .promotion-form .data-table.data-table--detail {
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.promotions-page .data-table--detail thead th, .promotion-form .data-table--detail thead th {
+  padding: 12px 16px;
+  background: var(--subtle-bg);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.1px;
+  text-transform: none;
+  white-space: normal;
+}
+
+.promotions-page .data-table--detail tbody td, .promotion-form .data-table--detail tbody td {
+  padding: 22px 16px;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.promotions-page .data-table--detail .table-actions-heading, .promotion-form .data-table--detail .table-actions-heading {
+  text-align: center;
+}
+
+.promotions-page .data-table--detail .table-empty, .promotion-form .data-table--detail .table-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.promotions-page .data-table--detail .table-item-title, .promotion-form .data-table--detail .table-item-title {
+  margin-bottom: 8px;
+  color: var(--heading-color);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.promotions-page .table-item-meta, .promotion-form .table-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.promotions-page .reference-code, .promotion-form .reference-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--subtle-bg);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  overflow-wrap: anywhere;
+}
+
+.promotions-page .badge.badge-subtle, .promotion-form .badge.badge-subtle {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.promotions-page .badge-with-dot, .promotion-form .badge-with-dot {
+  gap: 5px;
+}
+
+.promotions-page .badge-with-dot::before, .promotion-form .badge-with-dot::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.promotions-page .badge-subtle.badge-success, .promotion-form .badge-subtle.badge-success {
+  background: var(--detail-success-bg);
+  color: var(--detail-success);
+}
+
+.promotions-page .badge-subtle.badge-info, .promotion-form .badge-subtle.badge-info {
+  background: var(--detail-info-bg);
+  color: var(--detail-info);
+}
+
+.promotions-page .badge-subtle.badge-gray, .promotion-form .badge-subtle.badge-gray {
+  background: var(--subtle-bg);
+  color: var(--text-secondary);
+}
+
+.promotions-page .data-table--detail .table-item-rule, .promotion-form .data-table--detail .table-item-rule {
+  margin-top: 12px;
+  color: var(--body-text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.8;
+}
+
+.promotions-page .data-table--detail .table-item-description, .promotion-form .data-table--detail .table-item-description {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+.promotions-page .data-table--detail .table-item-line, .promotion-form .data-table--detail .table-item-line {
+  color: var(--body-text);
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.promotions-page .data-table--detail .table-item-emphasis, .promotion-form .data-table--detail .table-item-emphasis {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.8;
+}
+
+
+/* ============================================
+   Shared — Benefit value
+   ============================================ */
+
+.promotions-page .benefit-value, .promotion-form .benefit-value {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 9px;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--detail-success-bg);
+  color: var(--detail-success);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.promotions-page .benefit-value--text, .promotion-form .benefit-value--text {
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+
+/* ============================================
+   Shared — ProgressBar
+   ============================================ */
+
+
+/* ============================================
+   Shared — Table metrics and notices
+   ============================================ */
+
+.promotions-page .table-total, .promotion-form .table-total {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  margin-bottom: 11px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.promotions-page .table-total strong, .promotion-form .table-total strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.promotions-page .table-metric + .table-metric, .promotion-form .table-metric + .table-metric {
+  margin-top: 13px;
+}
+
+.promotions-page .table-metric-heading, .promotion-form .table-metric-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.promotions-page .table-metric-heading strong, .promotion-form .table-metric-heading strong {
+  margin-left: auto;
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.promotions-page .table-metric-limit, .promotion-form .table-metric-limit {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.promotions-page .table-notice, .promotion-form .table-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 14px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: var(--subtle-bg);
+  color: var(--text-secondary);
+}
+
+.promotions-page .table-notice--warning, .promotion-form .table-notice--warning {
+  background: var(--detail-warning-bg);
+  color: var(--detail-warning);
+}
+
+.promotions-page .table-notice > svg, .promotion-form .table-notice > svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.promotions-page .table-notice strong, .promotion-form .table-notice strong {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.promotions-page .table-notice p, .promotion-form .table-notice p {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.8;
+}
+
+.promotions-page .table-end-rule, .promotion-form .table-end-rule {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.85;
+}
+
+.promotions-page .table-date-range, .promotion-form .table-date-range {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.9;
+}
+
+.promotions-page .table-scope, .promotion-form .table-scope {
+  margin-top: 13px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+.promotions-page .table-row-actions, .promotion-form .table-row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.promotions-page .table-row-actions .table-action-button, .promotion-form .table-row-actions .table-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 7px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.promotions-page .table-row-actions .table-action-button:hover:not(:disabled), .promotion-form .table-row-actions .table-action-button:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--detail-success);
+}
+
+.promotions-page .table-row-actions .table-action-button:active, .promotion-form .table-row-actions .table-action-button:active {
+  transform: none;
+}
+
+
+/* ============================================
+   Shared — Form panels
+   ============================================ */
+
+.promotions-page .form-panel, .promotion-form .form-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+/* Một panel con không cần thêm khung thứ hai. */
+.promotions-page .form-panel > .form-panel, .promotion-form .form-panel > .form-panel {
+  margin-top: 20px;
+  padding: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+
+/* ============================================
+   Promotions — Existing form refinement
+   ============================================ */
+
+.promotion-form {
+  color: var(--body-text);
+}
+
+.promotion-form h3 {
+  color: var(--heading-color);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.promotion-form .form-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.promotion-form .form-input {
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.promotion-form .form-textarea {
+  min-height: 76px;
+}
+
+.promotion-form .form-input:read-only {
+  background-color: var(--subtle-bg);
+  color: var(--muted);
+}
+
+.promotion-form input[type="checkbox"] {
+  accent-color: var(--primary-dark);
+}
+
+.promotion-form .btn-sm {
+  font-weight: 500;
+}
+
+/* Thay màu amber hardcoded trong cảnh báo xung đột,
+   vẫn giữ nguyên nội dung và role hiện tại. */
+.promotion-form [role="status"] {
+  background: var(--detail-warning-bg);
+  color: var(--detail-warning);
+}
+
+
+/* ============================================
+   Refined data lists — Responsive
+   ============================================ */
+
+@media (max-width: 1399px) {
+  .promotions-page .data-list-summary, .promotion-form .data-list-summary {
+    flex-basis: 100%;
+    margin-bottom: 4px;
+  }
+}
+
+@media (max-width: 767px) {
+  .promotions-page .data-list-toolbar, .promotion-form .data-list-toolbar {
+    padding: 13px;
+    gap: 8px;
+  }
+
+  .promotions-page .data-list-search, .promotion-form .data-list-search {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .promotions-page .data-list-status-filter,
+  .promotion-form .data-list-status-filter,
+  .promotions-page .data-list-channel-filter,
+  .promotion-form .data-list-channel-filter {
+    flex: 1 1 130px;
+    min-width: 0;
+    width: auto;
+  }
+
+  .promotions-page .data-table--detail tbody td, .promotion-form .data-table--detail tbody td {
+    padding: 18px 14px;
+  }
+
+  .promotions-page .form-panel, .promotion-form .form-panel {
+    padding: 15px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .promotions-page .data-list-toolbar .btn,
+  .promotion-form .data-list-toolbar .btn,
+  .promotions-page .table-row-actions .table-action-button,
+  .promotion-form .table-row-actions .table-action-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

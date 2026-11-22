@@ -1,53 +1,97 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { can, checkLogin, scopedBranch } from "../../utils/auth";
+import { getSalesBranches } from "../../data/sales/branches";
 import { useToast } from "../../components/common/useToast";
-import { branches, formatCurrency, SalesPageHeader } from "./sales-support";
-import { loadPromotions, savePromotions } from "./PromotionsPage";
-import type { Promotion } from "./PromotionsPage";
+import { formatCurrency, SalesPageHeader } from "./sales-support";
+import {
+    listScopedPromotions,
+    promotionAppliesAtBranch,
+    getPromotionStatus,
+    setBranchPromotions,
+    PROMOTIONS_CHANGED,
+    STORAGE_PROMOTIONS,
+    type Promotion,
+} from "../shared/promotions-store";
 
 export default function BranchPromotionsPage() {
     const toast = useToast();
     const [branchSearch, setBranchSearch] = useState("");
-    const [promotions, setPromotions] = useState<Promotion[]>(() => loadPromotions());
+    const isChainAdmin = checkLogin() === "owner" && can("promotion.manage");
+    const userBranch = scopedBranch();
+    const [promotions, setPromotions] = useState<Promotion[]>([]);
+    const [branches, setBranches] = useState<ReturnType<typeof getSalesBranches>>([]);
+    const [dataError, setDataError] = useState("");
+    const [saving, setSaving] = useState(false);
 
-    function togglePromotionForBranch(promoId: string, branchId: string) {
-        setPromotions((prev) => {
-            const next = prev.map((promo) => {
-                if (promo.id !== promoId) return promo;
-                const has = promo.branchIds.includes(branchId);
-                const nextBranchIds = has
-                    ? promo.branchIds.filter((b) => b !== branchId)
-                    : [...promo.branchIds, branchId];
-                return { ...promo, branchIds: nextBranchIds };
-            });
-            savePromotions(next);
-            return next;
-        });
-        toast.success("Đã cập nhật phạm vi áp dụng chi nhánh!", {
-            title: "Điều Chỉnh Khuyến Mãi",
-        });
+    function reload() {
+        try {
+            const allBranches = getSalesBranches();
+            setBranches(isChainAdmin
+                ? allBranches
+                : allBranches.filter(branch => branch.id === userBranch));
+            setPromotions(listScopedPromotions());
+            setDataError("");
+        } catch (error) {
+            setDataError(
+                error instanceof Error ? error.message : "Không đọc được dữ liệu.",
+            );
+        }
     }
 
-    function toggleAllForBranch(branchId: string, enable: boolean) {
-        setPromotions((prev) => {
-            const next = prev.map((promo) => {
-                const has = promo.branchIds.includes(branchId);
-                if (enable && !has) {
-                    return { ...promo, branchIds: [...promo.branchIds, branchId] };
-                }
-                if (!enable && has) {
-                    return { ...promo, branchIds: promo.branchIds.filter((b) => b !== branchId) };
-                }
-                return promo;
-            });
-            savePromotions(next);
-            return next;
-        });
-        toast.info(
-            enable
-                ? `Đã kích hoạt toàn bộ khuyến mãi cho chi nhánh ${branchId}`
-                : `Đã tạm ngưng toàn bộ khuyến mãi cho chi nhánh ${branchId}`,
-            { title: "Điều Chỉnh Khuyến Mãi" }
-        );
+    useEffect(() => {
+        reload();
+        const refresh = () => reload();
+        const storage = (event: StorageEvent) => {
+            if (event.key === STORAGE_PROMOTIONS || event.key === null) reload();
+        };
+        window.addEventListener(PROMOTIONS_CHANGED, refresh);
+        window.addEventListener("storage", storage);
+        return () => {
+            window.removeEventListener(PROMOTIONS_CHANGED, refresh);
+            window.removeEventListener("storage", storage);
+        };
+    }, [userBranch, isChainAdmin]);
+    async function togglePromotionForBranch(promoId: string, branchId: string) {
+        if (!isChainAdmin || saving) return;
+
+        const promotion = promotions.find(row => row.id === promoId);
+        if (!promotion) return;
+
+        setSaving(true);
+        try {
+            await setBranchPromotions(
+                branchId,
+                !promotionAppliesAtBranch(promotion, branchId),
+                promoId,
+            );
+            reload();
+            toast.success("Đã cập nhật phạm vi chi nhánh.");
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : "Không cập nhật được phạm vi.",
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function toggleAllForBranch(branchId: string, enable: boolean) {
+        if (!isChainAdmin || saving) return;
+
+        setSaving(true);
+        try {
+            await setBranchPromotions(branchId, enable);
+            reload();
+            toast.success(
+                enable ? "Đã bật phân bổ tại chi nhánh." : "Đã tắt phân bổ tại chi nhánh.",
+            );
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : "Không cập nhật được phạm vi.",
+            );
+        } finally {
+            setSaving(false);
+        }
     }
 
     return (
@@ -56,9 +100,23 @@ export default function BranchPromotionsPage() {
                 title="Áp dụng khuyến mãi theo chi nhánh"
                 breadcrumb="Marketing"
                 parent={{ label: "", to: "" }}
-                description="Điều chỉnh phân bổ và kích hoạt các chương trình ưu đãi cho từng cửa hàng trong hệ thống 12 chi nhánh."
+                description="Theo dõi phạm vi áp dụng; chỉ Admin được điều chỉnh phân bổ."
             />
 
+            {!isChainAdmin && (
+                <div className="card mb-4 text-sm" role="status">
+                    🔒 <strong>Chế độ Chỉ Xem:</strong> Quyền điều chỉnh và phân bổ
+                    chương trình khuyến mãi chỉ thuộc về Admin (Quản trị chuỗi).
+                    Quản lý chi nhánh và nhân viên chỉ theo dõi chương trình
+                    tại chi nhánh của mình{userBranch ? ` · ${userBranch}` : ""}.
+                </div>
+            )}
+
+            {dataError && (
+                <div className="card mb-4 text-rose-700" role="alert">
+                    {dataError}
+                </div>
+            )}
             <section className="space-y-6" aria-label="Ma trận khuyến mãi theo chi nhánh">
                 {/* Thống kê phạm vi phân bổ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -69,7 +127,7 @@ export default function BranchPromotionsPage() {
                         <div className="stat-card-body">
                             <div className="stat-label">Chi nhánh áp dụng</div>
                             <div className="stat-value">
-                                {branches.filter((b) => promotions.some((p) => p.branchIds.includes(b.id))).length} / {branches.length}
+                                {branches.filter((b) => promotions.some(p => promotionAppliesAtBranch(p, b.id))).length} / {branches.length}
                             </div>
                             <div className="stat-sub-label">Toàn chuỗi TP.HCM</div>
                         </div>
@@ -81,7 +139,7 @@ export default function BranchPromotionsPage() {
                         <div className="stat-card-body">
                             <div className="stat-label">Chương trình đang chạy</div>
                             <div className="stat-value text-emerald-600">
-                                {promotions.filter((r) => r.status === "active").length}
+                                {promotions.filter(r => getPromotionStatus(r) === "active").length}
                             </div>
                             <div className="stat-sub-label">Áp dụng trực tiếp tại quầy &amp; app</div>
                         </div>
@@ -116,9 +174,11 @@ export default function BranchPromotionsPage() {
                 <div className="card p-0 overflow-hidden">
                     <div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h2 className="font-bold text-base">Ma Trận Khuyến Mãi 12 Chi Nhánh Chuỗi MilktyWay</h2>
+                            <h2 className="font-bold text-base">Ma trận khuyến mãi · {branches.length} chi nhánh</h2>
                             <p className="text-xs text-[var(--muted)] mt-0.5">
-                                Nhấp trực tiếp vào mã khuyến mãi để bật/tắt áp dụng cho từng cửa hàng.
+                                {isChainAdmin
+        ? "Nhấp mã khuyến mãi để bật/tắt phân bổ. Phân bổ không thay thế trạng thái và thời hạn chương trình."
+        : "Các chương trình được phân bổ tại chi nhánh của bạn. Không có quyền chỉnh sửa."}
                             </p>
                         </div>
                         <div className="w-full sm:w-72">
@@ -147,7 +207,10 @@ export default function BranchPromotionsPage() {
                                 {branches
                                     .filter((b) => !branchSearch || `${b.id} ${b.name}`.toLowerCase().includes(branchSearch.toLowerCase()))
                                     .map((branch) => {
-                                        const activePromos = promotions.filter((r) => r.branchIds.includes(branch.id));
+                                        const activePromos = promotions.filter(promotion =>
+    promotionAppliesAtBranch(promotion, branch.id) &&
+    getPromotionStatus(promotion) === "active"
+);
                                         return (
                                             <tr key={branch.id}>
                                                 <td className="font-mono font-bold text-[var(--primary)] whitespace-nowrap">
@@ -160,13 +223,14 @@ export default function BranchPromotionsPage() {
                                                 <td>
                                                     <div className="flex flex-wrap gap-2 py-1">
                                                         {promotions.map((promo) => {
-                                                            const isEnabled = promo.branchIds.includes(branch.id);
+                                                            const isEnabled = promotionAppliesAtBranch(promo, branch.id);
                                                             return (
                                                                 <button
                                                                     key={promo.id}
                                                                     type="button"
-                                                                    onClick={() => togglePromotionForBranch(promo.id, branch.id)}
-                                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                                                    disabled={!isChainAdmin || saving || !!dataError}
+                                                            onClick={() => togglePromotionForBranch(promo.id, branch.id)}
+                                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                                                                         isEnabled
                                                                             ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
                                                                             : "bg-gray-50 text-gray-400 border-gray-200 line-through hover:bg-gray-100"
@@ -191,7 +255,8 @@ export default function BranchPromotionsPage() {
                                                     <div className="flex justify-end gap-1.5">
                                                         <button
                                                             type="button"
-                                                            className="btn btn-secondary btn-sm text-xs"
+                                                            className="btn btn-secondary btn-sm text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                                            disabled={!isChainAdmin || saving || !!dataError}
                                                             onClick={() => toggleAllForBranch(branch.id, true)}
                                                             title="Bật toàn bộ ưu đãi cho chi nhánh này"
                                                         >
@@ -199,11 +264,12 @@ export default function BranchPromotionsPage() {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="btn btn-secondary btn-sm text-xs text-rose-600 hover:bg-rose-50"
+                                                            className="btn btn-secondary btn-sm text-xs disabled:opacity-60 disabled:cursor-not-allowed text-rose-600 hover:bg-rose-50"
+                                                            disabled={!isChainAdmin || saving || !!dataError}
                                                             onClick={() => toggleAllForBranch(branch.id, false)}
                                                             title="Tạm ngưng ưu đãi tại chi nhánh này khi quá tải quầy bar"
                                                         >
-                                                            Tạm ngưng
+                                                            Tắt tất cả
                                                         </button>
                                                     </div>
                                                 </td>
