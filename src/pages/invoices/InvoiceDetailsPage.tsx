@@ -175,28 +175,28 @@ export default function InvoiceDetailsPage() {
               In K57
             </button>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => toast.info(`Đang in phiếu pha chế (KOT) cho đơn ${orderId}...`, { title: "In Phiếu KOT" })}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-            </svg>
-            In Phiếu Pha (KOT)
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => toast.success(`Đã gửi hóa đơn điện tử đến SĐT ${customerPhone}`, { title: "Gửi Thành Công" })}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
-            </svg>
-            Gửi Cho Khách
-          </button></>}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => toast.info(`Đang in phiếu pha chế (KOT) cho đơn ${orderId}...`, { title: "In Phiếu KOT" })}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              In Phiếu Pha (KOT)
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => toast.success(`Đã gửi hóa đơn điện tử đến SĐT ${customerPhone}`, { title: "Gửi Thành Công" })}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              Gửi Cho Khách
+            </button></>}
         </div>
       </div>
 
@@ -233,18 +233,18 @@ export default function InvoiceDetailsPage() {
 
       {/* Hóa đơn có thể in */}
       <div className="card printable-card max-w-4xl mx-auto p-6 md:p-10 relative shadow-md">
-        {/* Dấu trạng thái thanh toán */}
-        <div className="absolute top-[30px] right-[40px] border-[3px] border-[var(--primary)] text-[var(--primary)] font-black text-xl px-[18px] py-1 rounded-lg rotate-[8deg] tracking-[2px] uppercase opacity-[0.85] no-print">
+        {/* Dấu trạng thái thanh toán (watermark nằm dưới chữ, opacity thấp) */}
+        <div className="absolute top-[30px] right-[40px] z-0 pointer-events-none select-none border-[3px] border-[var(--primary)] text-[var(--primary)] font-black text-xl px-[18px] py-1 rounded-lg rotate-[8deg] tracking-[2px] uppercase opacity-65 no-print">
           {invoiceStatus.toUpperCase()}
         </div>
 
         {/* Header hóa đơn */}
-        <div className="flex justify-between items-start flex-wrap gap-5 mb-8 pb-6 border-b border-[var(--border)]">
+        <div className="relative z-10 flex justify-between items-start flex-wrap gap-5 mb-8 pb-6 border-b border-[var(--border)]">
           <div className="flex items-center gap-3">
             <div className="w-[48px] h-[48px] rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] flex items-center justify-center shadow-md">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="white" fillOpacity="0.2"/>
-                <circle cx="12" cy="12" r="3" fill="white"/>
+                <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="white" fillOpacity="0.2" />
+                <circle cx="12" cy="12" r="3" fill="white" />
               </svg>
             </div>
             <div className="border-l border-[var(--border)] pl-3">
@@ -274,12 +274,12 @@ export default function InvoiceDetailsPage() {
               Hạng thành viên:{" "}
               <span className="font-semibold text-emerald-600">
                 {memberTier === "VIP"
-                  ? "VIP (Chiết khấu 15%)"
+                  ? "VIP (Giảm 10% / đơn)"
                   : memberTier === "Gold"
-                  ? "Gold (Chiết khấu 10%)"
-                  : memberTier === "Silver"
-                  ? "Silver (Chiết khấu 5%)"
-                  : "Member (Hội viên thân thiết)"}
+                    ? "Gold (Giảm 5% / đơn)"
+                    : memberTier === "Silver"
+                      ? "Silver (Giảm 5.000 ₫ / đơn)"
+                      : "Member (Giảm 2.000 ₫ / đơn)"}
               </span>
             </div>
             <div className="text-[13px] text-[var(--muted)] mt-1">
@@ -344,7 +344,7 @@ export default function InvoiceDetailsPage() {
         </div>
 
         {/* Tổng cộng */}
-        <div className="flex justify-end mb-8">
+        <div className="flex justify-end">
           <div className="w-[340px] flex flex-col gap-2.5">
             <div className="flex justify-between text-[13px]">
               <span className="text-[var(--muted)]">Tạm tính:</span>
@@ -372,33 +372,6 @@ export default function InvoiceDetailsPage() {
               <span className="text-[var(--muted)]">Tiền thừa trả lại:</span>
               <span className="text-[var(--text)]">{formatCurrency(change)}</span>
             </div>
-          </div>
-        </div>
-
-        {/* Footer hóa đơn */}
-        <div className="border-t border-[var(--border)] pt-5 flex justify-between items-end flex-wrap gap-5">
-          <div className="max-w-[420px]">
-            <div className="text-xs font-bold text-[var(--text)] mb-1">Cảm ơn quý khách đã ủng hộ MilktyWay!</div>
-            <div className="text-[11px] text-[var(--muted)] leading-relaxed">
-              Trà sữa MilktyWay — Đậm đà hương vị, tươi mát tự nhiên. Khiếu nại dịch vụ vui lòng liên hệ hotline 1900 6868 hoặc
-              truy cập MilktyWay.vn trong vòng 30 phút kể từ khi nhận nước.
-            </div>
-            <div className="text-[11px] text-[var(--muted)] mt-1">
-              Mã tra cứu hóa đơn: <strong>{invoiceId}</strong>
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-[11px] text-[var(--muted)] mb-1.5 font-medium">Quét QR tích điểm & nhận voucher</div>
-            <div className="w-[68px] h-[68px] bg-[var(--background)] border border-[var(--border)] rounded-lg flex items-center justify-center mx-auto">
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--muted)]">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-                <path d="M14 14h3v3h-3z" />
-                <path d="M17 17h4v4h-4z" />
-              </svg>
-            </div>
-            <div className="text-[10px] text-[var(--muted)] mt-1 font-mono">MilktyWay.vn/loyalty</div>
           </div>
         </div>
       </div>

@@ -88,17 +88,17 @@ export default function NotificationsSettingsPage() {
           </div>
         </div>
 
-        {/* Cảnh Báo Vận Hành & Tài Chính Đặc Tả Mục 11 */}
+        {/* Cảnh Báo Vận Hành & Tài Chính */}
         <div className="card">
           <div className="card-header mb-4 pb-3 border-b border-[var(--border)]">
-            <h3 className="card-title">Cảnh Báo Sự Cố Mạng POS &amp; Điểm Hòa Vốn</h3>
+            <h3 className="card-title">Cảnh Báo Vận Hành &amp; Điểm Hòa Vốn</h3>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4 p-3 rounded-lg border border-red-200 bg-red-50/20">
               <div>
                 <div className="font-bold text-red-700 text-sm">
-                  Cảnh Báo Chi Nhánh Dưới Điểm Hòa Vốn (Mục 11 Đặc Tả)
+                  Cảnh Báo Chi Nhánh Dưới Điểm Hòa Vốn
                 </div>
                 <div className="text-xs text-red-600 mt-0.5">
                   Gửi email khẩn cấp đến Chủ Doanh Nghiệp khi doanh thu chi nhánh thấp hơn điểm hòa vốn liên tục 4 tuần hoặc 3 tháng.
@@ -108,22 +108,6 @@ export default function NotificationsSettingsPage() {
                 type="checkbox"
                 defaultChecked
                 className="w-5 h-5 accent-red-600 cursor-pointer mt-1"
-              />
-            </div>
-
-            <div className="flex items-start justify-between gap-4 p-3 rounded-lg border border-[var(--border)]">
-              <div>
-                <div className="font-bold text-[var(--text)] text-sm">
-                  Cảnh Báo Mất Mạng POS &amp; Kích Hoạt Chế Độ Bán Offline
-                </div>
-                <div className="text-xs text-[var(--muted)] mt-0.5">
-                  Tự động phát thông báo màu vàng trên màn hình thu ngân: "Đang bán Offline — Dữ liệu lưu an toàn trên máy".
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="w-5 h-5 accent-[#22B573] cursor-pointer mt-1"
               />
             </div>
 

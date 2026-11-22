@@ -202,7 +202,7 @@ export default function ShiftsPage() {
         }
 
         const shift: CashShift = {
-            id: `CA-MP-${crypto.randomUUID()}`,
+            id: `CA-261109-${String(shifts.length + 1).padStart(2, "0")}`,
             branchId: openingForm.branchId,
             counterId: openingForm.counterId,
             counterName: openingForm.counterId === "POS02" ? "Quầy 02" : openingForm.counterId === "POS03" ? "Quầy 03" : "Quầy 01",
@@ -250,9 +250,11 @@ export default function ShiftsPage() {
             const closedAt = new Date().toISOString();
             setShifts(current => current.map(shift =>
                 shift.id === selectedShift.id && shift.status === "open"
-                    ? { ...shift, status: "closed", closedAt, countedCash,
+                    ? {
+                        ...shift, status: "closed", closedAt, countedCash,
                         expectedCash: effectiveExpectedCash, recipientId: closingForm.recipientId,
-                        handoverNote: closingForm.note.trim() }
+                        handoverNote: closingForm.note.trim()
+                    }
                     : shift
             ));
             toast.success("Đã đóng ca và ghi nhận bàn giao.");
@@ -314,7 +316,7 @@ export default function ShiftsPage() {
             return;
         }
         setShifts(current => current.map(item => item.id === shift.id && item.status === "closing-requested"
-            ? {...item, status: "closed", closedAt: new Date().toISOString()} : item));
+            ? { ...item, status: "closed", closedAt: new Date().toISOString() } : item));
         setHandoverId(null);
         toast.success("Đã đóng ca và ghi nhận bàn giao trong phiên làm việc.");
     }
@@ -322,7 +324,7 @@ export default function ShiftsPage() {
     function withdrawCloseRequest() {
         if (!selectedShift || selectedShift.status !== "closing-requested") return;
         setShifts(current => current.map(item => item.id === selectedShift.id && item.status === "closing-requested"
-            ? {...item, status: "open"} : item));
+            ? { ...item, status: "open" } : item));
         toast.info("Đã rút yêu cầu. Bạn có thể sửa thông tin bàn giao.");
     }
 
@@ -379,10 +381,10 @@ export default function ShiftsPage() {
             header: "Trạng thái",
             render: (shift) => (
                 <Badge variant={
-                           shift.status === "open"
-                               ? "success"
-                               : shift.status === "closing-requested" ? "warning" : "gray"
-                       }>
+                    shift.status === "open"
+                        ? "success"
+                        : shift.status === "closing-requested" ? "warning" : "gray"
+                }>
                     {shift.status === "open"
                         ? "Đang mở"
                         : shift.status === "closing-requested"
@@ -574,7 +576,7 @@ export default function ShiftsPage() {
                             Mở ca
                         </button>
                     </div>
-                    
+
                 </form>
             </section>)}
 
@@ -692,9 +694,9 @@ export default function ShiftsPage() {
 
                     <p className="text-sm text-[var(--muted)] mt-4">
                         Đơn chưa xong: {selectedShift?.pendingOrders.join("; ") || "Không có trong dữ liệu mẫu"}.
-                        
+
                     </p>
-                    
+
 
                     <button
                         type="submit"
@@ -727,7 +729,7 @@ export default function ShiftsPage() {
                     <>
                         Ca {pendingRequest?.shiftId} · Tiền thực đếm: {formatCurrency(pendingRequest?.countedCash ?? 0)} · Người nhận: {getRecipientName(pendingRequest?.recipientId)}.
                         {pendingRequest?.note && <p>Nội dung bàn giao: {pendingRequest.note}</p>}
-                        
+
                     </>
                 }
                 confirmText="Gửi yêu cầu"

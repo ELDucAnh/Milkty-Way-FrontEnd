@@ -130,7 +130,6 @@ const SECTIONS: readonly SidebarSection[] = [
           { to: "/settings/sales", label: "Cài đặt bán hàng", page: "settings-sales" },
           { to: "/settings/purchases", label: "Cài đặt nhập hàng", page: "settings-purchases" },
           { to: "/settings/notifications", label: "Thông báo", page: "settings-notifications" },
-          { to: "/settings/offline-sync", label: "Đồng bộ & Offline", page: "settings-offline-sync" },
         ]
       },
     ],

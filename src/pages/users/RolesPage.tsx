@@ -82,7 +82,7 @@ const permissionSources: { section: string; rows: PermissionSource[] }[] = [
       { id: "report_revenue", name: "Xem báo cáo doanh thu", check: { route: "/reports/sales-report" }, managerNote: "(Chỉ CN mình)" },
       { id: "report_inventory", name: "Xem báo cáo tồn kho, hao hụt", check: { route: "/reports/inventory-report" } },
       { id: "report_pnl", name: "Xem báo cáo hiệu quả sản phẩm / chi nhánh (P&L)", check: { route: "/reports/profit-loss" }, managerNote: "(Chỉ CN mình)" },
-      { id: "sys_config", name: "Cấu hình tham số hệ thống, đồng bộ & offline", check: { route: "/settings/general" } },
+      { id: "sys_config", name: "Cấu hình tham số hệ thống chuỗi", check: { route: "/settings/general" } },
     ],
   },
 ];

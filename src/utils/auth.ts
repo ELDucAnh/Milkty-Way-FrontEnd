@@ -61,7 +61,7 @@ const managerPages = new Set([
   "/invoices", "/marketing", "/marketing/promotions",
   "/inventory", "/inventory/products", "/inventory/ingredients", "/inventory/stock-adjustment",
   "/purchases", "/purchases/new", "/purchases/add-purchase", "/purchases/purchases",
-  "/distribution", "/distribution/planning", "/stores", "/stores/ingredients",
+  "/distribution", "/distribution/planning", "/production/planning", "/stores", "/stores/ingredients", "/stores/shift-reconciliation",
   "/reports", "/reports/sales-report", "/reports/inventory-report", "/reports/profit-loss",
   "/users", "/users/users", "/users/roles",
   "/profile", "/pages/profile", "/logout",

@@ -6,6 +6,7 @@ import type { BadgeVariant } from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import type { DataTableColumn } from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
+import StatCard from "../../components/common/StatCard";
 import { useToast } from "../../components/common/useToast";
 import { formatCurrency, SalesPageHeader } from "./sales-support";
 
@@ -63,10 +64,10 @@ export const TIER_RULES: Record<MemberTier, TierRule> = {
         variant: "gray",
         minPoints: 0,
         maxPoints: 199,
-        discountText: "Tích 1 điểm / 10k",
+        discountText: "Giảm 2.000 ₫ / đơn",
         discountPercent: 0,
         spendingRequired: "Dưới 2.000.000 ₫",
-        benefits: "Tích lũy 1 điểm cho mỗi 10.000 ₫ chi tiêu, voucher chào mừng thành viên mới.",
+        benefits: "Giảm 2.000 ₫ trực tiếp mỗi đơn, tích lũy 1 điểm cho mỗi 10.000 ₫ chi tiêu, voucher chào mừng thành viên mới.",
         nextTier: "Hạng Bạc (Cần 200 điểm)",
     },
     silver: {
@@ -75,10 +76,10 @@ export const TIER_RULES: Record<MemberTier, TierRule> = {
         variant: "info",
         minPoints: 200,
         maxPoints: 499,
-        discountText: "Giảm 5% hóa đơn",
-        discountPercent: 5,
+        discountText: "Giảm 5.000 ₫ / đơn",
+        discountPercent: 0,
         spendingRequired: "Từ 2.000.000 ₫ (200 điểm)",
-        benefits: "Giảm 5% trực tiếp trên mọi đơn hàng toàn chuỗi, tặng voucher 50.000 ₫ ngày sinh nhật.",
+        benefits: "Giảm 5.000 ₫ trực tiếp trên mọi đơn hàng toàn chuỗi, tặng voucher 50.000 ₫ ngày sinh nhật.",
         nextTier: "Hạng Vàng (Cần 500 điểm)",
     },
     gold: {
@@ -87,10 +88,10 @@ export const TIER_RULES: Record<MemberTier, TierRule> = {
         variant: "warning",
         minPoints: 500,
         maxPoints: 999,
-        discountText: "Giảm 10% + Free Topping",
-        discountPercent: 10,
+        discountText: "Giảm 5% mỗi đơn",
+        discountPercent: 5,
         spendingRequired: "Từ 5.000.000 ₫ (500 điểm)",
-        benefits: "Giảm 10% trực tiếp, miễn phí 1 topping / ly, ưu tiên nhận đồ uống giờ cao điểm.",
+        benefits: "Giảm 5% trực tiếp mỗi đơn, miễn phí 1 topping / ly, ưu tiên nhận đồ uống giờ cao điểm.",
         nextTier: "Hạng VIP (Cần 1.000 điểm)",
     },
     vip: {
@@ -99,10 +100,10 @@ export const TIER_RULES: Record<MemberTier, TierRule> = {
         variant: "purple",
         minPoints: 1000,
         maxPoints: Infinity,
-        discountText: "Giảm 15% tối đa",
-        discountPercent: 15,
+        discountText: "Giảm 10% mỗi đơn",
+        discountPercent: 10,
         spendingRequired: "Từ 10.000.000 ₫ (1.000 điểm)",
-        benefits: "Giảm 15% mọi hóa đơn, nhân đôi điểm tích lũy vào thứ 4, hộp quà sinh nhật độc quyền.",
+        benefits: "Giảm 10% mọi đơn hàng, nhân đôi điểm tích lũy vào thứ 4, hộp quà sinh nhật độc quyền.",
         nextTier: null,
     },
 };
@@ -115,7 +116,7 @@ export function calculateTierProgression(points: number) {
             nextTierLabel: "Đã đạt hạng cao nhất",
             neededPoints: 0,
             percent: 100,
-            summary: "Đã đạt hạng VIP cao nhất (Giảm 15%)",
+            summary: "Đã đạt hạng VIP cao nhất (Giảm 10% mỗi đơn)",
         };
     }
     if (points >= 500) {
@@ -260,6 +261,8 @@ export default function CustomersPage() {
     const [addOpen, setAddOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer>(initialCustomers[0]);
     const [applied, setApplied] = useState({ search: "", tier: "" });
+    const [historySearchInput, setHistorySearchInput] = useState("");
+    const [appliedHistorySearch, setAppliedHistorySearch] = useState("");
     const [form, setForm] = useState<CustomerForm>({
         id: `HV-${String(customers.length + 1).padStart(4, "0")}`,
         consent: false,
@@ -434,6 +437,8 @@ export default function CustomersPage() {
                     className={`btn btn-sm ${selectedCustomer.id === customer.id ? "btn-primary" : "btn-secondary"}`}
                     onClick={() => {
                         setSelectedCustomer(customer);
+                        setHistorySearchInput("");
+                        setAppliedHistorySearch("");
                         document.getElementById("customer-history-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
                     }}
                 >
@@ -491,64 +496,57 @@ export default function CustomersPage() {
 
             <section className="page-section" aria-label="Thống kê khách hàng">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-                    <div className="stat-card">
-                        <div className="stat-card-icon icon-bg-info">
+                    <StatCard
+                        label="Tổng hội viên toàn chuỗi"
+                        value="1.842"
+                        subLabel="+48 thành viên mới tháng này"
+                        tone="info"
+                        icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
                                 <circle cx="9" cy="7" r="4" />
                                 <path d="M23 21v-2a4 4 0 00-3-3.87" />
                                 <path d="M16 3.13a4 4 0 010 7.75" />
                             </svg>
-                        </div>
-                        <div className="stat-card-body">
-                            <div className="stat-label">Tổng hội viên toàn chuỗi</div>
-                            <div className="stat-value">1.842</div>
-                            <div className="trend-up stat-sub-label">↑ +48 thành viên mới tháng này</div>
-                        </div>
-                    </div>
-
-                    <div className="stat-card">
-                        <div className="stat-card-icon icon-bg-primary">
+                        }
+                    />
+                    <StatCard
+                        label="Hội viên đang hoạt động"
+                        value="1.680"
+                        subLabel="91.2% tỷ lệ quay lại mua hàng"
+                        tone="primary"
+                        icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
                                 <circle cx="8.5" cy="7" r="4" />
                                 <polyline points="17 11 19 13 23 9" />
                             </svg>
-                        </div>
-                        <div className="stat-card-body">
-                            <div className="stat-label">Hội viên đang hoạt động</div>
-                            <div className="stat-value text-[var(--primary)]">1.680</div>
-                            <div className="stat-sub-label">91.2% tỷ lệ quay lại mua hàng</div>
-                        </div>
-                    </div>
-
-                    <div className="stat-card">
-                        <div className="stat-card-icon icon-bg-warning">
+                        }
+                    />
+                    <StatCard
+                        label="Doanh thu từ hội viên"
+                        value={formatCurrency(145870000)}
+                        subLabel="Chiếm 68% tổng doanh số bán"
+                        tone="warning"
+                        icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="1" x2="12" y2="23" />
                                 <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
                             </svg>
-                        </div>
-                        <div className="stat-card-body">
-                            <div className="stat-label">Doanh thu từ hội viên</div>
-                            <div className="stat-value text-amber-600">{formatCurrency(145870000)}</div>
-                            <div className="stat-sub-label">Chiếm 68% tổng doanh số bán</div>
-                        </div>
-                    </div>
-
-                    <div className="stat-card">
-                        <div className="stat-card-icon icon-bg-success">
+                        }
+                    />
+                    <StatCard
+                        label="Chi tiêu trung bình (AOV)"
+                        value={formatCurrency(185000)}
+                        subLabel="+5.4% so với quý trước"
+                        tone="success"
+                        icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
                                 <polyline points="17 6 23 6 23 12" />
                             </svg>
-                        </div>
-                        <div className="stat-card-body">
-                            <div className="stat-label">Chi tiêu trung bình (AOV)</div>
-                            <div className="stat-value">{formatCurrency(185000)}</div>
-                            <div className="trend-up stat-sub-label">↑ +5.4% so với quý trước</div>
-                        </div>
-                    </div>
+                        }
+                    />
                 </div>
             </section>
 
@@ -573,7 +571,7 @@ export default function CustomersPage() {
                             <span className="font-bold text-sm text-[var(--text)]">1. Thành Viên Mới</span>
                             <Badge variant="gray">0 – 199 Điểm</Badge>
                         </div>
-                        <div className="text-xs font-semibold text-[var(--primary)]">Mức chi: Dưới 2.000.000 ₫</div>
+                        <div className="text-xs font-semibold text-[var(--primary)]">Giảm 2.000 ₫ mỗi đơn</div>
                         <div className="text-xs text-[var(--muted)] leading-relaxed">
                             {TIER_RULES.member.benefits}
                         </div>
@@ -588,7 +586,7 @@ export default function CustomersPage() {
                             <span className="font-bold text-sm text-[var(--text)]">2. Hạng Bạc (Silver)</span>
                             <Badge variant="info">200 – 499 Điểm</Badge>
                         </div>
-                        <div className="text-xs font-semibold text-blue-600">Giảm 5% mọi hóa đơn</div>
+                        <div className="text-xs font-semibold text-blue-600">Giảm 5.000 ₫ mỗi đơn</div>
                         <div className="text-xs text-[var(--muted)] leading-relaxed">
                             {TIER_RULES.silver.benefits}
                         </div>
@@ -603,7 +601,7 @@ export default function CustomersPage() {
                             <span className="font-bold text-sm text-[var(--text)]">3. Hạng Vàng (Gold)</span>
                             <Badge variant="warning">500 – 999 Điểm</Badge>
                         </div>
-                        <div className="text-xs font-semibold text-amber-600">Giảm 10% + Free Topping</div>
+                        <div className="text-xs font-semibold text-amber-600">Giảm 5% mỗi đơn</div>
                         <div className="text-xs text-[var(--muted)] leading-relaxed">
                             {TIER_RULES.gold.benefits}
                         </div>
@@ -618,7 +616,7 @@ export default function CustomersPage() {
                             <span className="font-bold text-sm text-[var(--text)]">4. Hạng VIP (Diamond)</span>
                             <Badge variant="purple">Từ 1.000 Điểm</Badge>
                         </div>
-                        <div className="text-xs font-semibold text-purple-600">Giảm 15% tối đa</div>
+                        <div className="text-xs font-semibold text-purple-600">Giảm 10% mỗi đơn</div>
                         <div className="text-xs text-[var(--muted)] leading-relaxed">
                             {TIER_RULES.vip.benefits}
                         </div>
@@ -749,6 +747,45 @@ export default function CustomersPage() {
                     );
                 })()}
 
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h3 className="text-sm font-bold text-[var(--text)]">Lịch sử hóa đơn &amp; giao dịch tích điểm</h3>
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <input
+                            id="customer-history-search"
+                            type="search"
+                            className="form-input h-9 text-xs sm:w-64"
+                            placeholder="Nhập mã hóa đơn, nội dung, ngày..."
+                            value={historySearchInput}
+                            onChange={(e) => setHistorySearchInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    setAppliedHistorySearch(historySearchInput.trim());
+                                }
+                            }}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-primary btn-sm h-9 px-3"
+                            onClick={() => setAppliedHistorySearch(historySearchInput.trim())}
+                        >
+                            Tìm kiếm
+                        </button>
+                        {appliedHistorySearch && (
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm h-9 px-3"
+                                onClick={() => {
+                                    setHistorySearchInput("");
+                                    setAppliedHistorySearch("");
+                                }}
+                            >
+                                Xóa lọc
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 <div className="overflow-x-auto">
                     <table className="data-table w-full">
                         <thead>
@@ -762,14 +799,27 @@ export default function CustomersPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {selectedCustomer.history.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="text-center py-6 text-[var(--muted)]">
-                                        Chưa có giao dịch tích điểm nào cho hội viên này.
-                                    </td>
-                                </tr>
-                            ) : (
-                                selectedCustomer.history.map((tx) => (
+                            {(() => {
+                                const hQuery = appliedHistorySearch.toLocaleLowerCase("vi-VN");
+                                const filteredHistory = selectedCustomer.history.filter(
+                                    (tx) =>
+                                        !hQuery ||
+                                        `${tx.invoiceId} ${tx.action} ${tx.createdAt}`
+                                            .toLocaleLowerCase("vi-VN")
+                                            .includes(hQuery),
+                                );
+                                if (filteredHistory.length === 0) {
+                                    return (
+                                        <tr>
+                                            <td colSpan={6} className="text-center py-6 text-[var(--muted)]">
+                                                {appliedHistorySearch
+                                                    ? `Không tìm thấy hóa đơn / giao dịch nào khớp với "${appliedHistorySearch}".`
+                                                    : "Chưa có giao dịch tích điểm nào cho hội viên này."}
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+                                return filteredHistory.map((tx) => (
                                     <tr key={tx.id}>
                                         <td className="text-xs text-[var(--muted)] whitespace-nowrap">{tx.createdAt}</td>
                                         <td>
@@ -793,8 +843,8 @@ export default function CustomersPage() {
                                             {tx.balance.toLocaleString("vi-VN")} điểm
                                         </td>
                                     </tr>
-                                ))
-                            )}
+                                ));
+                            })()}
                         </tbody>
                     </table>
                 </div>

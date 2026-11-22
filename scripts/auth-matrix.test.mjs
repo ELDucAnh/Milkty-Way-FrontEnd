@@ -51,11 +51,11 @@ const ROUTES = {
   "/inventory/products/:id": "O", "/inventory/add-product": "O", "/inventory/branches": "O",
   "/inventory/categories": "O", "/inventory/ingredients": "OMW", "/inventory/stock-adjustment": "OMW",
   "/inventory/units": "O",
-  "/production": "O", "/production/recipes": "O", "/production/batches": "OW",
+  "/production": "O", "/production/recipes": "O", "/production/batches": "OW", "/production/planning": "OM",
   "/purchases": "OM", "/purchases/new": "OM", "/purchases/add-purchase": "OM", "/purchases/purchases": "OM",
   "/purchases/transfers": "OW", "/purchases/receipts": "OW", "/purchases/stock-transfers": "OW",
   "/distribution": "OM", "/distribution/planning": "OM",
-  "/stores": "OMW", "/stores/ingredients": "OMW", "/stores/shift-reconciliation": "OW",
+  "/stores": "OMW", "/stores/ingredients": "OMW", "/stores/shift-reconciliation": "OMW",
   "/invoices": "OMC", "/invoices/invoices": "OMC", "/invoices/:id": "OMC", "/invoices/invoice-details": "OMC",
   "/expenses": "O", "/expenses/expenses": "O",
   "/suppliers": "O", "/suppliers/suppliers": "O",
@@ -64,7 +64,7 @@ const ROUTES = {
   "/reports/profit-loss": "OM", "/reports/customer-report": "O", "/reports/purchase-report": "O",
   "/reports/supplier-report": "O",
   "/settings": "O", "/settings/general": "O", "/settings/inventory": "O", "/settings/sales": "O",
-  "/settings/purchases": "O", "/settings/notifications": "O", "/settings/offline-sync": "O",
+  "/settings/purchases": "O", "/settings/notifications": "O",
   "/profile": "OMCW", "/pages/profile": "OMCW",
 };
 

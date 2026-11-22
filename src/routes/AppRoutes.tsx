@@ -59,7 +59,6 @@ import InventorySettingsPage from "../pages/settings/InventorySettingsPage";
 import SalesSettingsPage from "../pages/settings/SalesSettingsPage";
 import PurchasesSettingsPage from "../pages/settings/PurchasesSettingsPage";
 import NotificationsSettingsPage from "../pages/settings/NotificationsSettingsPage";
-import OfflineSyncPage from "../pages/settings/OfflineSyncPage";
 
 // Reports (Người 3)
 import SalesReportPage from "../pages/reports/SalesReportPage";
@@ -143,6 +142,7 @@ export default function AppRoutes() {
         {/* Phân Phối & Cửa Hàng Chi Nhánh */}
         <Route path="/distribution" element={<Navigate to="/distribution/planning" replace />} />
         <Route path="/distribution/planning" element={<DistributionPlanningPage />} />
+        <Route path="/production/planning" element={<DistributionPlanningPage />} />
         <Route path="/stores" element={<Navigate to="/stores/ingredients" replace />} />
         <Route path="/stores/ingredients" element={<StoreIngredientsPage />} />
         <Route path="/stores/shift-reconciliation" element={<ShiftReconciliationPage />} />
@@ -182,7 +182,6 @@ export default function AppRoutes() {
         <Route path="/settings/sales" element={<SalesSettingsPage />} />
         <Route path="/settings/purchases" element={<PurchasesSettingsPage />} />
         <Route path="/settings/notifications" element={<NotificationsSettingsPage />} />
-        <Route path="/settings/offline-sync" element={<OfflineSyncPage />} />
 
         {/* Hồ Sơ Cá Nhân (Hỗ trợ cả /profile và alias /pages/profile) */}
         <Route path="/profile" element={<ProfilePage />} />

@@ -33,15 +33,15 @@ function validPercentage(value: string): number | null {
         : null;
 }
 
-const SAMPLE_MEMBERS: Record<string, { name: string; tier: string; points: number; discount: number; nextProgression: string }> = {
-    "0903 123 456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 15, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 15%)" },
-    "0903123456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 15, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 15%)" },
-    "0908 123 456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 10, nextProgression: "Cần 150 điểm nữa lên VIP" },
-    "0908123456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 10, nextProgression: "Cần 150 điểm nữa lên VIP" },
-    "0912 345 678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 5, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
-    "0912345678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 5, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
-    "0988 777 666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
-    "0988777666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
+const SAMPLE_MEMBERS: Record<string, { name: string; tier: string; points: number; discount: number; discountAmount?: number; nextProgression: string }> = {
+    "0903 123 456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 10, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 10%)" },
+    "0903123456": { name: "Nguyễn An", tier: "Hạng VIP", points: 1250, discount: 10, nextProgression: "Đã đạt Hạng VIP cao nhất (Giảm 10%)" },
+    "0908 123 456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 5, nextProgression: "Cần 150 điểm nữa lên VIP" },
+    "0908123456": { name: "Trần Văn An", tier: "Hạng Vàng", points: 850, discount: 5, nextProgression: "Cần 150 điểm nữa lên VIP" },
+    "0912 345 678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 0, discountAmount: 5000, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
+    "0912345678": { name: "Trần Bình", tier: "Hạng Bạc", points: 420, discount: 0, discountAmount: 5000, nextProgression: "Cần 80 điểm nữa lên Hạng Vàng" },
+    "0988 777 666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, discountAmount: 2000, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
+    "0988777666": { name: "Lê Minh Tuấn", tier: "Hạng Thành Viên", points: 150, discount: 0, discountAmount: 2000, nextProgression: "Cần 50 điểm nữa lên Hạng Bạc" },
 };
 
 export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }: PosCartProps) {
@@ -53,6 +53,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
     const [memberName, setMemberName] = useState<string>("");
     const [voucher, setVoucher] = useState("");
     const [discountInput, setDiscountInput] = useState("");
+    const [flatDiscount, setFlatDiscount] = useState(0);
     const [taxInput, setTaxInput] = useState("10");
     const [paidInput, setPaidInput] = useState("");
 
@@ -62,7 +63,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         (sum, item) => sum + item.quantity * item.unitPrice,
         0,
     );
-    const discount = Math.round(subtotal * (discountRate ?? 0) / 100);
+    const discount = subtotal > 0 ? Math.min(subtotal, Math.round(subtotal * (discountRate ?? 0) / 100) + flatDiscount) : 0;
     const tax = Math.round((subtotal - discount) * (taxRate ?? 0) / 100);
     const total = subtotal - discount + tax;
     const paid = paidInput.trim() ? Number(paidInput) : 0;
@@ -81,13 +82,19 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
             setMemberName(found.name);
             setMemberInfo(found.name);
             setDiscountInput(String(found.discount));
+            setFlatDiscount(found.discountAmount ?? 0);
             toast.success("Đã áp dụng ưu đãi hiện có của khách hàng.");
         } else if (found) {
             setMemberName(found.name);
             setMemberInfo(`${found.name} · ${found.tier} (${found.points.toLocaleString()} điểm · ${found.nextProgression})`);
+            setDiscountInput(String(found.discount));
+            setFlatDiscount(found.discountAmount ?? 0);
             if (found.discount > 0) {
-                setDiscountInput(String(found.discount));
                 toast.success(`Đã nhận diện hội viên ${found.name}! Tự động áp dụng giảm ${found.discount}% (${found.tier}).`, {
+                    title: "Hội Viên Thân Thiết",
+                });
+            } else if (found.discountAmount && found.discountAmount > 0) {
+                toast.success(`Đã nhận diện hội viên ${found.name}! Tự động áp dụng giảm ${formatCurrency(found.discountAmount)} (${found.tier}).`, {
                     title: "Hội Viên Thân Thiết",
                 });
             } else {
@@ -98,8 +105,9 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         } else {
             setMemberName("Khách Mới");
             setMemberInfo(`Khách mới: ${cleanPhone}`);
-            toast.info(`Số điện thoại ${cleanPhone} chưa có trên hệ thống, sẽ tích điểm như Khách Mới.`, {
-                title: "Khách Mới",
+            setFlatDiscount(2000);
+            toast.info(`Số điện thoại ${cleanPhone} chưa có trên hệ thống, sẽ tích điểm và giảm 2.000 ₫ như Thành Viên Mới.`, {
+                title: "Thành Viên Mới",
             });
         }
     }
@@ -171,6 +179,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
         setPaidInput("");
         setVoucher("");
         setDiscountInput("");
+        setFlatDiscount(0);
         setPhone("");
         setMemberInfo(null);
         setMemberName("");
@@ -214,7 +223,7 @@ export default function PosCart({ items, onRemove, onClear, branchId = "CN01" }:
                         </p>
                     ) : (
                         <p className="text-xs text-[var(--muted)] mt-2">
-                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (Hạng VIP: -15%, Hạng Vàng: -10%, Hạng Bạc: -5%).
+                            Nhập SĐT để tích điểm và áp dụng ưu đãi hạng thẻ (VIP: -10%, Vàng: -5%, Bạc: -5.000₫, Thành viên: -2.000₫).
                         </p>
                     )}
                 </div>

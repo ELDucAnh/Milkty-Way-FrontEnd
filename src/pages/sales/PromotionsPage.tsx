@@ -340,7 +340,7 @@ export default function PromotionsPage() {
         }
 
         const id = crypto.randomUUID();
-        const code = form.code.trim().toUpperCase() || `KM-MP-${id}`;
+        const code = form.code.trim().toUpperCase() || `KM-${String(rows.length + 1).padStart(3, "0")}`;
 
         if (rows.some((row) => row.code.toUpperCase() === code)) {
             toast.warning("Mã chương trình đã tồn tại.");
@@ -471,10 +471,10 @@ export default function PromotionsPage() {
                 <Badge variant={statusVariants[row.status]}>{statusLabels[row.status]}</Badge>
             ),
         },
-        {
+        ...(can("promotion.manage") ? [{
             id: "actions",
             header: "Thao tác",
-            render: (row) => (
+            render: (row: Promotion) => (
                 <button
                     type="button"
                     className={`btn btn-sm ${row.status === "active" ? "btn-secondary" : "btn-primary"}`}
@@ -483,7 +483,7 @@ export default function PromotionsPage() {
                     {row.status === "active" ? "Tạm ngưng" : "Kích hoạt"}
                 </button>
             ),
-        },
+        }] : []),
     ];
 
     return (
