@@ -5,6 +5,7 @@ import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../contexts/ToastContext";
 import { getTodayISO, makeId } from "../shared/formatters";
+import { homePath } from "../../utils/auth";
 import { useDemoState } from "../shared/useDemoState";
 import { usableLotQuantity } from "../shared/business-demo";
 import type {
@@ -364,10 +365,10 @@ export default function AddProductPage() {
               const costPerUnit =
                 quantity > 0
                   ? lots.reduce(
-                      (total, lot) =>
-                        total + usableLotQuantity(lot) * lot.unitCost,
-                      0,
-                    ) / quantity
+                    (total, lot) =>
+                      total + usableLotQuantity(lot) * lot.unitCost,
+                    0,
+                  ) / quantity
                   : 0;
               return sum + line.quantity * costPerUnit;
             }, 0);
@@ -379,6 +380,7 @@ export default function AddProductPage() {
       status: "pending-recipe" as const,
       note: description.trim(),
       imageName,
+      createdAt: getTodayISO(),
     };
     const recipes = usableSizes.map((size) => ({
       id: makeId("recipe"),
@@ -415,7 +417,7 @@ export default function AddProductPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/inventory/products">Menu đồ uống</Link>
             <span className="sep">/</span>
@@ -583,11 +585,10 @@ export default function AddProductPage() {
                     return (
                       <label
                         key={ingredient.id}
-                        className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${
-                          isSelected
-                            ? "border-[var(--primary)] bg-[var(--background)]"
-                            : "border-[var(--border)]"
-                        }`}
+                        className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${isSelected
+                          ? "border-[var(--primary)] bg-[var(--background)]"
+                          : "border-[var(--border)]"
+                          }`}
                       >
                         <input
                           type="checkbox"

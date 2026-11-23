@@ -21,7 +21,7 @@ import {
   type PillTone,
   type SortOption,
 } from "../../components/shared/ui-kit";
-import { homePath, isCashier, scopedBranch, sessionUser } from "../../utils/auth";
+import { can, canVisit, homePath, scopedBranch, sessionUser } from "../../utils/auth";
 import { getIngredient, getStore } from "../shared/business-demo";
 import {
   formatCurrency,
@@ -37,12 +37,15 @@ import {
 import { useDemoState } from "../shared/useDemoState";
 
 type InvTab = "all" | "low" | "expiring" | "expired" | "ignored";
-type InvSortKey = "ratio-asc" | "name-asc" | "value-desc";
+type InvSortKey = "ratio-asc" | "ratio-desc" | "name-asc" | "name-desc" | "value-desc" | "value-asc";
 
 const SORT_OPTIONS: SortOption<InvSortKey>[] = [
   { key: "ratio-asc", label: "Mức độ thiếu hụt (Thấp → Cao)", fieldLabel: "Tồn / Ngưỡng" },
+  { key: "ratio-desc", label: "Mức độ đủ tồn (Cao → Thấp)", fieldLabel: "Tồn / Ngưỡng" },
   { key: "name-asc", label: "Tên nguyên liệu A → Z", fieldLabel: "Tên nguyên liệu" },
+  { key: "name-desc", label: "Tên nguyên liệu Z → A", fieldLabel: "Tên nguyên liệu" },
   { key: "value-desc", label: "Giá trị tồn cao → thấp", fieldLabel: "Giá trị tồn" },
+  { key: "value-asc", label: "Giá trị tồn thấp → cao", fieldLabel: "Giá trị tồn" },
 ];
 
 export default function InventoryReportPage() {
@@ -51,7 +54,7 @@ export default function InventoryReportPage() {
   const [data, setData] = useDemoState();
   const branchScope = scopedBranch();
   const currentUser = sessionUser();
-  const canMute = !isCashier();
+  const canMute = can("ingredient.manage");
   const today = getTodayISO();
 
   const [ui, setUi] = usePageUiState<{
@@ -126,7 +129,14 @@ export default function InventoryReportPage() {
         const rB = b.stockMin > 0 ? b.stockActual / b.stockMin : b.stockActual;
         return rA - rB;
       }
+      if (ui.sortBy === "ratio-desc") {
+        const rA = a.stockMin > 0 ? a.stockActual / a.stockMin : a.stockActual;
+        const rB = b.stockMin > 0 ? b.stockActual / b.stockMin : b.stockActual;
+        return rB - rA;
+      }
       if (ui.sortBy === "name-asc") return a.name.localeCompare(b.name, "vi");
+      if (ui.sortBy === "name-desc") return b.name.localeCompare(a.name, "vi");
+      if (ui.sortBy === "value-asc") return a.totalValue - b.totalValue;
       return b.totalValue - a.totalValue;
     });
     return searched;
@@ -170,7 +180,9 @@ export default function InventoryReportPage() {
         (r) =>
           !(
             r.ingredientId === row.ingredientId &&
-            (r.scope === row.warehouse || r.scope === "ALL")
+            (branchScope
+              ? r.scope === branchScope
+              : r.scope === row.warehouse || r.scope === "ALL")
           ),
       ),
     }));
@@ -251,13 +263,15 @@ export default function InventoryReportPage() {
           >
             Xuất CSV tồn kho
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => navigate("/purchases/new")}
-          >
-            + Tạo đơn nhập PO
-          </button>
+          {canVisit("/purchases/new") && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate("/purchases/new")}
+            >
+              + Tạo đơn nhập PO
+            </button>
+          )}
         </div>
       </div>
 
@@ -419,7 +433,7 @@ export default function InventoryReportPage() {
                       label="Nguyên liệu & Điểm kho"
                       fieldHint="ingredient.name"
                       ascKey="name-asc"
-                      descKey="name-asc"
+                      descKey="name-desc"
                       currentSort={ui.sortBy}
                       onSort={(next) =>
                         setUi((p) => ({ ...p, sortBy: next as InvSortKey }))
@@ -429,7 +443,7 @@ export default function InventoryReportPage() {
                       label="Tồn thực tế vs Ngưỡng an toàn"
                       fieldHint="stockActual / stockMin"
                       ascKey="ratio-asc"
-                      descKey="ratio-asc"
+                      descKey="ratio-desc"
                       currentSort={ui.sortBy}
                       onSort={(next) =>
                         setUi((p) => ({ ...p, sortBy: next as InvSortKey }))
@@ -438,7 +452,7 @@ export default function InventoryReportPage() {
                     <SortableTh
                       label="Giá trị tồn"
                       fieldHint="totalValue"
-                      ascKey="ratio-asc"
+                      ascKey="value-asc"
                       descKey="value-desc"
                       currentSort={ui.sortBy}
                       onSort={(next) =>
@@ -615,22 +629,24 @@ export default function InventoryReportPage() {
         widthClass="max-w-[500px]"
         footer={
           <div className="flex justify-between w-full">
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                setSelectedRuleItem(null);
-                navigate(
-                  activeBranch === "ALL" || activeBranch === "Kho Tổng"
-                    ? "/purchases/new"
-                    : "/production/planning",
-                );
-              }}
-            >
-              {activeBranch === "ALL" || activeBranch === "Kho Tổng"
-                ? "+ Lập đơn mua PO"
-                : "+ Đề xuất bổ sung tạm thời"}
-            </button>
+            {(canVisit("/purchases/new") || (activeBranch !== "ALL" && activeBranch !== "Kho Tổng")) && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setSelectedRuleItem(null);
+                  navigate(
+                    (activeBranch === "ALL" || activeBranch === "Kho Tổng") && canVisit("/purchases/new")
+                      ? "/purchases/new"
+                      : "/production/planning",
+                  );
+                }}
+              >
+                {(activeBranch === "ALL" || activeBranch === "Kho Tổng") && canVisit("/purchases/new")
+                  ? "+ Lập đơn mua PO"
+                  : "+ Đề xuất bổ sung tạm thời"}
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-secondary btn-sm"

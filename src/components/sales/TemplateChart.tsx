@@ -160,7 +160,7 @@ export default function TemplateChart({
                 boxWidth: 10,
                 font: {
                   size: 11,
-                  family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                  family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 },
               },
             },
@@ -171,15 +171,15 @@ export default function TemplateChart({
               padding: 10,
               cornerRadius: 8,
               titleFont: {
-                family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               },
               bodyFont: {
-                family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               },
               callbacks: {
-                label: (ctx: { dataset: { label?: string }; parsed: { y: number } }) => {
+                label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) => {
                   const lbl = ctx.dataset?.label ? `${ctx.dataset.label}: ` : "";
-                  const val = ctx.parsed.y.toLocaleString("vi-VN");
+                  const val = (ctx.parsed.y ?? 0).toLocaleString("vi-VN");
                   return `${lbl}${val} ${unitSuffix}`.trim();
                 },
               },
@@ -196,7 +196,7 @@ export default function TemplateChart({
                   color: tick,
                   font: {
                     size: 11,
-                    family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                    family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   },
                 }
                 : undefined,
@@ -205,7 +205,7 @@ export default function TemplateChart({
                 font: {
                   size: 11,
                   weight: "500",
-                  family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                  family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 },
               },
             },
@@ -219,7 +219,7 @@ export default function TemplateChart({
                   color: tick,
                   font: {
                     size: 11,
-                    family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                    family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   },
                 }
                 : undefined,
@@ -227,10 +227,9 @@ export default function TemplateChart({
                 color: tick,
                 font: {
                   size: 11,
-                  family: "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif",
+                  family: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 },
-                callback: (v: number) =>
-                  `${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toLocaleString("vi-VN")}`,
+                callback: (v: number) => v.toLocaleString("vi-VN"),
               },
             },
           },

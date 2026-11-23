@@ -20,23 +20,26 @@ import {
 } from "../../components/shared/ui-kit";
 import { homePath, scopedBranch } from "../../utils/auth";
 import {
+  availableLotQuantity,
   getBranchMinimum,
   getIngredient,
   getStore,
   relativeDateISO,
-  usableLotQuantity,
   type Ingredient,
   type IngredientLot,
 } from "../shared/business-demo";
 import { formatDate, formatNumber, getTodayISO, sumBy } from "../shared/formatters";
 import { useDemoState } from "../shared/useDemoState";
 
-type StoreIngSortKey = "name-asc" | "stock-asc" | "expiry-asc";
+type StoreIngSortKey = "name-asc" | "name-desc" | "stock-asc" | "stock-desc" | "expiry-asc" | "expiry-desc";
 
 const SORT_OPTIONS: SortOption<StoreIngSortKey>[] = [
   { key: "name-asc", label: "Tên nguyên liệu A → Z", fieldLabel: "Tên nguyên liệu" },
+  { key: "name-desc", label: "Tên nguyên liệu Z → A", fieldLabel: "Tên nguyên liệu" },
   { key: "stock-asc", label: "Tồn quầy thấp → cao", fieldLabel: "Tồn quầy" },
+  { key: "stock-desc", label: "Tồn quầy cao → thấp", fieldLabel: "Tồn quầy" },
   { key: "expiry-asc", label: "Hạn dùng gần nhất", fieldLabel: "Hạn dùng" },
+  { key: "expiry-desc", label: "Hạn dùng xa nhất", fieldLabel: "Hạn dùng" },
 ];
 
 export default function StoreIngredientsPage() {
@@ -74,7 +77,7 @@ export default function StoreIngredientsPage() {
   const counterRows = useMemo(() => {
     const targetStores =
       activeBranch === "ALL"
-        ? data.stores.slice(0, 6)
+        ? data.stores
         : data.stores.filter((s) => s.id === activeBranch);
 
     const list: Array<{
@@ -111,11 +114,12 @@ export default function StoreIngredientsPage() {
         const ing = getIngredient(data, ingId);
         if (!ing) continue;
         const ingLots = lotsAtStore.filter((l) => l.ingredientId === ingId);
-        const available = sumBy(ingLots, (l) => usableLotQuantity(l, today));
+        const available = sumBy(ingLots, (l) => availableLotQuantity(l, today));
         const reserved = sumBy(ingLots, (l) => l.reservedQuantity ?? 0);
         const locked = sumBy(ingLots, (l) => l.lockedQuantity ?? 0);
         const minimum = getBranchMinimum(ing, store.id);
         const expDates = ingLots
+          .filter((l) => l.quantity > 0 && l.quality === "pass")
           .map((l) => l.expiryDate)
           .filter((d): d is string => Boolean(d))
           .sort();
@@ -167,10 +171,21 @@ export default function StoreIngredientsPage() {
       if (ui.sortBy === "name-asc") {
         return a.ingredient.name.localeCompare(b.ingredient.name, "vi");
       }
+      if (ui.sortBy === "name-desc") {
+        return b.ingredient.name.localeCompare(a.ingredient.name, "vi");
+      }
       if (ui.sortBy === "stock-asc") {
         const ratioA = a.minimum > 0 ? a.available / a.minimum : a.available;
         const ratioB = b.minimum > 0 ? b.available / b.minimum : b.available;
         return ratioA - ratioB;
+      }
+      if (ui.sortBy === "stock-desc") {
+        const ratioA = a.minimum > 0 ? a.available / a.minimum : a.available;
+        const ratioB = b.minimum > 0 ? b.available / b.minimum : b.available;
+        return ratioB - ratioA;
+      }
+      if (ui.sortBy === "expiry-desc") {
+        return (b.nearestExpiry ?? "").localeCompare(a.nearestExpiry ?? "");
       }
       return (a.nearestExpiry ?? "9999-12-31").localeCompare(
         b.nearestExpiry ?? "9999-12-31",
@@ -356,7 +371,7 @@ export default function StoreIngredientsPage() {
                     label="Nguyên liệu"
                     fieldHint="ingredient.name"
                     ascKey="name-asc"
-                    descKey="name-asc"
+                    descKey="name-desc"
                     currentSort={ui.sortBy}
                     onSort={(next) =>
                       setUi((p) => ({ ...p, sortBy: next as StoreIngSortKey }))
@@ -367,7 +382,7 @@ export default function StoreIngredientsPage() {
                     label="Tồn quầy vs Ngưỡng an toàn"
                     fieldHint="available / minimum"
                     ascKey="stock-asc"
-                    descKey="stock-asc"
+                    descKey="stock-desc"
                     currentSort={ui.sortBy}
                     onSort={(next) =>
                       setUi((p) => ({ ...p, sortBy: next as StoreIngSortKey }))
@@ -377,7 +392,7 @@ export default function StoreIngredientsPage() {
                     label="Hạn gần nhất"
                     fieldHint="nearestExpiry"
                     ascKey="expiry-asc"
-                    descKey="expiry-asc"
+                    descKey="expiry-desc"
                     currentSort={ui.sortBy}
                     onSort={(next) =>
                       setUi((p) => ({ ...p, sortBy: next as StoreIngSortKey }))

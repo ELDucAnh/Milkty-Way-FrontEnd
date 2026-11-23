@@ -122,10 +122,43 @@ const mockEmployees: UserEmployee[] = [
   },
 ];
 
+const BRANCH_OPTIONS = [
+  "CN01 — Bến Nghé (Quận 1)",
+  "CN02 — Bàn Cờ (Quận 3)",
+  "CN03 — Chợ Lớn (Quận 5)",
+  "CN04 — Tân Hưng (Quận 7)",
+  "CN05 — Hàng Xanh (Bình Thạnh)",
+  "CN06 — Làng Đại Học (Thủ Đức)",
+  "CN07 — Bảy Hiền (Tân Bình)",
+  "CN08 — Cityland (Gò Vấp)",
+  "CN09 — Phan Xích Long (Phú Nhuận)",
+  "CN10 — Thảo Điền (TP. Thủ Đức)",
+  "CN11 — Celadon (Tân Phú)",
+  "CN12 — Sư Vạn Hạnh (Quận 10)",
+  "Kho Tổng Trung Tâm (Bình Tân)",
+  "Trụ Sở Chính (Văn Phòng Điều Hành)",
+];
+
+const STORAGE_USERS_KEY = "milktyway.users.extra.v1";
+
+function loadStoredUsers(): UserEmployee[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_USERS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return [...parsed, ...mockEmployees];
+    }
+  } catch {
+    // ignore
+  }
+  return mockEmployees;
+}
+
 export default function UsersPage() {
   const toast = useToast();
   const navigate = useNavigate();
-  const [employees, setEmployees] = useState<UserEmployee[]>(mockEmployees);
+  const branchScope = scopedBranch();
+  const [employees, setEmployees] = useState<UserEmployee[]>(loadStoredUsers);
   const [search, setSearch] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
@@ -133,14 +166,18 @@ export default function UsersPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<UserEmployee | null>(null);
 
+  const defaultBranchForScope =
+    (branchScope
+      ? BRANCH_OPTIONS.find((opt) => opt.startsWith(`${branchScope} `)) ?? branchScope
+      : BRANCH_OPTIONS[0]);
+
   // Form states
   const [formName, setFormName] = useState("");
   const [formCode, setFormCode] = useState("NV-TN-0104");
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formRole, setFormRole] = useState("Thu Ngân Quầy POS");
-  const [formBranch, setFormBranch] = useState("CN05 — Quận 10 (Sư Vạn Hạnh)");
-  const branchScope = scopedBranch();
+  const [formBranch, setFormBranch] = useState(defaultBranchForScope);
   const canAddEmployee = can("user.manageBranch");
   const assignableRoles = branchScope
     ? ["Thu Ngân Quầy POS", "Nhân Viên Kho Chi Nhánh"]
@@ -176,7 +213,8 @@ export default function UsersPage() {
       toast.warning("Quản lý chi nhánh chỉ được tạo tài khoản Thu ngân hoặc Nhân viên kho.");
       return;
     }
-    if (branchScope && !formBranch.includes(branchScope)) {
+    const targetBranch = branchScope ? defaultBranchForScope : formBranch;
+    if (branchScope && !targetBranch.includes(branchScope)) {
       toast.warning(`Chỉ được phân công nhân viên vào chi nhánh ${branchScope}.`);
       return;
     }
@@ -200,8 +238,8 @@ export default function UsersPage() {
             : formRole.includes("Thu Ngân")
               ? "warning"
               : "gray",
-      branch: formBranch,
-      branchBadge: formBranch.includes("Trụ Sở") ? "purple" : "info",
+      branch: targetBranch,
+      branchBadge: targetBranch.includes("Trụ Sở") ? "purple" : "info",
       phone: formPhone.trim(),
       shiftStatus: "Mới tạo (Chưa vào ca)",
       shiftTone: "gray",
@@ -214,7 +252,14 @@ export default function UsersPage() {
       avatarBg: "bg-teal-600",
     };
 
-    setEmployees([...employees, newEmp]);
+    const next = [...employees, newEmp];
+    setEmployees(next);
+    try {
+      const mockIds = new Set(mockEmployees.map((m) => m.id));
+      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(next.filter((e) => !mockIds.has(e.id))));
+    } catch {
+      // ignore storage error
+    }
     setShowAddModal(false);
     setFormName("");
     setFormCode(`NV-TN-01${String(nextIndex + 1).padStart(2, "0")}`);
@@ -346,15 +391,14 @@ export default function UsersPage() {
             onChange={(e) => setSelectedBranch(e.target.value)}
           >
             <option value="">Tất cả 12 Chi Nhánh</option>
-            <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>
-            <option value="CN02">CN02 — Quận 3 (Võ Văn Tần)</option>
-            <option value="CN03">CN03 — Quận 5 (Trần Hưng Đạo)</option>
-            <option value="CN04">CN04 — Quận 7 (Phú Mỹ Hưng)</option>
-            <option value="CN05">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-            <option value="CN06">CN06 — Bình Thạnh (D2)</option>
-            <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
-            <option value="Kho Tổng">Kho Tổng Trung Tâm (Bình Tân)</option>
-            <option value="Trụ Sở">Trụ Sở Chính (Văn Phòng Điều Hành)</option>
+            {BRANCH_OPTIONS.map((opt) => {
+              const code = opt.startsWith("CN") ? opt.slice(0, 4) : opt.startsWith("Kho") ? "Kho Tổng" : "Trụ Sở";
+              return (
+                <option key={opt} value={code}>
+                  {opt}
+                </option>
+              );
+            })}
           </select>)}
           <select
             className="form-input form-select w-auto"
@@ -563,20 +607,16 @@ export default function UsersPage() {
               </label>
               <select
                 className="form-input form-select"
-                value={formBranch}
+                value={branchScope ? defaultBranchForScope : formBranch}
                 disabled={!!branchScope}
                 onChange={(e) => setFormBranch(e.target.value)}
                 required
               >
-                <option>CN01 — Quận 1 (Nguyễn Huệ)</option>
-                <option>CN02 — Quận 3 (Võ Văn Tần)</option>
-                <option>CN03 — Quận 5 (Trần Hưng Đạo)</option>
-                <option>CN04 — Quận 7 (Phú Mỹ Hưng)</option>
-                <option>CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-                <option>CN06 — Bình Thạnh (D2)</option>
-                <option>CN07 — Gò Vấp (Phan Văn Trị)</option>
-                <option>Kho Tổng Trung Tâm (Bình Tân)</option>
-                <option>Trụ Sở Chính (Văn Phòng Điều Hành)</option>
+                {BRANCH_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -694,10 +734,10 @@ export default function UsersPage() {
                     {selectedEmployee.role.includes("Chủ Doanh Nghiệp")
                       ? "Toàn quyền hệ thống chuỗi 12 chi nhánh & Kho tổng"
                       : selectedEmployee.role.includes("Quản Lý")
-                      ? "Quản lý nhân sự, kho, đối soát ca tại chi nhánh được gán"
-                      : selectedEmployee.role.includes("Thu Ngân")
-                      ? "Bán hàng POS cảm ứng, tích điểm thành viên, mở/đóng ca"
-                      : "Quản lý nhập xuất lô hàng FEFO & kiểm kê mù"}
+                        ? "Quản lý nhân sự, kho, đối soát ca tại chi nhánh được gán"
+                        : selectedEmployee.role.includes("Thu Ngân")
+                          ? "Bán hàng POS cảm ứng, tích điểm thành viên, mở/đóng ca"
+                          : "Quản lý nhập xuất lô hàng FEFO & kiểm kê mù"}
                   </div>
                 </div>
               </div>

@@ -1,23 +1,37 @@
-import { canVisit, homePath, isCashier, isManager, isWarehouse, sessionUser } from "../../utils/auth";
+import { can, canVisit, homePath, currentStaff, readStaffProfile, saveStaffProfile, sessionUser, type StaffRecord, type Role } from "../../utils/auth";
+import { loadCashShifts } from "../shared/cash-shifts-store";
+import { formatCurrency } from "../shared/formatters";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
 
-const STAFF_CODES = { owner: "NV-ADMIN-01", manager: "NV-QL-CN05", cashier: "NV-POS-01", warehouse: "NV-KHO-01" } as const;
 const DEFAULT_PHONE = { owner: "0903 123 456", manager: "0907 654 321", cashier: "0908 111 222", warehouse: "0909 888 777" } as const;
-const DEFAULT_ADDRESS = { owner: "Số 2 Hải Triều, Phường Bến Nghé, Quận 1, TP.HCM", manager: "Quận 10, TP.HCM", cashier: "Quận 1, TP.HCM", warehouse: "Bình Tân, TP.HCM" } as const;
 
 export default function ProfilePage() {
+  const staff = currentStaff();
+  if (!staff?.loginRole) return <Navigate to="/login" replace />;
+  return <StaffProfileForm key={staff.staffId} staff={staff} role={staff.loginRole} />;
+}
+
+function StaffProfileForm({ staff, role }: { staff: StaffRecord; role: Role }) {
   const toast = useToast();
   const navigate = useNavigate();
   const user = sessionUser();
-  const persisted = isCashier() || isManager() || isWarehouse();
-  const storageKey = (field: string) => `milktyway.${user.role}.${field}`;
-
-  const [fullName, setFullName] = useState(user.name);
-  const [phone, setPhone] = useState(persisted ? localStorage.getItem(storageKey("phone")) || DEFAULT_PHONE[user.role] : DEFAULT_PHONE[user.role]);
-  const [address, setAddress] = useState(persisted ? localStorage.getItem(storageKey("address")) || DEFAULT_ADDRESS[user.role] : DEFAULT_ADDRESS[user.role]);
+  const [initial] = useState(() => {
+    try {
+      return {
+        name: readStaffProfile(staff, "name") ?? staff.name,
+        phone: readStaffProfile(staff, "phone") ?? DEFAULT_PHONE[role],
+        address: readStaffProfile(staff, "address") ?? "", error: ""
+      };
+    } catch {
+      return { name: staff.name, phone: "", address: "", error: "Không đọc được hồ sơ. Vui lòng tải lại trang trước khi lưu." };
+    }
+  });
+  const [fullName, setFullName] = useState(initial.name);
+  const [phone, setPhone] = useState(initial.phone);
+  const [address, setAddress] = useState(initial.address);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -29,22 +43,40 @@ export default function ProfilePage() {
       .map((w) => w[0]?.toUpperCase() || "")
       .join("") || "HL";
 
+  const openBranchShift = (() => {
+    try {
+      if (!staff.branchId) return null;
+      return loadCashShifts().find((s) => s.branchId === staff.branchId && s.status !== "closed") ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
   function handleSaveProfile(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (newPassword && newPassword.length < 8) {
-      toast.warning("Mật khẩu mới phải có tối thiểu 8 ký tự!");
+    if (newPassword || confirmPassword) {
+      if (!newPassword.trim() || newPassword.length < 8) {
+        toast.warning("Mật khẩu mới phải có tối thiểu 8 ký tự (không chỉ gồm khoảng trắng)!");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error("Mật khẩu xác nhận không khớp!");
+        return;
+      }
+    }
+    try {
+      if (initial.error) throw new Error(initial.error);
+      saveStaffProfile(staff.staffId, {
+        name: fullName, phone, address,
+        ...(newPassword ? { password: newPassword } : {}),
+      });
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không lưu được hồ sơ.");
       return;
     }
-    if (newPassword && newPassword !== confirmPassword) {
-      toast.error("Mật khẩu xác nhận không khớp!");
-      return;
-    }
-    if (persisted) {
-      localStorage.setItem(storageKey("name"), fullName.trim());
-      localStorage.setItem(storageKey("phone"), phone);
-      localStorage.setItem(storageKey("address"), address);
-      if (newPassword) localStorage.setItem(storageKey("password"), newPassword);
-    }
+    window.dispatchEvent(new Event("milktyway:profile-updated"));
     toast.success("Đã cập nhật hồ sơ nhân sự thành công!", {
       title: "Hồ Sơ",
     });
@@ -89,10 +121,10 @@ export default function ProfilePage() {
           <div className="text-[13px] text-[var(--primary)] font-semibold mt-1">
             {user.roleLabel}
           </div>
-          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: {STAFF_CODES[user.role]}</div>
+          <div className="text-xs text-[var(--muted)] mt-0.5">Mã NV: {staff.staffId}</div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mt-2 border border-emerald-200">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Đang Trong Ca Trực Chiều
+            {openBranchShift ? `Ca đang mở · ${openBranchShift.id}` : user.branchLabel}
           </div>
 
           <div className="mt-5 pt-5 border-t border-[var(--border)]">
@@ -135,48 +167,60 @@ export default function ProfilePage() {
         {/* Profile Form & Ca làm việc */}
         <div className="lg:col-span-2 space-y-6">
           {/* Thông tin ca trực hiện tại */}
-          <div className="card border border-emerald-200 bg-emerald-50/20">
-            <div className="card-header border-b border-emerald-100 pb-3 mb-3 flex items-center justify-between">
-              <h3 className="card-title text-emerald-900 m-0">Ca Làm Việc Hôm Nay (28/10/2026)</h3>
-              <Badge variant="success">Ca 2 (14:00 - 22:30)</Badge>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
-                <span className="text-[var(--muted)] block">Thời gian mở ca:</span>
-                <strong className="text-sm text-[var(--text)]">13:55 Hôm nay</strong>
+          {staff.branchId && (
+            <div className="card border border-emerald-200 bg-emerald-50/20">
+              <div className="card-header border-b border-emerald-100 pb-3 mb-3 flex items-center justify-between">
+                <h3 className="card-title text-emerald-900 m-0">
+                  Ca Làm Việc Chi Nhánh {staff.branchId}
+                </h3>
+                <Badge variant={openBranchShift ? "success" : "gray"}>
+                  {openBranchShift ? `${openBranchShift.counterName} · Đang mở` : "Chưa có ca mở"}
+                </Badge>
               </div>
-              <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
-                <span className="text-[var(--muted)] block">Quỹ tiền mặt đầu ca:</span>
-                <strong className="text-sm text-[var(--primary)]">1.500.000 ₫</strong>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
+                  <span className="text-[var(--muted)] block">Mã ca hiện tại:</span>
+                  <strong className="text-sm text-[var(--text)]">
+                    {openBranchShift ? openBranchShift.id : "Chưa mở ca"}
+                  </strong>
+                </div>
+                <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
+                  <span className="text-[var(--muted)] block">Quỹ tiền mặt đầu ca:</span>
+                  <strong className="text-sm text-[var(--primary)]">
+                    {openBranchShift ? formatCurrency(openBranchShift.openingCash) : "—"}
+                  </strong>
+                </div>
+                <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
+                  <span className="text-[var(--muted)] block">Nhân sự mở ca:</span>
+                  <strong className="text-sm text-[var(--text)]">
+                    {openBranchShift ? openBranchShift.staffName : user.name}
+                  </strong>
+                </div>
               </div>
-              <div className="p-2.5 rounded-lg bg-white border border-emerald-100">
-                <span className="text-[var(--muted)] block">Thu ngân cùng ca:</span>
-                <strong className="text-sm text-[var(--text)]">Tuấn Anh (POS 1)</strong>
-              </div>
-            </div>
-            <div className="mt-3 flex justify-end gap-2">
-              {!isCashier() && (<button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() =>
-                  toast.info("Đã mở biểu mẫu gửi yêu cầu đổi ca trực đến Admin", {
-                    title: "Đổi Ca",
-                  })
-                }
-              >
-                Xin Đổi Ca Trực
-              </button>)}
-              {canVisit("/sales/shifts") && (
+              <div className="mt-3 flex justify-end gap-2">
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => navigate("/sales/shifts")}
+                  className="btn btn-secondary btn-sm"
+                  onClick={() =>
+                    toast.info("Đã mở biểu mẫu gửi yêu cầu đổi ca trực đến Quản lý", {
+                      title: "Đổi Ca",
+                    })
+                  }
                 >
-                  Đóng Ca &amp; Đối Soát Tiền Mặt
+                  Xin Đổi Ca Trực
                 </button>
-              )}
+                {can("shift.closeRequestBranch") && canVisit("/sales/shifts") && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => navigate("/sales/shifts")}
+                  >
+                    Đóng Ca &amp; Đối Soát Tiền Mặt
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Chi tiết hồ sơ */}
           <div className="card">
@@ -268,8 +312,12 @@ export default function ProfilePage() {
                     POS
                   </div>
                   <div>
-                    <div className="font-semibold text-[var(--text)]">Máy POS Cảm Ứng — Quầy 1 CN05</div>
-                    <div className="text-[var(--muted)]">IP: 192.168.1.105 · TP. Hồ Chí Minh</div>
+                    <div className="font-semibold text-[var(--text)]">
+                      {staff.branchId
+                        ? `Thiết bị quầy ${staff.counterId ?? "Quản lý"} — ${staff.branchId}`
+                        : `Phiên điều hành — ${user.branchLabel}`}
+                    </div>
+                    <div className="text-[var(--muted)]">Tài khoản: {staff.staffId} · TP. Hồ Chí Minh</div>
                   </div>
                 </div>
                 <Badge variant="success">Đang hoạt động</Badge>

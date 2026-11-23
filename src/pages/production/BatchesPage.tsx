@@ -21,6 +21,7 @@ import {
   type SortOption,
 } from "../../components/shared/ui-kit";
 import {
+  can,
   homePath,
   isCashier,
   isWarehouse,
@@ -92,7 +93,7 @@ export default function BatchesPage() {
   const [data, setData] = useDemoState();
   const branchScope = scopedBranch();
   const currentUser = sessionUser();
-  const canProduce = !isCashier();
+  const canProduce = can("batch.manage");
   const canDistribute = !isCashier() && (!branchScope || isWarehouse());
 
   const [ui, setUi] = usePageUiState<{
@@ -456,6 +457,10 @@ export default function BatchesPage() {
   }
 
   function handleToggleHold(batch: ProductionBatch) {
+    if (batch.status === "held" && (batch.quality === "fail" || batch.actualQuantity !== null)) {
+      toast.error(`Mẻ ${batch.code} đã có kết quả kiểm định / hoàn thành trước đó — không thể mở khóa chạy lại.`);
+      return;
+    }
     const nextStatus: BatchStatus = batch.status === "held" ? "processing" : "held";
     setData((current) => ({
       ...current,
@@ -517,6 +522,13 @@ export default function BatchesPage() {
       });
 
       if (completeForm.quality === "pass" && outputIngId) {
+        const inputCostTotal = completeBatch.inputs.reduce((sum, inp) => {
+          const srcLot = current.lots.find((l) => l.id === inp.lotId);
+          return sum + inp.plannedQuantity * (srcLot?.unitCost ?? 0);
+        }, 0);
+        const computedUnitCost = actualNum > 0 && inputCostTotal > 0
+          ? Math.round(inputCostTotal / actualNum)
+          : 65;
         const newKitchenLot: IngredientLot = {
           id: makeId("lot-kit"),
           ingredientId: outputIngId,
@@ -524,7 +536,7 @@ export default function BatchesPage() {
           manufactureDate: today,
           expiryDate: completeForm.expiry,
           quantity: actualNum,
-          unitCost: 65,
+          unitCost: computedUnitCost || 65,
           quality: "pass",
           location: "kitchen",
           locationId: "kitchen",

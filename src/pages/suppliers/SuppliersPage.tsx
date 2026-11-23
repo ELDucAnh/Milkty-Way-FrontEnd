@@ -28,7 +28,8 @@ type SupplierSortKey =
   | "name-desc"
   | "since-asc"
   | "since-desc"
-  | "purchase-desc";
+  | "purchase-desc"
+  | "purchase-asc";
 
 const SORT_OPTIONS: SortOption<SupplierSortKey>[] = [
   { key: "name-asc", label: "Tên NCC A → Z", fieldLabel: "Tên nhà cung cấp" },
@@ -363,6 +364,8 @@ export default function SuppliersPage() {
         return a.partnerSince.localeCompare(b.partnerSince);
       if (ui.sortBy === "since-desc")
         return b.partnerSince.localeCompare(a.partnerSince);
+      if (ui.sortBy === "purchase-asc")
+        return a.totalPurchase - b.totalPurchase;
       return b.totalPurchase - a.totalPurchase;
     });
     return rows;
@@ -658,7 +661,7 @@ export default function SuppliersPage() {
                   <SortableTh
                     label="Tổng nhập &amp; Công nợ"
                     fieldHint="supplier.totalPurchase"
-                    ascKey="purchase-desc"
+                    ascKey="purchase-asc"
                     descKey="purchase-desc"
                     currentSort={ui.sortBy}
                     onSort={(next) =>

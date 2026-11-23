@@ -24,7 +24,7 @@ import {
   UndoBanner,
   usePageUiState,
 } from "../../components/shared/ui-kit";
-import { homePath, scopedBranch } from "../../utils/auth";
+import { homePath, scopedBranch, sessionUser } from "../../utils/auth";
 import {
   getBranchMinimum,
   getIngredient,
@@ -88,7 +88,11 @@ export default function DashboardPage() {
     [stockSummary.stockItems],
   );
 
-  const mutedRules = demoState.ignoredThresholds ?? [];
+  const mutedRules = useMemo(() => {
+    const allMuted = demoState.ignoredThresholds ?? [];
+    if (activeBranch === "ALL") return allMuted;
+    return allMuted.filter((r) => r.scope === "ALL" || r.scope === activeBranch);
+  }, [demoState.ignoredThresholds, activeBranch]);
 
   // Scale factor per selected branch (real profile weights so metrics change cleanly per branch)
   const branchWeight = useMemo(() => {
@@ -168,7 +172,7 @@ export default function DashboardPage() {
       ingredientId: muteTarget.ingredientId,
       scope,
       reason: muteReason,
-      ignoredBy: branchScope ? `QL ${branchScope}` : "Quản trị chuỗi",
+      ignoredBy: sessionUser().name,
       ignoredAt: getTodayISO(),
     };
     setDemoState((prev) => ({
@@ -958,12 +962,14 @@ export default function DashboardPage() {
                       {rule.ignoredBy} · {rule.ignoredAt}
                     </div>
                   </div>
-                  <ConfirmInline
-                    triggerLabel="Khôi phục"
-                    confirmText="Bật lại?"
-                    tone="primary"
-                    onConfirm={() => restoreMutedRule(rule.id)}
-                  />
+                  {(!branchScope || rule.scope === branchScope) && (
+                    <ConfirmInline
+                      triggerLabel="Khôi phục"
+                      confirmText="Bật lại?"
+                      tone="primary"
+                      onConfirm={() => restoreMutedRule(rule.id)}
+                    />
+                  )}
                 </div>
               );
             })}

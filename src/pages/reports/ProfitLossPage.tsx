@@ -23,13 +23,15 @@ import { formatCurrency, formatNumber, getTodayISO } from "../shared/formatters"
 import { useDemoState } from "../shared/useDemoState";
 
 type PlTab = "branches" | "promotions" | "trend";
-type PlSortKey = "profit-desc" | "profit-asc" | "revenue-desc" | "name-asc";
+type PlSortKey = "profit-desc" | "profit-asc" | "revenue-desc" | "revenue-asc" | "name-asc" | "name-desc";
 
 const SORT_OPTIONS: SortOption<PlSortKey>[] = [
   { key: "profit-desc", label: "Lợi nhuận sau thuế cao → thấp", fieldLabel: "Lợi nhuận sau thuế" },
   { key: "profit-asc", label: "Cần tối ưu trước (LN thấp → cao)", fieldLabel: "Lợi nhuận sau thuế" },
   { key: "revenue-desc", label: "Doanh thu cao → thấp", fieldLabel: "Doanh thu" },
+  { key: "revenue-asc", label: "Doanh thu thấp → cao", fieldLabel: "Doanh thu" },
   { key: "name-asc", label: "Mã chi nhánh A → Z", fieldLabel: "Chi nhánh" },
+  { key: "name-desc", label: "Mã chi nhánh Z → A", fieldLabel: "Chi nhánh" },
 ];
 
 interface BranchPlRow {
@@ -216,6 +218,8 @@ export default function ProfitLossPage() {
       if (ui.sortBy === "profit-desc") return b.afterTaxProfit - a.afterTaxProfit;
       if (ui.sortBy === "profit-asc") return a.afterTaxProfit - b.afterTaxProfit;
       if (ui.sortBy === "revenue-desc") return b.revenue - a.revenue;
+      if (ui.sortBy === "revenue-asc") return a.revenue - b.revenue;
+      if (ui.sortBy === "name-desc") return b.storeId.localeCompare(a.storeId);
       return a.storeId.localeCompare(b.storeId);
     });
     return rows;
@@ -507,7 +511,7 @@ export default function ProfitLossPage() {
                       label="Chi nhánh"
                       fieldHint="storeId"
                       ascKey="name-asc"
-                      descKey="name-asc"
+                      descKey="name-desc"
                       currentSort={ui.sortBy}
                       onSort={(next) =>
                         setUi((p) => ({ ...p, sortBy: next as PlSortKey }))
@@ -516,7 +520,7 @@ export default function ProfitLossPage() {
                     <SortableTh
                       label="Doanh thu"
                       fieldHint="revenue"
-                      ascKey="revenue-desc"
+                      ascKey="revenue-asc"
                       descKey="revenue-desc"
                       currentSort={ui.sortBy}
                       onSort={(next) =>

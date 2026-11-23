@@ -23,6 +23,7 @@ import {
 } from "../../components/shared/ui-kit";
 import {
   can,
+  canAtBranch,
   homePath,
   isCashier,
   isManager,
@@ -31,6 +32,7 @@ import {
 } from "../../utils/auth";
 import { getIngredient, relativeDateISO } from "../shared/business-demo";
 import type { Product, ProductStatus } from "../shared/business-demo";
+import { productStatusAtStore } from "../shared/product-branch-status";
 import { formatCurrency, formatDate } from "../shared/formatters";
 import {
   getBranchProducibleSummary,
@@ -105,7 +107,11 @@ export default function ProductsPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const canManageProducts = !isCashier() && !isWarehouse() && can("product.manage");
-  const canLockAtBranch = isManager() && can("product.lockAtBranch");
+  const canLockAtBranch =
+    isManager() &&
+    (branchScope
+      ? canAtBranch("product.lockAtBranch", branchScope)
+      : can("product.lockAtBranch"));
   const canAdminLock = !branchScope && can("product.manage");
   const canReportShortage =
     (isCashier() || isWarehouse()) && can("order.reportShortage");
@@ -182,8 +188,12 @@ export default function ProductsPage() {
         if (ui.status !== "all") {
           if (ui.status === "recent30") {
             if ((product.createdAt ?? "") < recentThreshold) return false;
-          } else if (product.status !== ui.status) {
-            return false;
+          } else {
+            const scopedStatus = productStatusAtStore(
+              product,
+              activeBranch === "ALL" ? null : activeBranch,
+            );
+            if (scopedStatus !== ui.status) return false;
           }
         }
         return true;
@@ -214,18 +224,16 @@ export default function ProductsPage() {
     const visibleAtScope = data.products.filter(
       (p) => !isCashier() || p.status === "active" || p.status === "branch-locked",
     );
-    const active = visibleAtScope.filter((p) => {
-      if (activeBranch !== "ALL") {
-        return !p.lockedStoreIds.includes(activeBranch) && p.status !== "inactive" && p.status !== "pending-recipe";
-      }
-      return p.status === "active";
-    }).length;
-    const locked = visibleAtScope.filter((p) =>
-      activeBranch !== "ALL"
-        ? p.lockedStoreIds.includes(activeBranch)
-        : p.status === "branch-locked",
+    const scopeId = activeBranch === "ALL" ? null : activeBranch;
+    const active = visibleAtScope.filter(
+      (p) => productStatusAtStore(p, scopeId) === "active",
     ).length;
-    const pending = visibleAtScope.filter((p) => p.status === "pending-recipe").length;
+    const locked = visibleAtScope.filter(
+      (p) => productStatusAtStore(p, scopeId) === "branch-locked",
+    ).length;
+    const pending = visibleAtScope.filter(
+      (p) => productStatusAtStore(p, scopeId) === "pending-recipe",
+    ).length;
     const recent30 = visibleAtScope.filter(
       (p) => (p.createdAt ?? "") >= recentThreshold,
     ).length;
@@ -266,22 +274,19 @@ export default function ProductsPage() {
   }
 
   function applyBulkBranchLock(lock: boolean) {
-    if (activeBranch === "ALL" || checkedIds.length === 0) return;
+    if ((!canLockAtBranch && !canAdminLock) || activeBranch === "ALL" || checkedIds.length === 0) return;
     setData((current) => ({
       ...current,
       products: current.products.map((p) => {
         if (!checkedIds.includes(p.id)) return p;
+        if (p.status === "inactive" || p.status === "pending-recipe") return p;
         const nextLocked = lock
           ? p.lockedStoreIds.includes(activeBranch)
             ? p.lockedStoreIds
             : [...p.lockedStoreIds, activeBranch]
           : p.lockedStoreIds.filter((id) => id !== activeBranch);
         const nextStatus: ProductStatus =
-          p.status === "inactive" || p.status === "pending-recipe"
-            ? p.status
-            : nextLocked.length > 0
-              ? "branch-locked"
-              : "active";
+          nextLocked.length > 0 ? "branch-locked" : "active";
         return { ...p, lockedStoreIds: nextLocked, status: nextStatus };
       }),
     }));
@@ -666,17 +671,19 @@ export default function ProductsPage() {
             <table className="w-full text-[13px] text-left">
               <thead className="bg-[var(--background)] text-[var(--muted)] text-xs border-b border-[var(--border)]">
                 <tr>
-                  <th className="w-9 px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      aria-label="Chọn tất cả sản phẩm đang hiển thị"
-                      checked={allChecked}
-                      onChange={(e) =>
-                        setCheckedIds(e.target.checked ? allVisibleIds : [])
-                      }
-                      className="accent-emerald-600"
-                    />
-                  </th>
+                  {activeBranch !== "ALL" && (canLockAtBranch || canAdminLock) && (
+                    <th className="w-9 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        aria-label="Chọn tất cả sản phẩm đang hiển thị"
+                        checked={allChecked}
+                        onChange={(e) =>
+                          setCheckedIds(e.target.checked ? allVisibleIds : [])
+                        }
+                        className="accent-emerald-600"
+                      />
+                    </th>
+                  )}
                   <SortableTh
                     label="Sản phẩm"
                     fieldHint="product.name / product.code"
@@ -717,19 +724,22 @@ export default function ProductsPage() {
               </thead>
               <tbody>
                 {rowsWithMeta.map(({ product, isLockedAtActive, ingMatch, producible }) => {
+                  const scopedStatus = productStatusAtStore(
+                    product,
+                    activeBranch === "ALL" ? null : activeBranch,
+                  );
                   const needsAttention =
-                    isLockedAtActive ||
+                    scopedStatus === "branch-locked" ||
                     producible?.status === "out" ||
                     producible?.status === "low" ||
-                    product.status === "pending-recipe";
+                    scopedStatus === "pending-recipe";
                   const openBranchCount = data.stores.length - product.lockedStoreIds.length;
-                  const displayStatus: { label: string; tone: PillTone } = isLockedAtActive
-                    ? { label: `Khóa tại ${activeBranch}`, tone: "warning" }
-                    : activeBranch !== "ALL" && product.status === "branch-locked"
-                      ? { label: "Đang bán", tone: "success" }
+                  const displayStatus: { label: string; tone: PillTone } =
+                    activeBranch !== "ALL" && scopedStatus === "branch-locked"
+                      ? { label: `Khóa tại ${activeBranch}`, tone: "warning" }
                       : {
-                        label: STATUS_LABEL[product.status],
-                        tone: STATUS_TONE[product.status],
+                        label: STATUS_LABEL[scopedStatus],
+                        tone: STATUS_TONE[scopedStatus],
                       };
 
                   return (
@@ -741,24 +751,26 @@ export default function ProductsPage() {
                         : ""
                         }`}
                     >
-                      <td
-                        className={`px-3 ${rowPadding}`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          aria-label={`Chọn ${product.name}`}
-                          checked={checkedIds.includes(product.id)}
-                          onChange={(e) =>
-                            setCheckedIds((prev) =>
-                              e.target.checked
-                                ? [...prev, product.id]
-                                : prev.filter((x) => x !== product.id),
-                            )
-                          }
-                          className="accent-emerald-600"
-                        />
-                      </td>
+                      {activeBranch !== "ALL" && (canLockAtBranch || canAdminLock) && (
+                        <td
+                          className={`px-3 ${rowPadding}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-label={`Chọn ${product.name}`}
+                            checked={checkedIds.includes(product.id)}
+                            onChange={(e) =>
+                              setCheckedIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, product.id]
+                                  : prev.filter((x) => x !== product.id),
+                              )
+                            }
+                            className="accent-emerald-600"
+                          />
+                        </td>
+                      )}
                       <td className={`px-3 ${rowPadding}`}>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-[var(--heading-color)]">
@@ -964,12 +976,22 @@ export default function ProductsPage() {
             : undefined
         }
         badge={
-          selected ? (
-            <StatusPill
-              label={STATUS_LABEL[selected.status]}
-              tone={STATUS_TONE[selected.status]}
-            />
-          ) : undefined
+          selected ? (() => {
+            const st = productStatusAtStore(
+              selected,
+              activeBranch === "ALL" ? null : activeBranch,
+            );
+            return (
+              <StatusPill
+                label={
+                  activeBranch !== "ALL" && st === "branch-locked"
+                    ? `Khóa tại ${activeBranch}`
+                    : STATUS_LABEL[st]
+                }
+                tone={STATUS_TONE[st]}
+              />
+            );
+          })() : undefined
         }
         footer={
           selected && (

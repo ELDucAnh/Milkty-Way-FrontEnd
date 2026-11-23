@@ -5,6 +5,7 @@ import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import StatCard from "../../components/common/StatCard";
+import { useToast } from "../../components/common/useToast";
 import KpiIcon from "../shared/KpiIcon";
 import { formatDate, getTodayISO, makeId } from "../shared/formatters";
 import {
@@ -46,9 +47,11 @@ const DIRECT_COUNTER_INGREDIENT_IDS = new Set([
   "ing-peach",
   "ing-cup",
   "ing-seal",
+  "ing-jelly",
 ]);
 
 export default function StockTransfersPage() {
+  const toast = useToast();
   const [data, setData] = useDemoState();
   const [search, setSearch] = useState("");
   const [storeFilter, setStoreFilter] = useState("all");
@@ -232,6 +235,15 @@ export default function StockTransfersPage() {
         line.lotId,
         (requirements.get(line.lotId) ?? 0) + line.proposedQuantity,
       );
+    }
+
+    const insufficientPrecheck = [...requirements].some(([lotId, quantity]) => {
+      const lot = data.lots.find((item) => item.id === lotId);
+      return !lot || availableLotQuantity(lot) < quantity;
+    });
+    if (insufficientPrecheck) {
+      toast.error("Không đủ tồn khả dụng tại lô nguồn để xuất giao phiếu này.");
+      return;
     }
 
     setData((current) => {

@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
+import CashShiftReconciliationInbox from "../sales/CashShiftReconciliationInbox";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../../components/common/useToast";
 import {
@@ -46,7 +47,7 @@ import {
 } from "../shared/formatters";
 import { useDemoState } from "../shared/useDemoState";
 
-type RecSortKey = "date-desc" | "date-asc" | "variance-desc";
+type RecSortKey = "date-desc" | "date-asc" | "variance-desc" | "variance-asc";
 
 const SORT_OPTIONS: SortOption<RecSortKey>[] = [
   { key: "date-desc", label: "Mới nhất", fieldLabel: "Ngày đối soát" },
@@ -54,6 +55,11 @@ const SORT_OPTIONS: SortOption<RecSortKey>[] = [
   {
     key: "variance-desc",
     label: "Chênh lệch nhiều → ít",
+    fieldLabel: "Giá trị chênh lệch",
+  },
+  {
+    key: "variance-asc",
+    label: "Chênh lệch ít → nhiều",
     fieldLabel: "Giá trị chênh lệch",
   },
 ];
@@ -155,39 +161,63 @@ export default function ShiftReconciliationPage() {
     const snapshots = data.countSnapshots.filter(
       (s) => s.position === "counter" && s.locationId === storeId,
     );
-    if (snapshots.length > 0) {
-      return snapshots.map((snap) => ({
-        id: makeId("recl"),
-        ingredientId: snap.ingredientId,
-        lotId: snap.lotId,
-        opening: snap.opening,
-        received: snap.received,
-        actualUse: snap.actualUse,
-        waste: snap.waste,
-        counted: theoreticalBalance(
-          snap.opening,
-          snap.received,
-          snap.actualUse,
-          snap.waste,
-        ),
-        unitCost: snap.unitCost,
-        reason: "",
-      }));
-    }
-
+    const snapshotByLotId = new Map(snapshots.map((s) => [s.lotId, s]));
     const storeLots = data.lots.filter(
       (l) => l.location === "counter" && l.locationId === storeId && l.quantity > 0,
     );
-    return storeLots.map((lot) => ({
+
+    if (storeLots.length > 0) {
+      return storeLots.map((lot) => {
+        const snap = snapshotByLotId.get(lot.id);
+        if (snap) {
+          return {
+            id: makeId("recl"),
+            ingredientId: snap.ingredientId,
+            lotId: snap.lotId,
+            opening: snap.opening,
+            received: snap.received,
+            actualUse: snap.actualUse,
+            waste: snap.waste,
+            counted: theoreticalBalance(
+              snap.opening,
+              snap.received,
+              snap.actualUse,
+              snap.waste,
+            ),
+            unitCost: snap.unitCost,
+            reason: "",
+          };
+        }
+        return {
+          id: makeId("recl"),
+          ingredientId: lot.ingredientId,
+          lotId: lot.id,
+          opening: lot.quantity,
+          received: 0,
+          actualUse: 0,
+          waste: 0,
+          counted: lot.quantity,
+          unitCost: lot.unitCost,
+          reason: "",
+        };
+      });
+    }
+
+    return snapshots.map((snap) => ({
       id: makeId("recl"),
-      ingredientId: lot.ingredientId,
-      lotId: lot.id,
-      opening: lot.quantity,
-      received: 0,
-      actualUse: 0,
-      waste: 0,
-      counted: lot.quantity,
-      unitCost: lot.unitCost,
+      ingredientId: snap.ingredientId,
+      lotId: snap.lotId,
+      opening: snap.opening,
+      received: snap.received,
+      actualUse: snap.actualUse,
+      waste: snap.waste,
+      counted: theoreticalBalance(
+        snap.opening,
+        snap.received,
+        snap.actualUse,
+        snap.waste,
+      ),
+      unitCost: snap.unitCost,
       reason: "",
     }));
   }
@@ -315,6 +345,7 @@ export default function ShiftReconciliationPage() {
     list.sort((a, b) => {
       if (ui.sortBy === "date-desc") return b.rec.date.localeCompare(a.rec.date);
       if (ui.sortBy === "date-asc") return a.rec.date.localeCompare(b.rec.date);
+      if (ui.sortBy === "variance-asc") return a.varianceValue - b.varianceValue;
       return b.varianceValue - a.varianceValue;
     });
     return list;
@@ -335,6 +366,10 @@ export default function ShiftReconciliationPage() {
     }
     if (!form.opener || !form.counter || !form.approver) {
       toast.error("Vui lòng chọn đầy đủ nhân sự Mở ca, Đóng/Kiểm kê và Người duyệt.");
+      return;
+    }
+    if (form.counter === form.approver) {
+      toast.error("Người kiểm đếm không thể đồng thời là người duyệt chốt ca.");
       return;
     }
 
@@ -525,7 +560,6 @@ export default function ShiftReconciliationPage() {
             Kiểm kê thực tế cuối ca theo từng chi nhánh, xác thực người bàn giao và khóa cứng biên bản sau duyệt.
           </p>
         </div>
-
         <div className="page-header-actions flex-wrap">
           <button
             type="button"
@@ -576,6 +610,8 @@ export default function ShiftReconciliationPage() {
           }
         />
       </div>
+
+      <CashShiftReconciliationInbox activeBranch={activeBranch} />
 
       {/* Stat Cards (app.css .stat-card) */}
       <KpiStrip
@@ -700,7 +736,7 @@ export default function ShiftReconciliationPage() {
                   <SortableTh
                     label="Chênh lệch"
                     fieldHint="varianceValue"
-                    ascKey="date-asc"
+                    ascKey="variance-asc"
                     descKey="variance-desc"
                     currentSort={ui.sortBy}
                     onSort={(next) =>
@@ -757,15 +793,14 @@ export default function ShiftReconciliationPage() {
                               </strong>
                             </span>
                             {hasMismatchPerson && (
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-semibold"
+                              <StatusPill
+                                label="Đổi người giao ca"
+                                tone="warning"
                                 title={
                                   rec.handoverMismatchReason ||
                                   "Người mở ca khác người kiểm kê"
                                 }
-                              >
-                                Đổi người giao ca
-                              </span>
+                              />
                             )}
                           </div>
                           <div className="text-[11px] text-[var(--muted)] mt-0.5">
@@ -1150,6 +1185,7 @@ export default function ShiftReconciliationPage() {
                         <input
                           type="number"
                           min={0}
+                          step="any"
                           disabled={readOnlyView}
                           value={line.counted}
                           onChange={(e) => {
@@ -1174,7 +1210,7 @@ export default function ShiftReconciliationPage() {
                             </span>
                             {!readOnlyView && (
                               <div className="mt-1 flex flex-wrap justify-end gap-1">
-                                {VARIANCE_REASONS.slice(0, 2).map((rs) => (
+                                {VARIANCE_REASONS.map((rs) => (
                                   <button
                                     key={rs}
                                     type="button"

@@ -1,11 +1,12 @@
 import { canVisit, scopedBranch, sessionUser } from "../../utils/auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import avatar from "../../../assets/img/avator/1.jpg";
 import { navigationItems } from "../../routes/navigation";
 import Modal from "../common/Modal";
 
 export interface HeaderProps {
+  posFocus?: boolean;
   mobileOpen: boolean;
   isDark: boolean;
   onToggleSidebar: () => void;
@@ -145,15 +146,35 @@ const visibleNotifications = (): NotificationItemData[] => {
 
 export default function Header({
   mobileOpen,
+  posFocus = false,
   isDark,
   onToggleSidebar,
   onToggleTheme,
 }: HeaderProps) {
+  const [, setProfileVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setProfileVersion(version => version + 1);
+    function handleStorage(event: StorageEvent) {
+      if (event.key === null || event.key.startsWith("milktyway.")) refresh();
+    }
+    window.addEventListener("milktyway:profile-updated", refresh);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("milktyway:profile-updated", refresh);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
   const user = sessionUser();
   const [notifications, setNotifications] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "inventory" | "sales" | "shifts">("all");
-  const [notificationsList, setNotificationsList] = useState<NotificationItemData[]>(visibleNotifications);
+  const [notificationState, setNotificationState] = useState<Record<string, NotificationItemData[]>>({});
+  const staffKey = user.staffId ?? "guest";
+  const visibleIds = new Set(visibleNotifications().map(n => n.id));
+  const notificationsList = (notificationState[staffKey] ?? INITIAL_NOTIFICATIONS).filter(n => visibleIds.has(n.id));
+  function setNotificationsList(update: (items: NotificationItemData[]) => NotificationItemData[]) {
+    setNotificationState(previous => ({ ...previous, [staffKey]: update(previous[staffKey] ?? INITIAL_NOTIFICATIONS) }));
+  }
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -165,11 +186,11 @@ export default function Header({
   });
 
   function handleMarkAllAsRead() {
-    setNotificationsList((prev) => prev.map((n) => ({ ...n, unread: false })));
+    setNotificationsList((prev) => prev.map((n) => visibleIds.has(n.id) ? ({ ...n, unread: false }) : n));
   }
 
   function handleClearRead() {
-    setNotificationsList((prev) => prev.filter((n) => n.unread));
+    setNotificationsList((prev) => prev.filter((n) => !visibleIds.has(n.id) || n.unread));
   }
 
   function handleToggleRead(id: string) {
@@ -209,6 +230,8 @@ export default function Header({
           <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
+      {posFocus && <nav className="pos-quick-nav" aria-label="Lối tắt bán hàng">{[["/sales/pos","Bán hàng POS"],["/sales/preparation","Pha chế KDS"],["/sales/returns","Đổi trả"],["/sales/shifts","Ca & Kiểm kê"]].filter(([path]) => canVisit(path)).map(([path,label]) => <Link key={path} to={path} className="btn btn-secondary btn-sm">{label}</Link>)}</nav>}
+
 
       <div className="flex-1 max-w-md relative search-box" id="global-search-box">
         <svg
@@ -451,6 +474,7 @@ export default function Header({
                 {user.name}
               </div>
               <div style={{ fontSize: "11px", color: "var(--muted)" }}>{user.roleLabel}</div>
+          <div className="text-[11px] text-[var(--muted)] truncate max-w-[220px]" title={user.branchLabel}>{user.branchLabel}</div>
             </div>
             <svg
               width="14"

@@ -11,6 +11,7 @@ export interface ModalProps {
     footer?: ReactNode;
     size?: "sm" | "md" | "lg" | "xl" | "2xl";
     closeOnBackdrop?: boolean;
+    className?: string;
 }
 
 const sizeClasses: Record<"sm" | "md" | "lg" | "xl" | "2xl", string> = {
@@ -38,6 +39,7 @@ export default function Modal({
                                   onClose,
                                   footer,
                                   size = "md",
+                                  className = "",
                                   closeOnBackdrop = true,
                               }: ModalProps) {
     const modalOpen = open ?? isOpen ?? false;
@@ -141,7 +143,7 @@ export default function Modal({
         >
             <div
                 ref={dialogRef}
-                className={`modal-box ${sizeClasses[size]}`}
+                className={`modal-box ${sizeClasses[size]} ${className}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={titleId}

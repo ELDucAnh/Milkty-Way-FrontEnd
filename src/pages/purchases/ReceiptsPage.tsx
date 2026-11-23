@@ -55,8 +55,8 @@ export default function ReceiptsPage() {
             }
             if (line.receivedQuantity > 0 && !line.lotCode.trim()) { setError("Mỗi dòng có nhận hàng cần mã lô."); return; }
             if (line.receivedQuantity > 0 && ingredient?.shelfLifeDays !== null) {
-                if (!line.manufactureDate || !line.expiryDate || line.manufactureDate > today || line.expiryDate <= line.manufactureDate || line.expiryDate <= today) {
-                    setError("Ngày sản xuất phải không sau ngày nhận; hạn dùng phải sau ngày sản xuất và ngày nhập."); return;
+                if (!line.manufactureDate || !line.expiryDate || line.manufactureDate > today || line.expiryDate <= line.manufactureDate || (line.quality === "pass" && line.expiryDate <= today)) {
+                    setError("Ngày sản xuất phải không sau ngày nhận; lô đạt phải có hạn dùng sau ngày sản xuất và ngày nhập."); return;
                 }
             }
             if (line.receivedQuantity === 0 && !line.note.trim() && !note.trim()) { setError("Dòng từ chối/nhận 0 cần ghi lý do."); return; }
@@ -75,6 +75,7 @@ export default function ReceiptsPage() {
             id: makeId("lot"), ingredientId: line.ingredientId, lotCode: line.lotCode.trim(), manufactureDate: line.manufactureDate || null,
             expiryDate: line.expiryDate || null, quantity: line.receivedQuantity, unitCost: line.unitPrice,
             quality: line.quality === "pass" ? "pass" as const : "quarantine" as const, location: "central" as const, locationId: "central", batchId: null,
+            supplierName: selectedOrder.supplier, poCode: selectedOrder.code,
         }));
         setData((current) => ({
             ...current,

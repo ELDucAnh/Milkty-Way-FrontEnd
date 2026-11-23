@@ -1,6 +1,9 @@
-import { homePath, isBranchScoped, isCashier, scopedBranch } from "../../utils/auth";
-import { useState, useMemo } from "react";
-import { Navigate, Link, useParams, useSearchParams } from "react-router-dom";
+import OrderReturnHistory from "../sales/OrderReturnHistory";
+import { RETURNS_CHANGED } from "../shared/sales-returns-store";
+import { findStaff, homePath, scopedBranch } from "../../utils/auth";
+import { shiftLabels } from "../sales/sales-support";
+import { useEffect, useState, useMemo } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
 import { formatCurrency } from "../../utils/format";
@@ -14,9 +17,30 @@ export default function InvoiceDetailsPage() {
   const toast = useToast();
   const [printFormat, setPrintFormat] = useState<"k80" | "k57">("k80");
 
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    for (const event of ["storage", "focus", RETURNS_CHANGED]) window.addEventListener(event, refresh);
+    return () => {
+      for (const event of ["storage", "focus", RETURNS_CHANGED]) window.removeEventListener(event, refresh);
+    };
+  }, []);
   const branchScope = scopedBranch();
-  const invoices = useMemo(() => loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)), [branchScope]);
-  const orders = useMemo(() => loadOrders().filter(o => !branchScope || o.branchId === branchScope), [branchScope]);
+  const { invoices, orders, loadError } = useMemo(() => {
+    try {
+      return {
+        invoices: loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)),
+        orders: loadOrders().filter(o => !branchScope || o.branchId === branchScope),
+        loadError: "",
+      };
+    } catch (error) {
+      return {
+        invoices: [] as InvoiceRecord[],
+        orders: [] as SalesOrder[],
+        loadError: error instanceof Error ? error.message : "Không đọc được dữ liệu hóa đơn.",
+      };
+    }
+  }, [branchScope, revision]);
 
   const effectiveId = id && id !== "invoice-details" ? id : null;
 
@@ -55,11 +79,35 @@ export default function InvoiceDetailsPage() {
       if (byMatchedOrder) return byMatchedOrder;
       return undefined;
     }
-    if (isBranchScoped() && (orderIdParam || effectiveId)) return undefined;
+    if (orderIdParam || effectiveId) return undefined;
     return invoices[0];
   }, [effectiveId, orderIdParam, invoices, matchedOrder]);
 
-  if (isBranchScoped() && !matchedInvoice && !matchedOrder) return <Navigate to="/invoices" replace />;
+  if (loadError) {
+    return (
+      <div className="card space-y-3" role="alert">
+        <h1 className="page-title">Lỗi đọc dữ liệu hóa đơn</h1>
+        <p className="text-sm text-red-600">{loadError}</p>
+        <Link to="/invoices" className="btn btn-secondary">
+          Danh sách hóa đơn
+        </Link>
+      </div>
+    );
+  }
+
+  if (!matchedInvoice && !matchedOrder) {
+    return (
+      <div className="card space-y-3">
+        <h1 className="page-title">Không tìm thấy hóa đơn</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Mã không tồn tại hoặc không thuộc phạm vi chi nhánh được phép xem.
+        </p>
+        <Link to="/invoices" className="btn btn-secondary">
+          Danh sách hóa đơn
+        </Link>
+      </div>
+    );
+  }
 
   const invoiceId = matchedInvoice
     ? matchedInvoice.id
@@ -69,40 +117,24 @@ export default function InvoiceDetailsPage() {
   const customerPhone = matchedInvoice?.customerPhone || matchedOrder?.phone || "0908 123 456";
   const branchName = matchedInvoice?.branch || `${matchedOrder?.branchId || "CN01"} - Bến Nghé (Quận 1)`;
   const branchAddress = matchedInvoice?.branchAddress || "12 Nguyễn Huệ, Quận 1, TP.HCM";
-  const invoiceStatus = matchedInvoice?.status || (matchedOrder?.payment === "refunded" ? "Đã Hoàn Tiền" : matchedOrder?.payment === "unpaid" ? "Chờ Thanh Toán" : "Đã Thanh Toán");
+  const invoiceStatus =
+    matchedInvoice?.status ||
+    (
+      matchedOrder?.payment === "refunded"
+        ? "Đã Hoàn Tiền"
+        : matchedOrder?.payment === "partially-refunded"
+          ? "Hoàn Một Phần / Đã Điều Chỉnh"
+          : matchedOrder?.payment === "unpaid"
+            ? "Chờ Thanh Toán"
+            : "Đã Thanh Toán"
+    );
   const invoiceStatusVariant = matchedInvoice?.statusVariant || (invoiceStatus === "Đã Hoàn Tiền" ? "danger" : invoiceStatus === "Đã Thanh Toán" ? "success" : "warning");
   const memberTier = matchedInvoice?.tier || "Member";
   const invoiceDate = matchedInvoice?.date || (matchedOrder?.createdAt
     ? new Date(matchedOrder.createdAt).toLocaleDateString("vi-VN") + " — " + new Date(matchedOrder.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
     : new Date().toLocaleDateString("vi-VN") + " — " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
 
-  const items = matchedInvoice?.items && matchedInvoice.items.length > 0
-    ? matchedInvoice.items
-    : (matchedOrder?.items && matchedOrder.items.length > 0 ? matchedOrder.items : [
-      {
-        id: "item-default-1",
-        name: "Trà Sữa Ô Long Nướng",
-        size: "L" as const,
-        sugar: "50%",
-        ice: "Ít đá",
-        toppings: ["Trân châu hoàng kim", "Kem phô mai"],
-        note: "Ít ngọt",
-        quantity: 1,
-        unitPrice: 55000,
-      },
-      {
-        id: "item-default-2",
-        name: "Trà Sữa Trân Châu Hoàng Kim",
-        size: "M" as const,
-        sugar: "70%",
-        ice: "Vừa đá",
-        toppings: ["Pudding trứng"],
-        note: "",
-        quantity: 1,
-        unitPrice: 46000,
-      }
-    ]);
-
+  const items = matchedInvoice?.items ?? matchedOrder?.items ?? [];
   const computedSubtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const subtotal = matchedInvoice?.subtotal ?? matchedOrder?.subtotal ?? computedSubtotal;
   const discount = matchedInvoice?.discount ?? matchedOrder?.discount ?? 0;
@@ -151,7 +183,7 @@ export default function InvoiceDetailsPage() {
             </svg>
             Danh sách hóa đơn
           </Link>
-          {!isCashier() && <><div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
+          <div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
             <button
               type="button"
               className={`btn btn-secondary border-none rounded-none text-xs px-3 ${printFormat === "k80" ? "bg-[var(--surface)]" : ""
@@ -175,28 +207,28 @@ export default function InvoiceDetailsPage() {
               In K57
             </button>
           </div>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => toast.info(`Đang in phiếu pha chế (KOT) cho đơn ${orderId}...`, { title: "In Phiếu KOT" })}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              In Phiếu Pha (KOT)
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => toast.success(`Đã gửi hóa đơn điện tử đến SĐT ${customerPhone}`, { title: "Gửi Thành Công" })}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                <polyline points="22,6 12,13 2,6" />
-              </svg>
-              Gửi Cho Khách
-            </button></>}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => toast.info(`Đang in phiếu pha chế (KOT) cho đơn ${orderId}...`, { title: "In Phiếu KOT" })}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            In Phiếu Pha (KOT)
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => toast.success(`Đã gửi hóa đơn điện tử đến SĐT ${customerPhone}`, { title: "Gửi Thành Công" })}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            Gửi Cho Khách
+          </button>
         </div>
       </div>
 
@@ -211,12 +243,18 @@ export default function InvoiceDetailsPage() {
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
               <span className="text-[var(--muted)]">Thu ngân: </span>
-              <span className="font-semibold text-[var(--text)]">Nguyễn An (NV-01)</span>
+              <span className="font-semibold text-[var(--text)]">
+                {matchedOrder?.createdByStaffId
+                  ? (findStaff(matchedOrder.createdByStaffId)?.name ?? matchedOrder.createdByStaffId)
+                  : "—"}
+              </span>
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
               <span className="text-[var(--muted)]">Ca: </span>
-              <span className="font-semibold text-[var(--text)]">Ca Sáng (07:00–15:00)</span>
+              <span className="font-semibold text-[var(--text)]">
+                {matchedOrder?.shift ? (shiftLabels[matchedOrder.shift] ?? matchedOrder.shift) : "—"}
+              </span>
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
@@ -270,21 +308,25 @@ export default function InvoiceDetailsPage() {
             </div>
             <div className="text-[16px] font-bold text-[var(--text)]">{customerName}</div>
             <div className="text-[13px] text-[var(--muted)] mt-0.5">SĐT: {customerPhone}</div>
-            <div className="text-[13px] text-[var(--muted)]">
-              Hạng thành viên:{" "}
-              <span className="font-semibold text-emerald-600">
-                {memberTier === "VIP"
-                  ? "VIP (Giảm 10% / đơn)"
-                  : memberTier === "Gold"
-                    ? "Gold (Giảm 5% / đơn)"
-                    : memberTier === "Silver"
-                      ? "Silver (Giảm 5.000 ₫ / đơn)"
-                      : "Member (Giảm 2.000 ₫ / đơn)"}
-              </span>
-            </div>
-            <div className="text-[13px] text-[var(--muted)] mt-1">
-              Điểm tích lũy đơn này: <span className="font-bold text-[var(--primary)]">+{Math.round(total / 10000)} điểm</span>
-            </div>
+            {customerPhone && customerPhone !== "0900 000 000" && customerName !== "Khách Vãng Lai" && (
+              <>
+                <div className="text-[13px] text-[var(--muted)]">
+                  Hạng thành viên:{" "}
+                  <span className="font-semibold text-emerald-600">
+                    {memberTier === "VIP"
+                      ? "VIP (Giảm 10% / đơn)"
+                      : memberTier === "Gold"
+                        ? "Gold (Giảm 5% / đơn)"
+                        : memberTier === "Silver"
+                          ? "Silver (Giảm 5.000 ₫ / đơn)"
+                          : "Member (Giảm 2.000 ₫ / đơn)"}
+                  </span>
+                </div>
+                <div className="text-[13px] text-[var(--muted)] mt-1">
+                  Điểm tích lũy đơn này: <span className="font-bold text-[var(--primary)]">+{Math.round(total / 10000)} điểm</span>
+                </div>
+              </>
+            )}
           </div>
           <div className="bg-[var(--background)] p-4 rounded-xl flex flex-col gap-2">
             <div className="flex justify-between text-[13px]">
@@ -324,6 +366,7 @@ export default function InvoiceDetailsPage() {
                   <td className="text-xs text-[var(--muted)]">{index + 1}</td>
                   <td>
                     <div className="font-bold text-[var(--text)] text-sm">{item.name}</div>
+                    {!!item.returnedQty && <div className="text-xs text-[var(--muted)]">Đã xử lý {item.returnedQty}/{item.quantity} ly</div>}
                     <div className="text-[12px] text-[var(--muted)]">
                       Cỡ {item.size} · Đường {item.sugar} · Đá {item.ice}
                       {item.toppings && item.toppings.length > 0 && ` · +${item.toppings.join(", ")}`}
@@ -372,6 +415,46 @@ export default function InvoiceDetailsPage() {
               <span className="text-[var(--muted)]">Tiền thừa trả lại:</span>
               <span className="text-[var(--text)]">{formatCurrency(change)}</span>
             </div>
+            {paid < total && (
+              <div className="flex justify-between text-[13px] font-semibold text-amber-700 bg-amber-50 py-2 px-3 rounded-lg">
+                <span>Còn phải thu:</span>
+                <span>{formatCurrency(total - paid)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <OrderReturnHistory
+          amendments={matchedInvoice?.amendments ?? matchedOrder?.amendments}
+          refundedAmount={matchedInvoice?.refundedAmount ?? matchedOrder?.refundedAmount}
+          netTotal={matchedInvoice?.netTotal ?? matchedOrder?.netTotal}
+          parentOrderId={matchedInvoice?.parentOrderId ?? matchedOrder?.parentOrderId}
+          replacedByOrderId={matchedInvoice?.replacedByOrderId ?? matchedOrder?.replacedByOrderId}
+        />
+        {/* Footer hóa đơn */}
+        <div className="border-t border-[var(--border)] pt-5 flex justify-between items-end flex-wrap gap-5">
+          <div className="max-w-[420px]">
+            <div className="text-xs font-bold text-[var(--text)] mb-1">Cảm ơn quý khách đã ủng hộ MilktyWay!</div>
+            <div className="text-[11px] text-[var(--muted)] leading-relaxed">
+              Trà sữa MilktyWay — Đậm đà hương vị, tươi mát tự nhiên. Khiếu nại dịch vụ vui lòng liên hệ hotline 1900 6868 hoặc
+              truy cập MilktyWay.vn trong vòng 30 phút kể từ khi nhận nước.
+            </div>
+            <div className="text-[11px] text-[var(--muted)] mt-1">
+              Mã tra cứu hóa đơn: <strong>{invoiceId}</strong>
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-[11px] text-[var(--muted)] mb-1.5 font-medium">Quét QR tích điểm & nhận voucher</div>
+            <div className="w-[68px] h-[68px] bg-[var(--background)] border border-[var(--border)] rounded-lg flex items-center justify-center mx-auto">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--muted)]">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <path d="M14 14h3v3h-3z" />
+                <path d="M17 17h4v4h-4z" />
+              </svg>
+            </div>
+            <div className="text-[10px] text-[var(--muted)] mt-1 font-mono">MilktyWay.vn/loyalty</div>
           </div>
         </div>
       </div>

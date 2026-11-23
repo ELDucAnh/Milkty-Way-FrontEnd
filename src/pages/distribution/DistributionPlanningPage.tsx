@@ -13,7 +13,7 @@ import {
   usePageUiState,
   type PillTone,
 } from "../../components/shared/ui-kit";
-import { homePath, isCashier, scopedBranch, sessionUser } from "../../utils/auth";
+import { checkLogin, homePath, isCashier, isWarehouse, scopedBranch, sessionUser } from "../../utils/auth";
 import {
   getIngredient,
   getStore,
@@ -66,7 +66,8 @@ export default function DistributionPlanningPage() {
   const [data, setData] = useDemoState();
   const branchScope = scopedBranch();
   const currentUser = sessionUser();
-  const canEditPlans = !isCashier();
+  const isChainOwner = checkLogin() === "owner";
+  const canEditPlans = !isCashier() && !isWarehouse();
 
   const today = getTodayISO();
 
@@ -185,19 +186,22 @@ export default function DistributionPlanningPage() {
     };
   }
 
-  // Matrix rows (stores with fixed plans or matching branch filter)
+  // Matrix rows (stores with fixed plans, active overrides, or matching branch filter)
   const matrixStores = useMemo(() => {
-    const storeIds = new Set(
-      data.masterFixedPlans
+    const storeIds = new Set([
+      ...data.masterFixedPlans
         .filter((m) => m.ingredientId === activeIngredientId)
         .map((m) => m.storeId),
-    );
+      ...data.temporaryOverrides
+        .filter((o) => o.ingredientId === activeIngredientId && o.status === "active")
+        .map((o) => o.storeId),
+    ]);
     const filtered = data.stores.filter((s) => {
       if (activeBranch !== "ALL") return s.id === activeBranch;
       return storeIds.size > 0 ? storeIds.has(s.id) : true;
     });
     return filtered;
-  }, [data.stores, data.masterFixedPlans, activeIngredientId, activeBranch]);
+  }, [data.stores, data.masterFixedPlans, data.temporaryOverrides, activeIngredientId, activeBranch]);
 
   // Daily central totals for bottom summary row
   const centralDailyTotals = useMemo(() => {
@@ -268,7 +272,7 @@ export default function DistributionPlanningPage() {
       startDate: start,
       endDate: end,
       reason: "",
-      logImmediateHistory: true,
+      logImmediateHistory: start <= today,
     });
     setTempDrawerOpen(true);
   }
@@ -634,9 +638,7 @@ export default function DistributionPlanningPage() {
   // Hierarchy data (2 flows: F0 -> F1 -> Dish and F0 -> Dish)
   const f1Ingredients = useMemo(
     () =>
-      data.ingredients.filter(
-        (ing) => ing.tier === "F1" || ing.flowType === "F0_TO_F1_TO_DISH",
-      ),
+      data.ingredients.filter((ing) => ing.tier === "F1"),
     [data.ingredients],
   );
   const f0DirectIngredients = useMemo(
@@ -665,7 +667,7 @@ export default function DistributionPlanningPage() {
         <div className="page-header-actions flex-wrap">
           {canEditPlans && (
             <>
-              {!branchScope && (
+              {isChainOwner && (
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -883,7 +885,7 @@ export default function DistributionPlanningPage() {
                           ({formatDate(ov.startDate)} → {formatDate(ov.endDate)}) · Lý do: “
                           {ov.reason}”
                         </span>
-                        {canEditPlans && !branchScope && (
+                        {isChainOwner && (
                           <ConfirmInline
                             triggerLabel="Biến thành cố định"
                             confirmText={`Cộng +${formatNumber(ov.extraQuantity)} vào định mức ngày?`}
@@ -948,8 +950,8 @@ export default function DistributionPlanningPage() {
                       <th
                         key={day.iso}
                         className={`text-center min-w-[104px] ${day.isToday
-                            ? "bg-sky-50/70 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300"
-                            : ""
+                          ? "bg-sky-50/70 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300"
+                          : ""
                           }`}
                       >
                         <div className="font-semibold">
@@ -996,10 +998,10 @@ export default function DistributionPlanningPage() {
                             <td
                               key={day.iso}
                               className={`text-center p-1.5 cursor-pointer transition-colors ${isSelected
-                                  ? "ring-2 ring-inset ring-sky-500 bg-sky-50 dark:bg-sky-950/40"
-                                  : hasTemp
-                                    ? "bg-sky-50/50 dark:bg-sky-950/20 hover:bg-sky-100/60"
-                                    : "hover:bg-[var(--background)]"
+                                ? "ring-2 ring-inset ring-sky-500 bg-sky-50 dark:bg-sky-950/40"
+                                : hasTemp
+                                  ? "bg-sky-50/50 dark:bg-sky-950/20 hover:bg-sky-100/60"
+                                  : "hover:bg-[var(--background)]"
                                 }`}
                               onClick={() =>
                                 setSelectedCell({
@@ -1402,7 +1404,7 @@ export default function DistributionPlanningPage() {
                             Gửi duyệt
                           </button>
                         )}
-                        {plan.status === "pending" && !branchScope && (
+                        {plan.status === "pending" && isChainOwner && (
                           <button
                             type="button"
                             className="btn btn-primary btn-sm"
@@ -1569,8 +1571,8 @@ export default function DistributionPlanningPage() {
                   type="button"
                   onClick={() => applyTempPreset(key)}
                   className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${tempForm.preset === key
-                      ? "bg-sky-600 text-white border-sky-600 font-medium"
-                      : "border-[var(--border)] bg-[var(--background)] text-[var(--text)]"
+                    ? "bg-sky-600 text-white border-sky-600 font-medium"
+                    : "border-[var(--border)] bg-[var(--background)] text-[var(--text)]"
                     }`}
                 >
                   {label}

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
@@ -9,6 +9,7 @@ import Modal from "../../components/common/Modal";
 import StatCard from "../../components/common/StatCard";
 import { useToast } from "../../components/common/useToast";
 import { formatCurrency, SalesPageHeader } from "./sales-support";
+import { loadInvoices } from "../shared/sales-orders-store";
 
 type MemberTier = "member" | "silver" | "gold" | "vip";
 
@@ -274,6 +275,21 @@ export default function CustomersPage() {
     });
 
     const query = applied.search.trim().toLocaleLowerCase("vi-VN");
+    const knownInvoiceIds = useMemo(() => {
+        try {
+            return new Set(loadInvoices().flatMap((inv) => [inv.id, inv.orderId]));
+        } catch {
+            return new Set<string>();
+        }
+    }, [customers.length]);
+    const customerStats = useMemo(() => {
+        const total = customers.length;
+        const active = customers.filter((c) => c.points > 0).length;
+        const totalSpend = customers.reduce((s, c) => s + c.spending12Months, 0);
+        const avgSpend = total > 0 ? Math.round(totalSpend / total) : 0;
+        const vipGoldCount = customers.filter((c) => c.tier === "vip" || c.tier === "gold").length;
+        return { total, active, totalSpend, avgSpend, vipGoldCount };
+    }, [customers]);
     const visibleCustomers = customers.filter(
         (customer) =>
             (!applied.tier || customer.tier === applied.tier) &&
@@ -403,15 +419,14 @@ export default function CustomersPage() {
                         </div>
                         <div className="w-full h-1.5 bg-gray-100 dark:bg-zinc-700 rounded-full overflow-hidden mb-1">
                             <div
-                                className={`h-full rounded-full transition-all ${
-                                    customer.tier === "vip"
-                                        ? "bg-purple-500"
-                                        : customer.tier === "gold"
+                                className={`h-full rounded-full transition-all ${customer.tier === "vip"
+                                    ? "bg-purple-500"
+                                    : customer.tier === "gold"
                                         ? "bg-amber-500"
                                         : customer.tier === "silver"
-                                        ? "bg-blue-500"
-                                        : "bg-emerald-500"
-                                }`}
+                                            ? "bg-blue-500"
+                                            : "bg-emerald-500"
+                                    }`}
                                 style={{ width: `${prog.percent}%` }}
                             />
                         </div>
@@ -497,9 +512,9 @@ export default function CustomersPage() {
             <section className="page-section" aria-label="Thống kê khách hàng">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
                     <StatCard
-                        label="Tổng hội viên toàn chuỗi"
-                        value="1.842"
-                        subLabel="+48 thành viên mới tháng này"
+                        label="Tổng hội viên trong danh bạ"
+                        value={String(customerStats.total)}
+                        subLabel={`${customerStats.vipGoldCount} hội viên hạng Vàng & VIP`}
                         tone="info"
                         icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -511,9 +526,9 @@ export default function CustomersPage() {
                         }
                     />
                     <StatCard
-                        label="Hội viên đang hoạt động"
-                        value="1.680"
-                        subLabel="91.2% tỷ lệ quay lại mua hàng"
+                        label="Hội viên đang tích điểm"
+                        value={String(customerStats.active)}
+                        subLabel="Có giao dịch tích lũy điểm"
                         tone="primary"
                         icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -524,9 +539,9 @@ export default function CustomersPage() {
                         }
                     />
                     <StatCard
-                        label="Doanh thu từ hội viên"
-                        value={formatCurrency(145870000)}
-                        subLabel="Chiếm 68% tổng doanh số bán"
+                        label="Chi tiêu 12 tháng"
+                        value={formatCurrency(customerStats.totalSpend)}
+                        subLabel="Tổng chi tiêu từ hội viên"
                         tone="warning"
                         icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -536,9 +551,9 @@ export default function CustomersPage() {
                         }
                     />
                     <StatCard
-                        label="Chi tiêu trung bình (AOV)"
-                        value={formatCurrency(185000)}
-                        subLabel="+5.4% so với quý trước"
+                        label="Chi tiêu trung bình / KH"
+                        value={formatCurrency(customerStats.avgSpend)}
+                        subLabel="Bình quân 12 tháng"
                         tone="success"
                         icon={
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -725,15 +740,14 @@ export default function CustomersPage() {
                             </div>
                             <div className="w-full h-3 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden mb-2 relative">
                                 <div
-                                    className={`h-full rounded-full transition-all duration-500 ${
-                                        selectedCustomer.tier === "vip"
-                                            ? "bg-purple-600"
-                                            : selectedCustomer.tier === "gold"
+                                    className={`h-full rounded-full transition-all duration-500 ${selectedCustomer.tier === "vip"
+                                        ? "bg-purple-600"
+                                        : selectedCustomer.tier === "gold"
                                             ? "bg-amber-500"
                                             : selectedCustomer.tier === "silver"
-                                            ? "bg-blue-500"
-                                            : "bg-emerald-500"
-                                    }`}
+                                                ? "bg-blue-500"
+                                                : "bg-emerald-500"
+                                        }`}
                                     style={{ width: `${selectedCustomer.tier === "vip" ? 100 : Math.min(100, Math.round((selectedCustomer.points / 1000) * 100))}%` }}
                                 />
                             </div>
@@ -823,12 +837,18 @@ export default function CustomersPage() {
                                     <tr key={tx.id}>
                                         <td className="text-xs text-[var(--muted)] whitespace-nowrap">{tx.createdAt}</td>
                                         <td>
-                                            <Link
-                                                to={`/invoices/invoice-details?orderId=${encodeURIComponent(tx.invoiceId)}`}
-                                                className="font-mono font-bold text-[var(--primary)] hover:underline"
-                                            >
-                                                {tx.invoiceId}
-                                            </Link>
+                                            {knownInvoiceIds.has(tx.invoiceId) ? (
+                                                <Link
+                                                    to={`/invoices/invoice-details?orderId=${encodeURIComponent(tx.invoiceId)}`}
+                                                    className="font-mono font-bold text-[var(--primary)] hover:underline"
+                                                >
+                                                    {tx.invoiceId}
+                                                </Link>
+                                            ) : (
+                                                <span className="font-mono text-xs text-[var(--muted)]">
+                                                    {tx.invoiceId}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="text-sm font-medium">{tx.action}</td>
                                         <td className="text-right font-semibold text-xs">

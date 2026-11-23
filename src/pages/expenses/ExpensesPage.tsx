@@ -5,6 +5,9 @@ import Badge from "../../components/common/Badge";
 import type { BadgeVariant } from "../../components/common/Badge";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
+import { homePath, sessionUser } from "../../utils/auth";
+import { getSalesBranches } from "../../data/sales/branches";
+import { formatCurrency } from "../shared/formatters";
 
 export interface ExpenseItem {
   id: string;
@@ -119,10 +122,13 @@ export default function ExpensesPage() {
   const [selectedCategory, setSelectedCategory] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [newBranch, setNewBranch] = useState("CN01 — Quận 1");
+  const [newBranch, setNewBranch] = useState("CN01 — Bến Nghé");
   const [newCategory, setNewCategory] = useState("Điện nước");
   const [newAmount, setNewAmount] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const branchList = useMemo(() => {
+    try { return getSalesBranches(); } catch { return []; }
+  }, []);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((item) => {
@@ -140,6 +146,15 @@ export default function ExpensesPage() {
     });
   }, [expenses, search, selectedBranch, selectedCategory]);
 
+  const expenseStats = useMemo(() => {
+    const total = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+    const rent = filteredExpenses.filter((e) => e.category.includes("Mặt bằng")).reduce((s, e) => s + e.amount, 0);
+    const payroll = filteredExpenses.filter((e) => e.category.includes("Lương")).reduce((s, e) => s + e.amount, 0);
+    const utils = filteredExpenses.filter((e) => e.category.includes("Điện nước") || e.category.includes("Hủy")).reduce((s, e) => s + e.amount, 0);
+    const rentPct = total > 0 ? ((rent / total) * 100).toFixed(1) : "0";
+    return { total, rent, payroll, utils, rentPct };
+  }, [filteredExpenses]);
+
   const handleCreateExpense = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAmount || Number(newAmount) <= 0) {
@@ -147,6 +162,7 @@ export default function ExpensesPage() {
       return;
     }
 
+    const actorName = sessionUser().name;
     const branchCode = newBranch.slice(0, 4);
     const newExpense: ExpenseItem = {
       id: `PC-${branchCode}-${Math.floor(Math.random() * 9000 + 1000)}`,
@@ -155,7 +171,7 @@ export default function ExpensesPage() {
       description: newDescription || "Chi vận hành cửa hàng",
       amount: Number(newAmount),
       date: new Date().toLocaleDateString("vi-VN"),
-      creator: "Nguyễn Hoàng Long",
+      creator: actorName,
       approver: "Chờ duyệt",
       attachment: "phieu-chi.pdf",
       status: "Chờ Duyệt",
@@ -170,9 +186,10 @@ export default function ExpensesPage() {
   };
 
   const handleApproveExpense = (id: string) => {
+    const actorName = sessionUser().name;
     const next = expenses.map((exp) =>
       exp.id === id
-        ? { ...exp, status: "Đã Duyệt Chi" as const, statusVariant: "success" as BadgeVariant, approver: "BGD duyệt" }
+        ? { ...exp, status: "Đã Duyệt Chi" as const, statusVariant: "success" as BadgeVariant, approver: actorName }
         : exp
     );
     setExpenses(next);
@@ -185,7 +202,7 @@ export default function ExpensesPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <span className="current">Chi phí</span>
           </nav>
@@ -221,9 +238,9 @@ export default function ExpensesPage() {
       <section aria-label="Thống kê chi phí">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
-            label="Tổng Chi Tháng Này"
-            value="412.850.000 ₫"
-            subLabel="Toàn chuỗi 12 chi nhánh TP.HCM"
+            label="Tổng Chi Đang Lọc"
+            value={formatCurrency(expenseStats.total)}
+            subLabel={`${filteredExpenses.length} phiếu chi trong bộ lọc`}
             tone="danger"
             icon={
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -234,8 +251,8 @@ export default function ExpensesPage() {
           />
           <StatCard
             label="Tiền Thuê Mặt Bằng"
-            value="185.000.000 ₫"
-            subLabel="Chiếm 44.8% tổng chi phí"
+            value={formatCurrency(expenseStats.rent)}
+            subLabel={`Chiếm ${expenseStats.rentPct}% tổng chi`}
             tone="info"
             icon={
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -246,8 +263,8 @@ export default function ExpensesPage() {
           />
           <StatCard
             label="Lương Nhân Sự Ca"
-            value="158.400.000 ₫"
-            subLabel="Thu ngân, Barista &amp; Quản lý"
+            value={formatCurrency(expenseStats.payroll)}
+            subLabel="Thu ngân, Barista & Quản lý"
             tone="primary"
             icon={
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -259,9 +276,9 @@ export default function ExpensesPage() {
             }
           />
           <StatCard
-            label="Điện Nước &amp; Hủy Hàng"
-            value="69.450.000 ₫"
-            subLabel="Máy đá, tủ đông &amp; hủy cận date"
+            label="Điện Nước & Hủy Hàng"
+            value={formatCurrency(expenseStats.utils)}
+            subLabel="Máy đá, tủ đông & hủy cận date"
             tone="warning"
             icon={
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -295,11 +312,11 @@ export default function ExpensesPage() {
           onChange={(e) => setSelectedBranch(e.target.value)}
         >
           <option value="">Tất cả 12 Chi Nhánh</option>
-          <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>
-          <option value="CN02">CN02 — Quận 3 (Võ Văn Tần)</option>
-          <option value="CN05">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-          <option value="CN06">CN06 — Bình Thạnh (D2)</option>
-          <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
+          {branchList.map((b) => (
+            <option key={b.code} value={b.code}>
+              {b.code} — {b.name}
+            </option>
+          ))}
         </select>
         <select
           className="form-input form-select w-auto"
@@ -393,7 +410,9 @@ export default function ExpensesPage() {
           </div>
           <div className="px-5 py-4 border-t border-[var(--border)] flex items-center justify-between flex-wrap gap-3">
             <div className="text-[13px] text-[var(--muted)]">
-              Hiển thị 1–{filteredExpenses.length} khoản chi gần nhất
+              {filteredExpenses.length === 0
+                ? "Không có khoản chi nào phù hợp"
+                : `Hiển thị 1–${filteredExpenses.length} khoản chi`}
             </div>
           </div>
         </div>
@@ -426,10 +445,11 @@ export default function ExpensesPage() {
               value={newBranch}
               onChange={(e) => setNewBranch(e.target.value)}
             >
-              <option value="CN01 — Quận 1">CN01 — Quận 1 (Nguyễn Huệ)</option>
-              <option value="CN02 — Quận 3">CN02 — Quận 3 (Võ Văn Tần)</option>
-              <option value="CN05 — Quận 10">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-              <option value="CN06 — Bình Thạnh">CN06 — Bình Thạnh (D2)</option>
+              {branchList.map((b) => (
+                <option key={b.code} value={`${b.code} — ${b.name}`}>
+                  {b.code} — {b.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>

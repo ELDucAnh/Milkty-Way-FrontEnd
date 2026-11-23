@@ -141,6 +141,19 @@ function NavIcon({ children, className = "flex-shrink-0" }: { children: ReactNod
 }
 
 export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: SidebarProps) {
+  const [, setProfileVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setProfileVersion(version => version + 1);
+    function handleStorage(event: StorageEvent) {
+      if (event.key === null || event.key.startsWith("milktyway.")) refresh();
+    }
+    window.addEventListener("milktyway:profile-updated", refresh);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("milktyway:profile-updated", refresh);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
   const user = sessionUser();
   const { pathname } = useLocation();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ sales: true });
@@ -209,6 +222,7 @@ export default function Sidebar({ mobileOpen, onNavigate, collapsed = false }: S
         <div className="sidebar-label min-w-0">
           <div style={{ "fontSize": "13px", "fontWeight": "600", "color": "var(--text)", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis" }}>{user.name}</div>
           <div style={{ "fontSize": "11px", "color": "var(--muted)" }}>{user.roleLabel}</div>
+          <div className="text-[11px] text-[var(--muted)] truncate max-w-[220px]" title={user.branchLabel}>{user.branchLabel}</div>
         </div>
       </NavLink>
     </div>

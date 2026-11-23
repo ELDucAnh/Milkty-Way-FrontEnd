@@ -31,7 +31,8 @@ const permissionSources: { section: string; rows: PermissionSource[] }[] = [
     section: "2. Chi Nhánh, Quầy POS & Ca Bán Hàng",
     rows: [
       { id: "pos_use", name: "Sử dụng quầy POS được phân công, thu tiền tại POS", check: { action: "pos.use" } },
-      { id: "pos_shift", name: "Mở ca, đóng ca, chốt tiền & xem thống kê tiền đóng ca", check: { route: "/sales/shifts" } },
+      { id: "pos_shift_view", name: "Xem danh sách ca làm việc & thống kê bàn giao quỹ", check: { route: "/sales/shifts" } },
+      { id: "pos_shift_action", name: "Mở ca, đóng ca, xác thực bàn giao quỹ tại quầy", check: { action: "shift.openBranch" } },
       { id: "branch_manage", name: "Thêm, sửa, ngừng hoạt động chi nhánh", check: { route: "/inventory/branches" } },
     ],
   },

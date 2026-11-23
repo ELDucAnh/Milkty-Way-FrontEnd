@@ -50,10 +50,16 @@ Thumbs.db
 .cache/
 .temp/
 .tmp/
+.agents/
 *.tmp
 
 #Markdown
 .md
-
+*.md
 # Build output
 dist/
+
+# Python Playwright output
+/.venv/
+/test-results/
+/scripts/__pycache__/

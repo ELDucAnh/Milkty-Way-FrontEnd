@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import { canVisit, checkLogin, homePath, logout } from "../utils/auth";
-import { useLocation, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { canVisit, checkLogin, homePath, logout, currentStaff, STAFF_SESSION_KEY, STAFF_SESSION_CHANGED } from "../utils/auth";
+import { useNavigate, useLocation, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
 import AuthLayout from "../layouts/AuthLayout";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -75,18 +75,45 @@ import ForgotPasswordPage from "../pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/auth/ResetPasswordPage";
 import ProfilePage from "../pages/auth/ProfilePage";
 
+const PUBLIC_AUTH_PATHS = new Set([
+  "/login", "/pages/login", "/register", "/pages/register",
+  "/forgot-password", "/pages/forgot-password", "/reset-password", "/pages/reset-password",
+]);
+
+function LogoutRoute() {
+  const navigate = useNavigate();
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    try { logout(); navigate("/login", { replace: true }); }
+    catch { setError("Không xóa được phiên. Vui lòng kiểm tra quyền lưu trữ và thử lại."); }
+  }, [navigate, attempt]);
+  return error ? <section className="card" role="alert"><p>{error}</p><button className="btn btn-primary" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></section> : null;
+}
+
 export default function AppRoutes() {
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    const update = () => refresh(n => n + 1);
+    const storage = (event: StorageEvent) => {
+      if (event.key === STAFF_SESSION_KEY || event.key === null) update();
+    };
+    window.addEventListener(STAFF_SESSION_CHANGED, update);
+    window.addEventListener("storage", storage);
+    return () => { window.removeEventListener(STAFF_SESSION_CHANGED, update); window.removeEventListener("storage", storage); };
+  }, []);
   const role = checkLogin();
   const { pathname } = useLocation();
-  useEffect(() => { if (pathname === "/logout") logout(); }, [pathname]);
-  if (role && !canVisit(pathname, role)) return <Navigate to={homePath(role)} replace />;
+  const normalizedPath = pathname.replace(/\/+$/, "").toLowerCase() || "/";
+  const isPublicRoute = normalizedPath === "/logout" || PUBLIC_AUTH_PATHS.has(normalizedPath);
+  if (role && !isPublicRoute && !canVisit(normalizedPath, role)) return <Navigate to={homePath(role)} replace />;
   return (
     <Routes>
       {/* Auth Layout - Không header, không sidebar */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/pages/login" element={<Navigate to="/login" replace />} />
-        <Route path="/logout" element={<Navigate to="/login" replace />} />
+        <Route path="/logout" element={<LogoutRoute />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/pages/register" element={<Navigate to="/register" replace />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -96,7 +123,7 @@ export default function AppRoutes() {
       </Route>
 
       {/* Main Layout - Header & Sidebar tĩnh cố định, inner fade-in */}
-      <Route element={role ? <MainLayout /> : <Navigate to="/login" replace />}>
+      <Route element={role ? <MainLayout key={currentStaff()?.staffId ?? "guest"} /> : <Navigate to="/login" replace />}>
         <Route index element={<Navigate to={homePath(role)} replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
 
@@ -129,6 +156,7 @@ export default function AppRoutes() {
         <Route path="/production" element={<Navigate to="/production/recipes" replace />} />
         <Route path="/production/recipes" element={<RecipesPage />} />
         <Route path="/production/batches" element={<BatchesPage />} />
+        <Route path="/production/planning" element={<DistributionPlanningPage />} />
 
         {/* Nhập Hàng */}
         <Route path="/purchases" element={<PurchasesPage />} />
@@ -142,7 +170,6 @@ export default function AppRoutes() {
         {/* Phân Phối & Cửa Hàng Chi Nhánh */}
         <Route path="/distribution" element={<Navigate to="/distribution/planning" replace />} />
         <Route path="/distribution/planning" element={<DistributionPlanningPage />} />
-        <Route path="/production/planning" element={<DistributionPlanningPage />} />
         <Route path="/stores" element={<Navigate to="/stores/ingredients" replace />} />
         <Route path="/stores/ingredients" element={<StoreIngredientsPage />} />
         <Route path="/stores/shift-reconciliation" element={<ShiftReconciliationPage />} />

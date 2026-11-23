@@ -59,15 +59,19 @@ export default function StockAdjustmentPage() {
   const counts = useMemo(
     () =>
       data.counts.filter(
-        (record) =>
-          inScope(record) &&
-          (!search ||
-            `${record.code} ${getIngredient(data, record.ingredientId)?.name ?? ""} ${record.lotId}`
-              .toLocaleLowerCase("vi-VN")
-              .includes(search.toLocaleLowerCase("vi-VN"))),
+        (record) => {
+          const lotCode = data.lots.find((l) => l.id === record.lotId)?.lotCode ?? "";
+          return (
+            inScope(record) &&
+            (!search ||
+              `${record.code} ${getIngredient(data, record.ingredientId)?.name ?? ""} ${record.lotId} ${lotCode}`
+                .toLocaleLowerCase("vi-VN")
+                .includes(search.toLocaleLowerCase("vi-VN")))
+          );
+        },
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.counts, data.ingredients, search, branchScope],
+    [data.counts, data.ingredients, data.lots, search, branchScope],
   );
   const pending = data.counts.filter((record) => record.status === "pending" && inScope(record));
   const pendingValue = pending.reduce(
@@ -188,10 +192,10 @@ export default function StockAdjustmentPage() {
         counts: current.counts.map((item) =>
           item.id === record.id
             ? {
-                ...item,
-                status: "approved",
-                approver: isManager() ? sessionUser().name : "Quản lý kho",
-              }
+              ...item,
+              status: "approved",
+              approver: sessionUser().name,
+            }
             : item,
         ),
 
@@ -248,7 +252,11 @@ export default function StockAdjustmentPage() {
           <StatCard
             label="Lô hết hạn/cách ly"
             value={String(
-              data.lots.filter((lot) => lot.quality !== "pass").length,
+              data.lots.filter((lot) => {
+                const inScopeLot = !branchScope || (lot.location === "counter" && lot.locationId === branchScope);
+                const todayIso = getTodayISO();
+                return inScopeLot && (lot.quality !== "pass" || Boolean(lot.expiryDate && lot.expiryDate < todayIso));
+              }).length,
             )}
             subLabel="Không thuộc tồn khả dụng"
             tone="danger"
@@ -502,7 +510,7 @@ export default function StockAdjustmentPage() {
                     <td className="px-3 py-3">
                       {ingredient?.name}
                       <div className="text-xs text-[var(--muted)]">
-                        {record.lotId}
+                        {data.lots.find((l) => l.id === record.lotId)?.lotCode ?? record.lotId}
                       </div>
                     </td>
                     <td className="px-3 py-3">{record.opening}</td>
