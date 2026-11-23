@@ -95,7 +95,6 @@ ROUTE_CASES = [
     ("/settings/sales", "O", None, "Cấu Hình Bán Hàng POS & Kênh Online"),
     ("/settings/purchases", "O", None, "Cấu Hình Thu Mua & Điều Chuyển Cấp Cứu"),
     ("/settings/notifications", "O", None, "Cấu Hình Cảnh Báo Tự Động & Kịch Bản Sự Cố"),
-    ("/settings/offline-sync", "O", None, "Trung Tâm Giám Sát Đồng Bộ & Đối Soát Offline"),
     ("/profile", "OMCW", None, "Hồ Sơ Nhân Sự & Thông Tin Ca Trực"),
     ("/pages/profile", "OMCW", None, "Hồ Sơ Nhân Sự & Thông Tin Ca Trực"),
 ]

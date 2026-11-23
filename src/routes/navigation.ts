@@ -62,6 +62,5 @@ export const navigationItems: readonly NavigationItem[] = [
     { path: "/settings/sales", label: "Cấu hình bán hàng POS & Kênh trực tuyến", group: "Cài đặt" },
     { path: "/settings/purchases", label: "Cấu hình tiêu chuẩn nghiệm thu thu mua", group: "Cài đặt" },
     { path: "/settings/notifications", label: "Cài đặt cảnh báo tự động & Kịch bản sự cố", group: "Cài đặt" },
-    { path: "/settings/offline-sync", label: "Trung tâm giám sát đồng bộ ngoại tuyến", group: "Cài đặt" },
     { path: "/profile", label: "Hồ sơ cá nhân & Đổi mật khẩu", group: "Tài khoản" },
 ];

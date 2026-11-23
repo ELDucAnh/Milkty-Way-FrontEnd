@@ -216,7 +216,7 @@ export default function SalesReturnsPage() {
                 <div className="card p-4">
                     <div className="text-[11px] text-[var(--muted)] font-semibold uppercase tracking-wider">Số lượng đổi món / bù</div>
                     <div className="text-[26px] font-extrabold text-[var(--primary)] mt-1">
-                        {reviewState.requests.filter(r => r.resolution === "Đổi món" || r.resolution === "Bù voucher").length} <span className="text-[13px] font-medium text-[var(--muted)]">Trường hợp</span>
+                        {reviewState.requests.filter(r => r.status === "Approved" && (r.resolution === "Đổi món" || r.resolution === "Bù voucher")).length} <span className="text-[13px] font-medium text-[var(--muted)]">Trường hợp</span>
                     </div>
                     <div className="text-[11px] text-[var(--muted)] mt-0.5">Đã xử lý tại quầy bar</div>
                 </div>

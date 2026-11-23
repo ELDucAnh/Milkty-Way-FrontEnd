@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import { useToast } from "../../components/common/useToast";
+import { homePath, scopedBranch } from "../../utils/auth";
+import { getSalesBranches } from "../../data/sales/branches";
 
 interface BestSeller {
   name: string;
@@ -58,11 +60,18 @@ const mockBestSellers: BestSeller[] = [
 
 const BRANCH_WEIGHTS: Record<string, number> = {
   "": 1,
-  CN01: 0.18,
-  CN02: 0.11,
-  CN05: 0.14,
-  CN06: 0.12,
-  CN07: 0.09,
+  CN01: 0.16,
+  CN02: 0.1,
+  CN03: 0.08,
+  CN04: 0.09,
+  CN05: 0.13,
+  CN06: 0.1,
+  CN07: 0.07,
+  CN08: 0.08,
+  CN09: 0.07,
+  CN10: 0.05,
+  CN11: 0.04,
+  CN12: 0.03,
 };
 
 const TIME_WEIGHTS: Record<string, number> = {
@@ -73,10 +82,14 @@ const TIME_WEIGHTS: Record<string, number> = {
 
 export default function SalesReportPage() {
   const toast = useToast();
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const branchScope = scopedBranch();
+  const [selectedBranch, setSelectedBranch] = useState(branchScope ?? "");
   const [timeFilter, setTimeFilter] = useState("month");
+  const branchList = useMemo(() => {
+    try { return getSalesBranches(); } catch { return []; }
+  }, []);
 
-  const scaleFactor = (BRANCH_WEIGHTS[selectedBranch] ?? 1) * (TIME_WEIGHTS[timeFilter] ?? 1);
+  const scaleFactor = (BRANCH_WEIGHTS[selectedBranch] ?? 0.08) * (TIME_WEIGHTS[timeFilter] ?? 1);
 
   const displayedBestSellers = useMemo(() => {
     return mockBestSellers.map((item) => ({
@@ -100,7 +113,7 @@ export default function SalesReportPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/reports">Báo cáo</Link>
             <span className="sep">/</span>
@@ -114,15 +127,16 @@ export default function SalesReportPage() {
         <div className="flex gap-2.5 flex-wrap items-center">
           <select
             className="form-input form-select text-xs w-auto"
+            disabled={!!branchScope}
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
           >
             <option value="">Toàn chuỗi (12 Chi Nhánh)</option>
-            <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>
-            <option value="CN02">CN02 — Quận 3 (Võ Văn Tần)</option>
-            <option value="CN05">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-            <option value="CN06">CN06 — Bình Thạnh (D2)</option>
-            <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
+            {branchList.map((b) => (
+              <option key={b.code} value={b.code}>
+                {b.code} — {b.name}
+              </option>
+            ))}
           </select>
           <button
             type="button"

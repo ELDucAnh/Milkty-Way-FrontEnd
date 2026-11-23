@@ -128,7 +128,6 @@ const ROUTES = {
   "/settings/sales": "O",
   "/settings/purchases": "O",
   "/settings/notifications": "O",
-  "/settings/offline-sync": "O",
   "/profile": "OMCW",
   "/pages/profile": "OMCW",
 };
@@ -228,7 +227,7 @@ for (const [role, letter] of Object.entries(ROLES)) {
 
   check(
     auth.canVisit("/production/planning", role) ===
-      auth.canVisit("/distribution/planning", role),
+    auth.canVisit("/distribution/planning", role),
     `${role}: hai URL planning phải cùng chính sách`,
   );
 
@@ -371,7 +370,7 @@ for (const storage of [localStorage, sessionStorage]) {
 
     check(
       migrated.version === 2 &&
-        migrated.staffId === auth.primaryStaffIds[role],
+      migrated.staffId === auth.primaryStaffIds[role],
       `${role}: phiên cũ được migration v2`,
     );
   }
@@ -420,7 +419,7 @@ localStorage.setItem("milktyway.manager.name", "Tên quản lý CN05");
 
 check(
   auth.loginByEmail("ql.cn01@milktyway.vn", "123456", true) ===
-    "manager",
+  "manager",
   "Quản lý CN01 không dùng mật khẩu legacy CN05",
 );
 check(

@@ -1,9 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { canVisit, homePath } from "../../utils/auth";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import StatCard from "../../components/common/StatCard";
+import { useToast } from "../../components/common/useToast";
 import KpiIcon from "../shared/KpiIcon";
 import { formatDate, getTodayISO, makeId } from "../shared/formatters";
 import {
@@ -45,9 +47,11 @@ const DIRECT_COUNTER_INGREDIENT_IDS = new Set([
   "ing-peach",
   "ing-cup",
   "ing-seal",
+  "ing-jelly",
 ]);
 
 export default function StockTransfersPage() {
+  const toast = useToast();
   const [data, setData] = useDemoState();
   const [search, setSearch] = useState("");
   const [storeFilter, setStoreFilter] = useState("all");
@@ -233,6 +237,15 @@ export default function StockTransfersPage() {
       );
     }
 
+    const insufficientPrecheck = [...requirements].some(([lotId, quantity]) => {
+      const lot = data.lots.find((item) => item.id === lotId);
+      return !lot || availableLotQuantity(lot) < quantity;
+    });
+    if (insufficientPrecheck) {
+      toast.error("Không đủ tồn khả dụng tại lô nguồn để xuất giao phiếu này.");
+      return;
+    }
+
     setData((current) => {
       const currentTicket = current.allocations.find(
         (item) => item.id === ticket.id,
@@ -365,9 +378,13 @@ export default function StockTransfersPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/distribution/planning">Kế hoạch cấp phát</Link>
+            {canVisit("/distribution/planning") ? (
+              <Link to="/distribution/planning">Kế hoạch cấp phát</Link>
+            ) : (
+              <span>Kế hoạch cấp phát</span>
+            )}
             <span className="sep">/</span>
             <span className="current">Phiếu cấp phát</span>
           </nav>

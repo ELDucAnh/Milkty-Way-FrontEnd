@@ -12,6 +12,7 @@ import {
 } from "../shared/business-demo";
 import type { CountPosition, InventoryCount } from "../shared/business-demo";
 import { useDemoState } from "../shared/useDemoState";
+import { can, homePath, isManager, scopedBranch, sessionUser } from "../../utils/auth";
 
 const POSITION_LABEL: Record<CountPosition, string> = {
   central: "Kho tổng",
@@ -52,18 +53,27 @@ export default function StockAdjustmentPage() {
   );
   const selectedLot =
     eligibleLots.find((lot) => lot.id === lotId) ?? eligibleLots[0];
+  const branchScope = scopedBranch();
+  const inScope = (record: InventoryCount) =>
+    !branchScope || (record.position === "counter" && record.locationId === branchScope);
   const counts = useMemo(
     () =>
       data.counts.filter(
-        (record) =>
-          !search ||
-          `${record.code} ${getIngredient(data, record.ingredientId)?.name ?? ""} ${record.lotId}`
-            .toLocaleLowerCase("vi-VN")
-            .includes(search.toLocaleLowerCase("vi-VN")),
+        (record) => {
+          const lotCode = data.lots.find((l) => l.id === record.lotId)?.lotCode ?? "";
+          return (
+            inScope(record) &&
+            (!search ||
+              `${record.code} ${getIngredient(data, record.ingredientId)?.name ?? ""} ${record.lotId} ${lotCode}`
+                .toLocaleLowerCase("vi-VN")
+                .includes(search.toLocaleLowerCase("vi-VN")))
+          );
+        },
       ),
-    [data.counts, data.ingredients, search],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.counts, data.ingredients, data.lots, search, branchScope],
   );
-  const pending = data.counts.filter((record) => record.status === "pending");
+  const pending = data.counts.filter((record) => record.status === "pending" && inScope(record));
   const pendingValue = pending.reduce(
     (sum, record) => sum + record.varianceValue,
     0,
@@ -136,6 +146,7 @@ export default function StockAdjustmentPage() {
     setNote("");
   }
   function approve(record: InventoryCount) {
+    if (!can("stock.approveAdjustment") || !inScope(record)) return;
     setData((current) => {
       const currentRecord = current.counts.find(
         (item) => item.id === record.id,
@@ -181,10 +192,10 @@ export default function StockAdjustmentPage() {
         counts: current.counts.map((item) =>
           item.id === record.id
             ? {
-                ...item,
-                status: "approved",
-                approver: "Quản lý kho",
-              }
+              ...item,
+              status: "approved",
+              approver: sessionUser().name,
+            }
             : item,
         ),
 
@@ -201,7 +212,7 @@ export default function StockAdjustmentPage() {
       <div className="page-header">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
             <Link to="/inventory/ingredients">Nguyên liệu</Link>
             <span className="sep">/</span>
@@ -241,7 +252,11 @@ export default function StockAdjustmentPage() {
           <StatCard
             label="Lô hết hạn/cách ly"
             value={String(
-              data.lots.filter((lot) => lot.quality !== "pass").length,
+              data.lots.filter((lot) => {
+                const inScopeLot = !branchScope || (lot.location === "counter" && lot.locationId === branchScope);
+                const todayIso = getTodayISO();
+                return inScopeLot && (lot.quality !== "pass" || Boolean(lot.expiryDate && lot.expiryDate < todayIso));
+              }).length,
             )}
             subLabel="Không thuộc tồn khả dụng"
             tone="danger"
@@ -257,7 +272,7 @@ export default function StockAdjustmentPage() {
         </p>
       </section>
 
-      <form className="card mb-6" onSubmit={submit}>
+      {can("stock.count") && (<form className="card mb-6" onSubmit={submit}>
         <h2 className="font-bold mb-4">Ghi nhận số đếm thực tế</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <div>
@@ -422,7 +437,7 @@ export default function StockAdjustmentPage() {
             Gửi số đếm &amp; tính chênh lệch
           </button>
         </div>
-      </form>
+      </form>)}
 
       <section className="card p-0 overflow-hidden">
         <div className="p-4 md:p-5 border-b border-[var(--border)] flex flex-wrap justify-between gap-3">
@@ -495,7 +510,7 @@ export default function StockAdjustmentPage() {
                     <td className="px-3 py-3">
                       {ingredient?.name}
                       <div className="text-xs text-[var(--muted)]">
-                        {record.lotId}
+                        {data.lots.find((l) => l.id === record.lotId)?.lotCode ?? record.lotId}
                       </div>
                     </td>
                     <td className="px-3 py-3">{record.opening}</td>
@@ -535,13 +550,17 @@ export default function StockAdjustmentPage() {
                       </Badge>
                     </td>
                     <td className="px-3 py-3">
-                      {record.status === "pending" && (
+                      {record.status === "pending" && can("stock.approveAdjustment") ? (
                         <button
                           className="btn btn-secondary"
                           onClick={() => approve(record)}
                         >
                           Duyệt điều chỉnh
                         </button>
+                      ) : (
+                        <span className="text-xs text-[var(--muted)]">
+                          {record.status === "pending" ? "Chờ quản lý duyệt" : "—"}
+                        </span>
                       )}
                     </td>
                   </tr>

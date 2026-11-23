@@ -156,10 +156,9 @@ export default function PreparationQueuePage() {
         toast.success(
             action === "handover"
                 ? `Đã bàn giao đơn ${order.id}.`
-                : `Đã cập nhật đơn ${order.id}: ${
-                    statusDisplay[
-                        action === "start" ? "preparing" : "ready"
-                    ].label
+                : `Đã cập nhật đơn ${order.id}: ${statusDisplay[
+                    action === "start" ? "preparing" : "ready"
+                ].label
                 }.`,
             { title: "Pha chế" },
         );
@@ -218,7 +217,7 @@ export default function PreparationQueuePage() {
             },
         },
         {
-            id: "actions",header: "Thao tác quầy",
+            id: "actions", header: "Thao tác quầy",
             render: (order) => {
                 const editable =
                     !loadError &&
@@ -328,152 +327,148 @@ export default function PreparationQueuePage() {
                 </div>
             </div>
 
-<section
-    className="card overflow-hidden !p-0"
-    aria-label="Bộ lọc hàng đợi"
->
-    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-5">
-        <div
-            className="flex flex-wrap gap-2"
-            aria-label="Trạng thái pha chế"
-        >
-            {counters.map(counter => (
-                <button
-                    key={counter.value}
-                    type="button"
-                    aria-pressed={statusFilter === counter.value}
-                    className={`btn btn-sm ${
-                        statusFilter === counter.value
-                            ? "btn-primary"
-                            : "btn-secondary"
-                    }`}
-                    onClick={() => setStatusFilter(counter.value)}
-                >
-                    {counter.label}
-
-                    <span
-                        className={`inline-flex min-w-5 items-center justify-center rounded px-1.5 py-0.5 text-[11px] ${
-                            statusFilter === counter.value
-                                ? "bg-white/20"
-                                : "bg-[var(--border)]"
-                        }`}
+            <section
+                className="card overflow-hidden !p-0"
+                aria-label="Bộ lọc hàng đợi"
+            >
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-5">
+                    <div
+                        className="flex flex-wrap gap-2"
+                        aria-label="Trạng thái pha chế"
                     >
-                        {counter.count}
-                    </span>
-                </button>
-            ))}
-        </div>
+                        {counters.map(counter => (
+                            <button
+                                key={counter.value}
+                                type="button"
+                                aria-pressed={statusFilter === counter.value}
+                                className={`btn btn-sm ${statusFilter === counter.value
+                                        ? "btn-primary"
+                                        : "btn-secondary"
+                                    }`}
+                                onClick={() => setStatusFilter(counter.value)}
+                            >
+                                {counter.label}
 
-        <div
-            className="flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--background)] p-1"
-            aria-label="Cách xem hàng đợi"
-        >
-            <button
-                type="button"
-                className={`btn btn-sm ${
-                    viewMode === "table"
-                        ? "btn-primary"
-                        : "btn-secondary"
-                }`}
-                aria-pressed={viewMode === "table"}
-                onClick={() => setViewMode("table")}
-            >
-                Bảng gọn
-            </button>
+                                <span
+                                    className={`inline-flex min-w-5 items-center justify-center rounded px-1.5 py-0.5 text-[11px] ${statusFilter === counter.value
+                                            ? "bg-white/20"
+                                            : "bg-[var(--border)]"
+                                        }`}
+                                >
+                                    {counter.count}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
 
-            <button
-                type="button"
-                className={`btn btn-sm ${
-                    viewMode === "cards"
-                        ? "btn-primary"
-                        : "btn-secondary"
-                }`}
-                aria-pressed={viewMode === "cards"}
-                onClick={() => setViewMode("cards")}
-            >
-                Thẻ KDS gọn
-            </button>
-        </div>
-    </div>
+                    <div
+                        className="flex gap-1 rounded-lg border border-[var(--border)] bg-[var(--background)] p-1"
+                        aria-label="Cách xem hàng đợi"
+                    >
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${viewMode === "table"
+                                    ? "btn-primary"
+                                    : "btn-secondary"
+                                }`}
+                            aria-pressed={viewMode === "table"}
+                            onClick={() => setViewMode("table")}
+                        >
+                            Bảng gọn
+                        </button>
 
-    <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] bg-[var(--background)] px-4 py-3 md:px-5">
-        <div className="search-box min-w-0 flex-[1_1_240px]">
-            <svg
-                className="search-icon"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-            >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m16 16 4 4" />
-            </svg>
-
-            <input
-                aria-label="Tìm mã đơn hoặc tên món"
-                placeholder="Tìm mã đơn / tên món"
-                className="form-input"
-                type="search"
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-            />
-        </div>
-
-        <select
-            aria-label="Chi nhánh"
-            disabled={isBranchScoped()}
-            className="form-input form-select !w-auto max-w-full flex-[1_1_220px] md:flex-none"
-            value={activeBranchId}
-            onChange={event => setBranchFilter(event.target.value)}
-        >
-            <option value="">Tất cả chi nhánh</option>
-
-            {salesBranches.map(branch => (
-                <option key={branch.id} value={branch.id}>
-                    {branch.id} — {branch.name}
-                </option>
-            ))}
-        </select>
-
-        <select
-            aria-label="Số dòng hiển thị"
-            className="form-input form-select !w-auto"
-            value={pageSize}
-            onChange={event =>
-                setPageSize(Number(event.target.value))
-            }
-        >
-            <option value={5}>5 đơn/trang</option>
-            <option value={10}>10 đơn/trang</option>
-            <option value={20}>20 đơn/trang</option>
-        </select>
-    </div>
-</section>
-            {loadError && (<div
-                    role="alert"
-                    className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
-                >
-                    Không cập nhật được hàng đợi: {loadError}
-                    {" "}Dữ liệu đang hiển thị có thể đã cũ. Các nút ghi tạm thời bị khóa.
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${viewMode === "cards"
+                                    ? "btn-primary"
+                                    : "btn-secondary"
+                                }`}
+                            aria-pressed={viewMode === "cards"}
+                            onClick={() => setViewMode("cards")}
+                        >
+                            Thẻ KDS gọn
+                        </button>
+                    </div>
                 </div>
+
+                <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] bg-[var(--background)] px-4 py-3 md:px-5">
+                    <div className="search-box min-w-0 flex-[1_1_240px]">
+                        <svg
+                            className="search-icon"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                        >
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m16 16 4 4" />
+                        </svg>
+
+                        <input
+                            aria-label="Tìm mã đơn hoặc tên món"
+                            placeholder="Tìm mã đơn / tên món"
+                            className="form-input"
+                            type="search"
+                            value={search}
+                            onChange={event => setSearch(event.target.value)}
+                        />
+                    </div>
+
+                    <select
+                        aria-label="Chi nhánh"
+                        disabled={isBranchScoped()}
+                        className="form-input form-select !w-auto max-w-full flex-[1_1_220px] md:flex-none"
+                        value={activeBranchId}
+                        onChange={event => setBranchFilter(event.target.value)}
+                    >
+                        <option value="">Tất cả chi nhánh</option>
+
+                        {salesBranches.map(branch => (
+                            <option key={branch.id} value={branch.id}>
+                                {branch.id} — {branch.name}
+                            </option>
+                        ))}
+                    </select>
+
+                    <select
+                        aria-label="Số dòng hiển thị"
+                        className="form-input form-select !w-auto"
+                        value={pageSize}
+                        onChange={event =>
+                            setPageSize(Number(event.target.value))
+                        }
+                    >
+                        <option value={5}>5 đơn/trang</option>
+                        <option value={10}>10 đơn/trang</option>
+                        <option value={20}>20 đơn/trang</option>
+                    </select>
+                </div>
+            </section>
+            {loadError && (<div
+                role="alert"
+                className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+            >
+                Không cập nhật được hàng đợi: {loadError}
+                {" "}Dữ liệu đang hiển thị có thể đã cũ. Các nút ghi tạm thời bị khóa.
+            </div>
             )}
 
-<PreparationQueueWorkspace
-    orders={visibleOrders}
-    columns={columns}
-    viewMode={viewMode}
-    pageSize={pageSize}
-    filterKey={JSON.stringify([
-        activeBranchId,
-        statusFilter,
-        search,
-    ])}
-/>
+            <PreparationQueueWorkspace
+                orders={visibleOrders}
+                columns={columns}
+                viewMode={viewMode}
+                pageSize={pageSize}
+                filterKey={JSON.stringify([
+                    activeBranchId,
+                    statusFilter,
+                    search,
+                ])}
+            />
 
         </div>
     );

@@ -1,10 +1,10 @@
-import { homePath } from "../../utils/auth";
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import StatCard from "../../components/common/StatCard";
 import Badge from "../../components/common/Badge";
 import Modal from "../../components/common/Modal";
 import { useToast } from "../../components/common/useToast";
+import { can, homePath, scopedBranch } from "../../utils/auth";
 
 interface UserEmployee {
   id: string;
@@ -60,10 +60,10 @@ const mockEmployees: UserEmployee[] = [
     id: "EMP-03",
     name: "Lê Quốc Tuấn Anh",
     email: "anh.lqt@MilktyWay.vn",
-    code: "NV-TN-0501",
+    code: "NV-POS-01",
     role: "Thu Ngân Quầy POS",
     roleTone: "warning",
-    branch: "CN05 — Máy POS 1",
+    branch: "CN01 — Máy POS 1 (Nguyễn Huệ)",
     branchBadge: "info",
     phone: "0938 111 222",
     shiftStatus: "Đang Mở Ca Bán",
@@ -76,10 +76,10 @@ const mockEmployees: UserEmployee[] = [
     id: "EMP-04",
     name: "Vũ Minh Khoa",
     email: "khoa.vm@MilktyWay.vn",
-    code: "NV-KHO-0501",
+    code: "NV-KHO-01",
     role: "Nhân Viên Kho Chi Nhánh",
     roleTone: "gray",
-    branch: "Kho CN05 — Sư Vạn Hạnh",
+    branch: "Kho Tổng Trung Tâm (Bình Tân) — Điều phối CN",
     branchBadge: "info",
     phone: "0977 333 444",
     shiftStatus: "Nghỉ Giữa Ca",
@@ -88,12 +88,77 @@ const mockEmployees: UserEmployee[] = [
     initials: "VK",
     avatarBg: "bg-slate-600",
   },
+  {
+    id: "EMP-05",
+    name: "Phạm Gia Bảo",
+    email: "bao.pg@MilktyWay.vn",
+    code: "NV-TN-0501",
+    role: "Thu Ngân Quầy POS",
+    roleTone: "warning",
+    branch: "CN05 — Máy POS 1 (Sư Vạn Hạnh)",
+    branchBadge: "info",
+    phone: "0938 555 666",
+    shiftStatus: "Đang Mở Ca Bán",
+    shiftTone: "success",
+    lastLogin: "28/10/2026 14:00 (POS Cảm ứng)",
+    initials: "PB",
+    avatarBg: "bg-amber-600",
+  },
+  {
+    id: "EMP-06",
+    name: "Ngô Thị Mai",
+    email: "mai.nt@MilktyWay.vn",
+    code: "NV-KHO-0501",
+    role: "Nhân Viên Kho Chi Nhánh",
+    roleTone: "gray",
+    branch: "CN05 — Kho quầy Sư Vạn Hạnh",
+    branchBadge: "info",
+    phone: "0977 777 888",
+    shiftStatus: "Đang Trực Ca 2",
+    shiftTone: "success",
+    lastLogin: "28/10/2026 13:45 (Máy quét mã vạch)",
+    initials: "NM",
+    avatarBg: "bg-slate-600",
+  },
 ];
+
+const BRANCH_OPTIONS = [
+  "CN01 — Bến Nghé (Quận 1)",
+  "CN02 — Bàn Cờ (Quận 3)",
+  "CN03 — Chợ Lớn (Quận 5)",
+  "CN04 — Tân Hưng (Quận 7)",
+  "CN05 — Hàng Xanh (Bình Thạnh)",
+  "CN06 — Làng Đại Học (Thủ Đức)",
+  "CN07 — Bảy Hiền (Tân Bình)",
+  "CN08 — Cityland (Gò Vấp)",
+  "CN09 — Phan Xích Long (Phú Nhuận)",
+  "CN10 — Thảo Điền (TP. Thủ Đức)",
+  "CN11 — Celadon (Tân Phú)",
+  "CN12 — Sư Vạn Hạnh (Quận 10)",
+  "Kho Tổng Trung Tâm (Bình Tân)",
+  "Trụ Sở Chính (Văn Phòng Điều Hành)",
+];
+
+const STORAGE_USERS_KEY = "milktyway.users.extra.v1";
+
+function loadStoredUsers(): UserEmployee[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_USERS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return [...parsed, ...mockEmployees];
+    }
+  } catch {
+    // ignore
+  }
+  return mockEmployees;
+}
 
 export default function UsersPage() {
   const toast = useToast();
   const navigate = useNavigate();
-  const [employees, setEmployees] = useState<UserEmployee[]>(mockEmployees);
+  const branchScope = scopedBranch();
+  const [employees, setEmployees] = useState<UserEmployee[]>(loadStoredUsers);
   const [search, setSearch] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
@@ -101,16 +166,26 @@ export default function UsersPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<UserEmployee | null>(null);
 
+  const defaultBranchForScope =
+    (branchScope
+      ? BRANCH_OPTIONS.find((opt) => opt.startsWith(`${branchScope} `)) ?? branchScope
+      : BRANCH_OPTIONS[0]);
+
   // Form states
   const [formName, setFormName] = useState("");
   const [formCode, setFormCode] = useState("NV-TN-0104");
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formRole, setFormRole] = useState("Thu Ngân Quầy POS");
-  const [formBranch, setFormBranch] = useState("CN05 — Quận 10 (Sư Vạn Hạnh)");
+  const [formBranch, setFormBranch] = useState(defaultBranchForScope);
+  const canAddEmployee = can("user.manageBranch");
+  const assignableRoles = branchScope
+    ? ["Thu Ngân Quầy POS", "Nhân Viên Kho Chi Nhánh"]
+    : ["Quản Lý Chi Nhánh", "Thu Ngân Quầy POS", "Nhân Viên Kho Chi Nhánh", "Chủ Doanh Nghiệp (Admin)"];
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
+      if (branchScope && !emp.branch.includes(branchScope)) return false;
       const q = search.toLowerCase();
       const matchSearch =
         !q ||
@@ -129,10 +204,20 @@ export default function UsersPage() {
 
       return matchSearch && matchBranch && matchRole && matchShift;
     });
-  }, [employees, search, selectedBranch, selectedRole, selectedShift]);
+  }, [employees, search, selectedBranch, selectedRole, selectedShift, branchScope]);
 
   function handleAddUser(e: React.FormEvent) {
     e.preventDefault();
+    if (!canAddEmployee) return;
+    if (!assignableRoles.includes(formRole)) {
+      toast.warning("Quản lý chi nhánh chỉ được tạo tài khoản Thu ngân hoặc Nhân viên kho.");
+      return;
+    }
+    const targetBranch = branchScope ? defaultBranchForScope : formBranch;
+    if (branchScope && !targetBranch.includes(branchScope)) {
+      toast.warning(`Chỉ được phân công nhân viên vào chi nhánh ${branchScope}.`);
+      return;
+    }
     if (!formName.trim() || !formEmail.trim() || !formPhone.trim()) {
       toast.warning("Vui lòng điền đầy đủ các thông tin bắt buộc!");
       return;
@@ -153,8 +238,8 @@ export default function UsersPage() {
             : formRole.includes("Thu Ngân")
               ? "warning"
               : "gray",
-      branch: formBranch,
-      branchBadge: formBranch.includes("Trụ Sở") ? "purple" : "info",
+      branch: targetBranch,
+      branchBadge: targetBranch.includes("Trụ Sở") ? "purple" : "info",
       phone: formPhone.trim(),
       shiftStatus: "Mới tạo (Chưa vào ca)",
       shiftTone: "gray",
@@ -167,7 +252,14 @@ export default function UsersPage() {
       avatarBg: "bg-teal-600",
     };
 
-    setEmployees([...employees, newEmp]);
+    const next = [...employees, newEmp];
+    setEmployees(next);
+    try {
+      const mockIds = new Set(mockEmployees.map((m) => m.id));
+      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(next.filter((e) => !mockIds.has(e.id))));
+    } catch {
+      // ignore storage error
+    }
     setShowAddModal(false);
     setFormName("");
     setFormCode(`NV-TN-01${String(nextIndex + 1).padStart(2, "0")}`);
@@ -203,7 +295,7 @@ export default function UsersPage() {
             </svg>
             Phân Quyền Vai Trò
           </Link>
-          <button
+          {canAddEmployee && (<button
             type="button"
             className="btn btn-primary"
             onClick={() => setShowAddModal(true)}
@@ -213,12 +305,12 @@ export default function UsersPage() {
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             Thêm Nhân Viên
-          </button>
+          </button>)}
         </div>
       </div>
 
       {/* Stats Grid */}
-      <section aria-label="Thống kê nhân sự">
+      {!branchScope && (<section aria-label="Thống kê nhân sự">
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Tổng Nhân Sự Chuỗi"
@@ -275,7 +367,7 @@ export default function UsersPage() {
             }
           />
         </div>
-      </section>
+      </section>)}
 
       {/* Filter Bar */}
       <section aria-label="Bộ lọc nhân viên">
@@ -293,22 +385,21 @@ export default function UsersPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select
+          {!branchScope && (<select
             className="form-input form-select w-auto"
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
           >
             <option value="">Tất cả 12 Chi Nhánh</option>
-            <option value="CN01">CN01 — Quận 1 (Nguyễn Huệ)</option>
-            <option value="CN02">CN02 — Quận 3 (Võ Văn Tần)</option>
-            <option value="CN03">CN03 — Quận 5 (Trần Hưng Đạo)</option>
-            <option value="CN04">CN04 — Quận 7 (Phú Mỹ Hưng)</option>
-            <option value="CN05">CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-            <option value="CN06">CN06 — Bình Thạnh (D2)</option>
-            <option value="CN07">CN07 — Gò Vấp (Phan Văn Trị)</option>
-            <option value="Kho Tổng">Kho Tổng Trung Tâm (Bình Tân)</option>
-            <option value="Trụ Sở">Trụ Sở Chính (Văn Phòng Điều Hành)</option>
-          </select>
+            {BRANCH_OPTIONS.map((opt) => {
+              const code = opt.startsWith("CN") ? opt.slice(0, 4) : opt.startsWith("Kho") ? "Kho Tổng" : "Trụ Sở";
+              return (
+                <option key={opt} value={code}>
+                  {opt}
+                </option>
+              );
+            })}
+          </select>)}
           <select
             className="form-input form-select w-auto"
             value={selectedRole}
@@ -411,7 +502,7 @@ export default function UsersPage() {
           {/* Pagination */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] text-xs text-[var(--muted)]">
             <div>
-              Hiển thị 1 - {filteredEmployees.length} trong tổng số 64 nhân viên chuỗi 12 chi nhánh
+              Hiển thị 1 - {filteredEmployees.length} trong tổng số {branchScope ? `${filteredEmployees.length} nhân viên chi nhánh ${branchScope}` : "64 nhân viên chuỗi 12 chi nhánh"}
             </div>
             <div className="flex gap-1">
               <button type="button" className="btn btn-secondary btn-sm" disabled>
@@ -505,10 +596,9 @@ export default function UsersPage() {
                 onChange={(e) => setFormRole(e.target.value)}
                 required
               >
-                <option>Quản Lý Chi Nhánh</option>
-                <option>Thu Ngân Quầy POS</option>
-                <option>Nhân Viên Kho Chi Nhánh</option>
-                <option>Chủ Doanh Nghiệp (Admin)</option>
+                {assignableRoles.map((role) => (
+                  <option key={role}>{role}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -517,19 +607,16 @@ export default function UsersPage() {
               </label>
               <select
                 className="form-input form-select"
-                value={formBranch}
+                value={branchScope ? defaultBranchForScope : formBranch}
+                disabled={!!branchScope}
                 onChange={(e) => setFormBranch(e.target.value)}
                 required
               >
-                <option>CN01 — Quận 1 (Nguyễn Huệ)</option>
-                <option>CN02 — Quận 3 (Võ Văn Tần)</option>
-                <option>CN03 — Quận 5 (Trần Hưng Đạo)</option>
-                <option>CN04 — Quận 7 (Phú Mỹ Hưng)</option>
-                <option>CN05 — Quận 10 (Sư Vạn Hạnh)</option>
-                <option>CN06 — Bình Thạnh (D2)</option>
-                <option>CN07 — Gò Vấp (Phan Văn Trị)</option>
-                <option>Kho Tổng Trung Tâm (Bình Tân)</option>
-                <option>Trụ Sở Chính (Văn Phòng Điều Hành)</option>
+                {BRANCH_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -647,10 +734,10 @@ export default function UsersPage() {
                     {selectedEmployee.role.includes("Chủ Doanh Nghiệp")
                       ? "Toàn quyền hệ thống chuỗi 12 chi nhánh & Kho tổng"
                       : selectedEmployee.role.includes("Quản Lý")
-                      ? "Quản lý nhân sự, kho, đối soát ca tại chi nhánh được gán"
-                      : selectedEmployee.role.includes("Thu Ngân")
-                      ? "Bán hàng POS cảm ứng, tích điểm thành viên, mở/đóng ca"
-                      : "Quản lý nhập xuất lô hàng FEFO & kiểm kê mù"}
+                        ? "Quản lý nhân sự, kho, đối soát ca tại chi nhánh được gán"
+                        : selectedEmployee.role.includes("Thu Ngân")
+                          ? "Bán hàng POS cảm ứng, tích điểm thành viên, mở/đóng ca"
+                          : "Quản lý nhập xuất lô hàng FEFO & kiểm kê mù"}
                   </div>
                 </div>
               </div>

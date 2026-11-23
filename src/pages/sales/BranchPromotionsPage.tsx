@@ -6,6 +6,7 @@ import { formatCurrency, SalesPageHeader } from "./sales-support";
 import {
     listScopedPromotions,
     promotionAppliesAtBranch,
+    promotionUsageCapacity,
     getPromotionStatus,
     setBranchPromotions,
     PROMOTIONS_CHANGED,
@@ -105,7 +106,7 @@ export default function BranchPromotionsPage() {
 
             {!isChainAdmin && (
                 <div className="card mb-4 text-sm" role="status">
-                    🔒 <strong>Chế độ Chỉ Xem:</strong> Quyền điều chỉnh và phân bổ
+                    <strong>Chế độ Chỉ Xem:</strong> Quyền điều chỉnh và phân bổ
                     chương trình khuyến mãi chỉ thuộc về Admin (Quản trị chuỗi).
                     Quản lý chi nhánh và nhân viên chỉ theo dõi chương trình
                     tại chi nhánh của mình{userBranch ? ` · ${userBranch}` : ""}.
@@ -122,19 +123,19 @@ export default function BranchPromotionsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div className="stat-card">
                         <div className="stat-card-icon icon-bg-primary">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
                         </div>
                         <div className="stat-card-body">
                             <div className="stat-label">Chi nhánh áp dụng</div>
                             <div className="stat-value">
                                 {branches.filter((b) => promotions.some(p => promotionAppliesAtBranch(p, b.id))).length} / {branches.length}
                             </div>
-                            <div className="stat-sub-label">Toàn chuỗi TP.HCM</div>
+                            <div className="stat-sub-label">{userBranch ? `Phạm vi ${userBranch}` : "Toàn chuỗi TP.HCM"}</div>
                         </div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-card-icon icon-bg-success">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
                         </div>
                         <div className="stat-card-body">
                             <div className="stat-label">Chương trình đang chạy</div>
@@ -146,24 +147,24 @@ export default function BranchPromotionsPage() {
                     </div>
                     <div className="stat-card">
                         <div className="stat-card-icon icon-bg-warning">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
                         </div>
                         <div className="stat-card-body">
                             <div className="stat-label">Tổng ngân sách Marketing</div>
                             <div className="stat-value text-amber-600">
                                 {formatCurrency(promotions.reduce((sum, r) => sum + r.budget, 0))}
                             </div>
-                            <div className="stat-sub-label">Hạn mức toàn chuỗi tháng này</div>
+                            <div className="stat-sub-label">{userBranch ? `Ngân sách CT tại ${userBranch}` : "Hạn mức toàn chuỗi tháng này"}</div>
                         </div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-card-icon icon-bg-info">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 14 14" /></svg>
                         </div>
                         <div className="stat-card-body">
                             <div className="stat-label">Lượt sử dụng tối đa</div>
                             <div className="stat-value text-blue-600">
-                                {promotions.reduce((sum, r) => sum + r.usageLimit, 0).toLocaleString("vi-VN")}
+                                {promotions.reduce((sum, r) => sum + (promotionUsageCapacity(r) ?? r.usageLimit), 0).toLocaleString("vi-VN")}
                             </div>
                             <div className="stat-sub-label">Giới hạn chống lạm thu</div>
                         </div>
@@ -177,8 +178,8 @@ export default function BranchPromotionsPage() {
                             <h2 className="font-bold text-base">Ma trận khuyến mãi · {branches.length} chi nhánh</h2>
                             <p className="text-xs text-[var(--muted)] mt-0.5">
                                 {isChainAdmin
-        ? "Nhấp mã khuyến mãi để bật/tắt phân bổ. Phân bổ không thay thế trạng thái và thời hạn chương trình."
-        : "Các chương trình được phân bổ tại chi nhánh của bạn. Không có quyền chỉnh sửa."}
+                                    ? "Nhấp mã khuyến mãi để bật/tắt phân bổ. Phân bổ không thay thế trạng thái và thời hạn chương trình."
+                                    : "Các chương trình được phân bổ tại chi nhánh của bạn. Không có quyền chỉnh sửa."}
                             </p>
                         </div>
                         <div className="w-full sm:w-72">
@@ -208,9 +209,9 @@ export default function BranchPromotionsPage() {
                                     .filter((b) => !branchSearch || `${b.id} ${b.name}`.toLowerCase().includes(branchSearch.toLowerCase()))
                                     .map((branch) => {
                                         const activePromos = promotions.filter(promotion =>
-    promotionAppliesAtBranch(promotion, branch.id) &&
-    getPromotionStatus(promotion) === "active"
-);
+                                            promotionAppliesAtBranch(promotion, branch.id) &&
+                                            getPromotionStatus(promotion) === "active"
+                                        );
                                         return (
                                             <tr key={branch.id}>
                                                 <td className="font-mono font-bold text-[var(--primary)] whitespace-nowrap">
@@ -229,12 +230,11 @@ export default function BranchPromotionsPage() {
                                                                     key={promo.id}
                                                                     type="button"
                                                                     disabled={!isChainAdmin || saving || !!dataError}
-                                                            onClick={() => togglePromotionForBranch(promo.id, branch.id)}
-                                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-                                                                        isEnabled
-                                                                            ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                                                                            : "bg-gray-50 text-gray-400 border-gray-200 line-through hover:bg-gray-100"
-                                                                    }`}
+                                                                    onClick={() => togglePromotionForBranch(promo.id, branch.id)}
+                                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${isEnabled
+                                                                        ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                                                        : "bg-gray-50 text-gray-400 border-gray-200 line-through hover:bg-gray-100"
+                                                                        }`}
                                                                     title={`Nhấp để ${isEnabled ? "tắt" : "bật"} ${promo.name} tại ${branch.id}`}
                                                                 >
                                                                     <span className={`w-2 h-2 rounded-full ${isEnabled ? "bg-emerald-500" : "bg-gray-300"}`}></span>
@@ -245,9 +245,8 @@ export default function BranchPromotionsPage() {
                                                     </div>
                                                 </td>
                                                 <td className="text-center whitespace-nowrap">
-                                                    <span className={`font-bold px-2.5 py-1 rounded-full text-xs ${
-                                                        activePromos.length > 0 ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"
-                                                    }`}>
+                                                    <span className={`font-bold px-2.5 py-1 rounded-full text-xs ${activePromos.length > 0 ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"
+                                                        }`}>
                                                         {activePromos.length} / {promotions.length}
                                                     </span>
                                                 </td>

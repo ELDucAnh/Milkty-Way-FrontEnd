@@ -1,417 +1,726 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
-import StatCard from "../../components/common/StatCard";
-import Badge from "../../components/common/Badge";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../../components/common/useToast";
+import {
+  ConfirmInline,
+  EmptyState,
+  FilterBar,
+  HighlightText,
+  InfoTip,
+  KpiStrip,
+  MiniProgress,
+  ScopeBadge,
+  SegmentedControl,
+  SideDrawer,
+  SortableTh,
+  SortMenu,
+  StatusPill,
+  UndoBanner,
+  normalizeVi,
+  usePageUiState,
+  type PillTone,
+  type SortOption,
+} from "../../components/shared/ui-kit";
+import { can, canVisit, homePath, scopedBranch, sessionUser } from "../../utils/auth";
+import { getIngredient, getStore } from "../shared/business-demo";
+import {
+  formatCurrency,
+  formatNumber,
+  getTodayISO,
+  makeId,
+} from "../shared/formatters";
+import {
+  buildStockSummary,
+  type ExpiringLotRow,
+  type StockItemRow,
+} from "../shared/stock-summary";
+import { useDemoState } from "../shared/useDemoState";
 
-interface ExpiringLot {
-  batchId: string;
-  name: string;
-  warehouse: string;
-  quantity: string;
-  expDate: string;
-  remainingText: string;
-  remainingTone: "danger" | "warning";
-  actionNote: string;
-  actionButtonText: string;
-}
+type InvTab = "all" | "low" | "expiring" | "expired" | "ignored";
+type InvSortKey = "ratio-asc" | "ratio-desc" | "name-asc" | "name-desc" | "value-desc" | "value-asc";
 
-const mockExpiringLots: ExpiringLot[] = [
-  {
-    batchId: "LOT-ST-20261025",
-    name: "Sữa tươi thanh trùng 100% Vinamilk (Hộp 1L)",
-    warehouse: "CN01 — Q.1",
-    quantity: "24 Hộp",
-    expDate: "30/10/2026",
-    remainingText: "Còn 2 ngày",
-    remainingTone: "danger",
-    actionNote: "Ưu tiên pha chế các món Sữa tươi / Chuyển kho bán chạy",
-    actionButtonText: "Xuất Ngay",
-  },
-  {
-    batchId: "LOT-TC-2810-CA1",
-    name: "Trân châu đen nấu đường nâu (Nồi 5kg)",
-    warehouse: "CN05 — Q.10",
-    quantity: "3.5 kg",
-    expDate: "28/10/2026 22:00",
-    remainingText: "Còn 3 tiếng (Nấu quá 4h)",
-    remainingTone: "danger",
-    actionNote: "Nếu quá 22:00 phải hủy ghi nhận hao hụt quầy bar",
-    actionButtonText: "Kiểm Tra",
-  },
-  {
-    batchId: "LOT-KP-20261022",
-    name: "Kem phô mai Cheese Foam đóng hộp 2kg",
-    warehouse: "CN06 — Bình Thạnh",
-    quantity: "6 Hộp",
-    expDate: "02/11/2026",
-    remainingText: "Còn 5 ngày",
-    remainingTone: "warning",
-    actionNote: "Bảo quản lạnh 2-4°C, đánh bông dùng trong tuần",
-    actionButtonText: "Đạt Nhiệt Độ",
-  },
-  {
-    batchId: "LOT-CD-20261024",
-    name: "Chanh dây tươi Đà Lạt GAP (Thùng 10kg)",
-    warehouse: "CN02 — Q.3",
-    quantity: "2 Thùng",
-    expDate: "03/11/2026",
-    remainingText: "Còn 6 ngày",
-    remainingTone: "warning",
-    actionNote: "Vắt lấy cốt chanh cấp đông bảo quản dài ngày",
-    actionButtonText: "Sơ Chế",
-  },
-];
-
-interface StockItem {
-  sku: string;
-  name: string;
-  warehouse: string;
-  category: string;
-  categoryTone: "success" | "info" | "warning";
-  unit: string;
-  stockActual: number;
-  stockMin: number;
-  costPrice: number;
-  totalValue: number;
-  status: string;
-  statusTone: "success" | "warning" | "danger";
-}
-
-const mockStockItems: StockItem[] = [
-  {
-    sku: "NL-TRA-01",
-    name: "Trà Đen Lộc Phát Thượng Hạng",
-    warehouse: "Kho Tổng — Bình Tân",
-    category: "Trà lá",
-    categoryTone: "success",
-    unit: "Kg",
-    stockActual: 145.0,
-    stockMin: 50.0,
-    costPrice: 180000,
-    totalValue: 26100000,
-    status: "Dồi dào",
-    statusTone: "success",
-  },
-  {
-    sku: "NL-BOT-02",
-    name: "Bột Béo Pha Trà Sữa Indo B-One (Bao 25kg)",
-    warehouse: "CN01 — Q.1",
-    category: "Bột sữa",
-    categoryTone: "info",
-    unit: "Bao",
-    stockActual: 38,
-    stockMin: 15,
-    costPrice: 1450000,
-    totalValue: 55100000,
-    status: "Dồi dào",
-    statusTone: "success",
-  },
-  {
-    sku: "NL-TOP-03",
-    name: "Trân Châu Đen Gia Thịnh Phát (Thùng 18kg)",
-    warehouse: "CN05 — Q.10",
-    category: "Topping",
-    categoryTone: "warning",
-    unit: "Thùng",
-    stockActual: 8,
-    stockMin: 12,
-    costPrice: 580000,
-    totalValue: 4640000,
-    status: "Sắp hết",
-    statusTone: "warning",
-  },
-  {
-    sku: "NL-SUA-04",
-    name: "Sữa Tươi Thanh Trùng Vinamilk 100% (Thùng 12L)",
-    warehouse: "CN06 — Bình Thạnh",
-    category: "Bột sữa",
-    categoryTone: "info",
-    unit: "Thùng",
-    stockActual: 6,
-    stockMin: 10,
-    costPrice: 420000,
-    totalValue: 2520000,
-    status: "Sắp hết",
-    statusTone: "warning",
-  },
+const SORT_OPTIONS: SortOption<InvSortKey>[] = [
+  { key: "ratio-asc", label: "Mức độ thiếu hụt (Thấp → Cao)", fieldLabel: "Tồn / Ngưỡng" },
+  { key: "ratio-desc", label: "Mức độ đủ tồn (Cao → Thấp)", fieldLabel: "Tồn / Ngưỡng" },
+  { key: "name-asc", label: "Tên nguyên liệu A → Z", fieldLabel: "Tên nguyên liệu" },
+  { key: "name-desc", label: "Tên nguyên liệu Z → A", fieldLabel: "Tên nguyên liệu" },
+  { key: "value-desc", label: "Giá trị tồn cao → thấp", fieldLabel: "Giá trị tồn" },
+  { key: "value-asc", label: "Giá trị tồn thấp → cao", fieldLabel: "Giá trị tồn" },
 ];
 
 export default function InventoryReportPage() {
+  const navigate = useNavigate();
   const toast = useToast();
-  const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const [data, setData] = useDemoState();
+  const branchScope = scopedBranch();
+  const currentUser = sessionUser();
+  const canMute = can("ingredient.manage");
+  const today = getTodayISO();
 
-  const filteredExpiringLots = useMemo(() => {
-    return mockExpiringLots.filter(
-      (lot) => !selectedWarehouse || lot.warehouse.includes(selectedWarehouse)
+  const [ui, setUi] = usePageUiState<{
+    branch: string;
+    tab: InvTab;
+    search: string;
+    sortBy: InvSortKey;
+    density: "normal" | "compact";
+  }>("mw_ui_inv_report_v1", {
+    branch: branchScope ?? "ALL",
+    tab: "low",
+    search: "",
+    sortBy: "ratio-asc",
+    density: "normal",
+  });
+
+  const activeBranch = branchScope ?? ui.branch;
+  const [selectedRuleItem, setSelectedRuleItem] = useState<StockItemRow | null>(
+    null,
+  );
+  const [undoRuleId, setUndoRuleId] = useState<string | null>(null);
+  const [undoMsg, setUndoMsg] = useState<string | null>(null);
+
+  const warehouseFilter = activeBranch === "ALL" ? "" : activeBranch;
+
+  const summary = useMemo(
+    () =>
+      buildStockSummary(data, warehouseFilter, today, {
+        includeIgnored: true,
+      }),
+    [data, warehouseFilter, today],
+  );
+
+  const categorized = useMemo(() => {
+    const lowItems = summary.stockItems.filter(
+      (i) => !i.ignored && i.stockActual < i.stockMin,
     );
-  }, [selectedWarehouse]);
-
-  const filteredStockItems = useMemo(() => {
-    return mockStockItems.filter(
-      (item) => !selectedWarehouse || item.warehouse.includes(selectedWarehouse)
+    const ignoredItems = summary.stockItems.filter((i) => i.ignored);
+    const activeItems = summary.stockItems.filter((i) => !i.ignored);
+    const expiringSoon = summary.expiringLots.filter(
+      (l) => l.remainingTone === "warning",
     );
-  }, [selectedWarehouse]);
+    const expiredLots = summary.expiringLots.filter(
+      (l) => l.remainingTone === "danger",
+    );
 
-  const totalValuation = useMemo(() => {
-    return filteredStockItems.reduce((sum, item) => sum + item.totalValue, 0);
-  }, [filteredStockItems]);
+    return {
+      lowItems,
+      ignoredItems,
+      activeItems,
+      expiringSoon,
+      expiredLots,
+    };
+  }, [summary]);
 
-  const estimatedRevenue = useMemo(() => {
-    return Math.round(totalValuation * 2.65);
-  }, [totalValuation]);
+  const filteredStockRows = useMemo(() => {
+    const q = normalizeVi(ui.search.trim());
+    let base: StockItemRow[] = [];
+    if (ui.tab === "low") base = categorized.lowItems;
+    else if (ui.tab === "ignored") base = categorized.ignoredItems;
+    else base = categorized.activeItems;
 
-  const lowStockCount = useMemo(() => {
-    return filteredStockItems.filter((item) => item.stockActual < item.stockMin).length;
-  }, [filteredStockItems]);
+    const searched = q
+      ? base.filter((item) =>
+        normalizeVi(`${item.sku} ${item.name} ${item.warehouse}`).includes(q),
+      )
+      : [...base];
+
+    searched.sort((a, b) => {
+      if (ui.sortBy === "ratio-asc") {
+        const rA = a.stockMin > 0 ? a.stockActual / a.stockMin : a.stockActual;
+        const rB = b.stockMin > 0 ? b.stockActual / b.stockMin : b.stockActual;
+        return rA - rB;
+      }
+      if (ui.sortBy === "ratio-desc") {
+        const rA = a.stockMin > 0 ? a.stockActual / a.stockMin : a.stockActual;
+        const rB = b.stockMin > 0 ? b.stockActual / b.stockMin : b.stockActual;
+        return rB - rA;
+      }
+      if (ui.sortBy === "name-asc") return a.name.localeCompare(b.name, "vi");
+      if (ui.sortBy === "name-desc") return b.name.localeCompare(a.name, "vi");
+      if (ui.sortBy === "value-asc") return a.totalValue - b.totalValue;
+      return b.totalValue - a.totalValue;
+    });
+    return searched;
+  }, [categorized, ui.tab, ui.search, ui.sortBy]);
+
+  const filteredLots = useMemo(() => {
+    const q = normalizeVi(ui.search.trim());
+    const base: ExpiringLotRow[] =
+      ui.tab === "expired" ? categorized.expiredLots : categorized.expiringSoon;
+    return q
+      ? base.filter((l) =>
+        normalizeVi(`${l.batchId} ${l.name} ${l.warehouse}`).includes(q),
+      )
+      : base;
+  }, [categorized, ui.tab, ui.search]);
+
+  function muteIngredientThreshold(row: StockItemRow) {
+    const newId = makeId("ign");
+    setData((current) => ({
+      ...current,
+      ignoredThresholds: [
+        ...current.ignoredThresholds,
+        {
+          id: newId,
+          ingredientId: row.ingredientId,
+          scope: row.warehouse,
+          reason: "Ngừng dùng / lọc cảnh báo thừa từ Báo cáo tồn kho",
+          ignoredBy: currentUser.name,
+          ignoredAt: today,
+        },
+      ],
+    }));
+    setUndoRuleId(newId);
+    setUndoMsg(`Đã ẩn cảnh báo ngưỡng cho "${row.name}" tại ${row.warehouse}.`);
+  }
+
+  function restoreMuted(row: StockItemRow) {
+    setData((current) => ({
+      ...current,
+      ignoredThresholds: current.ignoredThresholds.filter(
+        (r) =>
+          !(
+            r.ingredientId === row.ingredientId &&
+            (branchScope
+              ? r.scope === branchScope
+              : r.scope === row.warehouse || r.scope === "ALL")
+          ),
+      ),
+    }));
+    toast.success(`Đã khôi phục theo dõi ngưỡng cho "${row.name}".`);
+  }
+
+  function undoLastMute() {
+    if (!undoRuleId) return;
+    setData((current) => ({
+      ...current,
+      ignoredThresholds: current.ignoredThresholds.filter(
+        (r) => r.id !== undoRuleId,
+      ),
+    }));
+    setUndoRuleId(null);
+    setUndoMsg(null);
+    toast.info("Đã hoàn tác việc ẩn cảnh báo.");
+  }
+
+  function exportCsv() {
+    const header =
+      "Ma NL,Ten nguyen lieu,Kho / Chi nhanh,Ton hien tai,Nguong an toan,Don vi,Gia tri ton VND,Trang thai";
+    const esc = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+    const rows = summary.stockItems.map((i) =>
+      [
+        i.sku,
+        esc(i.name),
+        esc(i.warehouse),
+        i.stockActual,
+        i.stockMin,
+        i.unit,
+        i.totalValue,
+        esc(i.ignored ? "Đã ẩn cảnh báo" : i.status),
+      ].join(","),
+    );
+    const blob = new Blob(["\uFEFF" + [header, ...rows].join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bao-cao-ton-kho-${activeBranch}-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Đã xuất báo cáo tồn kho (.CSV).");
+  }
+
+  const TONE_MAP: Record<StockItemRow["statusTone"], PillTone> = {
+    success: "success",
+    warning: "warning",
+    danger: "danger",
+  };
+
+  const showLotsTable = ui.tab === "expiring" || ui.tab === "expired";
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="page-header">
+    <div>
+      <div className="page-header !mb-4">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/reports">Báo cáo</Link>
+            <span>Báo cáo &amp; Phân tích</span>
             <span className="sep">/</span>
             <span className="current">Báo cáo tồn kho</span>
           </nav>
-          <h1 className="page-title">Báo Cáo Tồn Kho &amp; Cảnh Báo Cận Date (FEFO)</h1>
+          <h1 className="page-title">Báo cáo tồn kho &amp; Cảnh báo ngưỡng</h1>
           <p className="page-subtitle">
-            Giám sát giá trị tồn kho, tồn an toàn và cảnh báo hạn sử dụng theo nguyên tắc FEFO.
+            Phân tích giá trị tồn kho thực tế, kiểm tra quy tắc ngưỡng an toàn và xử lý lô cận/hết hạn theo FEFO.
           </p>
         </div>
-        <div className="flex gap-2.5 flex-wrap items-center">
-          <select
-            className="form-input form-select text-xs w-auto"
-            value={selectedWarehouse}
-            onChange={(e) => setSelectedWarehouse(e.target.value)}
-          >
-            <option value="">Tất cả 12 Kho Chi Nhánh &amp; Kho Tổng</option>
-            <option value="Kho Tổng">Kho Tổng Trung Tâm (Bình Tân)</option>
-            <option value="CN01">Kho CN01 — Q.1 (Nguyễn Huệ)</option>
-            <option value="CN02">Kho CN02 — Q.3 (Võ Văn Tần)</option>
-            <option value="CN05">Kho CN05 — Q.10 (Sư Vạn Hạnh)</option>
-            <option value="CN06">Kho CN06 — Bình Thạnh (D2)</option>
-            <option value="CN07">Kho CN07 — Gò Vấp (Phan Văn Trị)</option>
-          </select>
+
+        <div className="page-header-actions flex-wrap">
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() =>
-              toast.info("Đang xuất biên bản kiểm kê FEFO (PDF)...", {
-                title: "Xuất Báo Cáo",
-              })
-            }
+            className="btn btn-secondary"
+            onClick={exportCsv}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Xuất Báo Cáo Kiểm Kê
+            Xuất CSV tồn kho
           </button>
+          {canVisit("/purchases/new") && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate("/purchases/new")}
+            >
+              + Tạo đơn nhập PO
+            </button>
+          )}
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
-      <section aria-label="Thống kê tồn kho">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <StatCard
-            label="Định Giá Tồn Kho Toàn Chuỗi"
-            value={`${totalValuation.toLocaleString("vi-VN")} đ`}
-            subLabel="Theo giá vốn nhập (COGS)"
-            tone="info"
-            icon={
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
-            }
-          />
-          <StatCard
-            label="Giá Trị Bán Ra Dự Kiến"
-            value={`${estimatedRevenue.toLocaleString("vi-VN")} đ`}
-            valueClassName="text-[var(--primary)]"
-            subLabel={`Trên ${filteredStockItems.length} danh mục nguyên liệu`}
-            tone="primary"
-            icon={
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                <polyline points="16 7 22 7 22 13" />
-              </svg>
-            }
-          />
-          <StatCard
-            label="Nguyên Liệu Dưới Tồn An Toàn"
-            value={`${lowStockCount} Mặt hàng`}
-            valueClassName="text-[var(--warning)]"
-            subLabel="Cần đặt NCC hoặc chuyển kho"
-            tone="warning"
-            icon={
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            }
-          />
-          <StatCard
-            label="Lô Cận Date 7 Ngày (FEFO)"
-            value={`${filteredExpiringLots.length} Lô hàng`}
-            valueClassName="text-[var(--danger)]"
-            subLabel="Sữa tươi, trân châu, trái cây"
-            tone="danger"
-            icon={
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            }
-          />
-        </div>
-      </section>
+      {/* Scope Bar */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-4">
+        <ScopeBadge
+          branchScope={branchScope}
+          value={activeBranch}
+          onChange={(next) => setUi((p) => ({ ...p, branch: next }))}
+          stores={data.stores}
+          allLabel="Toàn chuỗi (Kho Tổng + CN)"
+          extraOptions={[
+            { id: "Kho Tổng", label: "Kho Tổng" },
+            { id: "Khu chế biến", label: "Khu chế biến (Bếp)" },
+          ]}
+        />
+        <InfoTip
+          title="Báo cáo tồn kho & Lọc cảnh báo"
+          summary="Theo dõi các mã dưới ngưỡng an toàn (bao gồm tồn = 0), lô cận hạn hoặc quá hạn. Có thể ẩn cảnh báo cho các nguyên liệu ngừng dùng tại chi nhánh."
+        />
+      </div>
 
-      {/* Warning Table: FEFO Lô Sắp Hết Hạn */}
-      <section aria-label="Lô hàng cận date FEFO">
-        <div className="card p-0 overflow-hidden border-2 border-amber-300 mb-6">
-          <div className="py-3 px-5 bg-amber-500/10 border-b border-amber-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span>
-              <h3 className="text-[15px] font-bold text-amber-900 mb-0">
-                Cảnh Báo Lô Nguyên Liệu Sắp Hết Hạn Sử Dụng (Nguyên tắc xuất FEFO)
-              </h3>
+      <UndoBanner
+        message={undoMsg}
+        onUndo={undoLastMute}
+        onDismiss={() => setUndoMsg(null)}
+      />
+
+      <KpiStrip
+        items={[
+          {
+            key: "val",
+            label: "Giá trị tồn hiện hữu",
+            value: formatCurrency(summary.totalValue),
+            subLabel: `${categorized.activeItems.length} mã đang theo dõi`,
+            icon: "currency",
+            tone: "primary",
+            active: ui.tab === "all",
+            onClick: () => setUi((p) => ({ ...p, tab: "all" })),
+          },
+          {
+            key: "low",
+            label: "Dưới ngưỡng an toàn",
+            value: String(categorized.lowItems.length),
+            subLabel: "Bao gồm nguyên liệu hết tồn",
+            icon: "warning",
+            tone: categorized.lowItems.length > 0 ? "danger" : "success",
+            valueTone: categorized.lowItems.length > 0 ? "danger" : "default",
+            active: ui.tab === "low",
+            onClick: () => setUi((p) => ({ ...p, tab: "low" })),
+          },
+          {
+            key: "expiring",
+            label: "Lô cận hạn sử dụng",
+            value: String(categorized.expiringSoon.length),
+            subLabel: "Ưu tiên điều phối FEFO",
+            icon: "clock",
+            tone: "warning",
+            valueTone:
+              categorized.expiringSoon.length > 0 ? "warning" : "default",
+            active: ui.tab === "expiring",
+            onClick: () => setUi((p) => ({ ...p, tab: "expiring" })),
+          },
+          {
+            key: "expired",
+            label: "Lô đã hết hạn",
+            value: String(categorized.expiredLots.length),
+            subLabel: "Cần cô lập & lập biên bản hủy",
+            icon: "box",
+            tone: categorized.expiredLots.length > 0 ? "danger" : "info",
+            valueTone:
+              categorized.expiredLots.length > 0 ? "danger" : "default",
+            active: ui.tab === "expired",
+            onClick: () => setUi((p) => ({ ...p, tab: "expired" })),
+          },
+        ]}
+      />
+
+      <FilterBar
+        search={ui.search}
+        onSearchChange={(next) => setUi((p) => ({ ...p, search: next }))}
+        searchPlaceholder="Tìm mã NL, tên nguyên liệu, số lô hoặc chi nhánh..."
+        density={ui.density}
+        onToggleDensity={() =>
+          setUi((p) => ({
+            ...p,
+            density: p.density === "compact" ? "normal" : "compact",
+          }))
+        }
+        filters={
+          <SegmentedControl<InvTab>
+            value={ui.tab}
+            onChange={(next) => setUi((p) => ({ ...p, tab: next }))}
+            options={[
+              {
+                value: "low",
+                label: "Dưới ngưỡng",
+                badge: categorized.lowItems.length,
+              },
+              {
+                value: "expiring",
+                label: "Cận hạn",
+                badge: categorized.expiringSoon.length,
+              },
+              {
+                value: "expired",
+                label: "Hết hạn",
+                badge: categorized.expiredLots.length,
+              },
+              {
+                value: "all",
+                label: "Tất cả",
+                badge: categorized.activeItems.length,
+              },
+              ...(categorized.ignoredItems.length > 0
+                ? [
+                  {
+                    value: "ignored" as const,
+                    label: "Đã ẩn",
+                    badge: categorized.ignoredItems.length,
+                  },
+                ]
+                : []),
+            ]}
+          />
+        }
+        sortMenu={
+          !showLotsTable ? (
+            <SortMenu
+              options={SORT_OPTIONS}
+              value={ui.sortBy}
+              onChange={(next) => setUi((p) => ({ ...p, sortBy: next }))}
+            />
+          ) : undefined
+        }
+      />
+
+      {/* Neutral Clean Table (No loud bright red/yellow background slabs) */}
+      <section className="card p-0 overflow-hidden">
+        {!showLotsTable ? (
+          filteredStockRows.length === 0 ? (
+            <EmptyState
+              title="Không có mặt hàng nào trong mục lọc này."
+              actionLabel={ui.tab !== "all" ? "Xem tất cả tồn kho" : undefined}
+              onAction={
+                ui.tab !== "all"
+                  ? () => setUi((p) => ({ ...p, tab: "all" }))
+                  : undefined
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table
+                className={`data-table ${ui.density === "compact" ? "text-xs" : ""}`}
+              >
+                <thead>
+                  <tr>
+                    <SortableTh
+                      label="Nguyên liệu & Điểm kho"
+                      fieldHint="ingredient.name"
+                      ascKey="name-asc"
+                      descKey="name-desc"
+                      currentSort={ui.sortBy}
+                      onSort={(next) =>
+                        setUi((p) => ({ ...p, sortBy: next as InvSortKey }))
+                      }
+                    />
+                    <SortableTh
+                      label="Tồn thực tế vs Ngưỡng an toàn"
+                      fieldHint="stockActual / stockMin"
+                      ascKey="ratio-asc"
+                      descKey="ratio-desc"
+                      currentSort={ui.sortBy}
+                      onSort={(next) =>
+                        setUi((p) => ({ ...p, sortBy: next as InvSortKey }))
+                      }
+                    />
+                    <SortableTh
+                      label="Giá trị tồn"
+                      fieldHint="totalValue"
+                      ascKey="value-asc"
+                      descKey="value-desc"
+                      currentSort={ui.sortBy}
+                      onSort={(next) =>
+                        setUi((p) => ({ ...p, sortBy: next as InvSortKey }))
+                      }
+                      align="right"
+                    />
+                    <th>Trạng thái</th>
+                    <th className="text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStockRows.map((row) => {
+                    const isLow = !row.ignored && row.stockActual < row.stockMin;
+                    const borderClass = row.ignored
+                      ? ""
+                      : row.stockActual === 0
+                        ? "border-l-4 border-l-rose-500"
+                        : isLow
+                          ? "border-l-4 border-l-amber-500"
+                          : "";
+                    return (
+                      <tr key={row.id} className={borderClass}>
+                        <td>
+                          <div className="font-semibold text-[var(--text)]">
+                            <HighlightText text={row.name} query={ui.search} />
+                          </div>
+                          <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                            <span className="font-mono">{row.sku}</span> ·{" "}
+                            {row.warehouse}
+                            {getStore(data, row.warehouse)
+                              ? ` (${getStore(data, row.warehouse)?.name})`
+                              : ""}
+                          </div>
+                        </td>
+
+                        <td className="min-w-[210px]">
+                          <MiniProgress
+                            value={row.stockActual}
+                            max={Math.max(row.stockMin * 1.5, row.stockActual, 1)}
+                            tone={
+                              row.stockActual === 0
+                                ? "danger"
+                                : isLow
+                                  ? "warning"
+                                  : "success"
+                            }
+                            label={`${formatNumber(row.stockActual)} / ngưỡng ${formatNumber(row.stockMin)} ${row.unit}`}
+                          />
+                        </td>
+
+                        <td className="text-right tabular-nums font-medium">
+                          {formatCurrency(row.totalValue)}
+                        </td>
+
+                        <td>
+                          <StatusPill
+                            label={row.ignored ? "Đã ẩn cảnh báo" : row.status}
+                            tone={row.ignored ? "neutral" : TONE_MAP[row.statusTone]}
+                          />
+                        </td>
+
+                        <td>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setSelectedRuleItem(row)}
+                            >
+                              Quy tắc ngưỡng
+                            </button>
+                            {canMute && !row.ignored && isLow && (
+                              <ConfirmInline
+                                triggerLabel="Bỏ qua"
+                                confirmText="Ẩn cảnh báo NL ngừng dùng?"
+                                onConfirm={() => muteIngredientThreshold(row)}
+                              />
+                            )}
+                            {canMute && row.ignored && (
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={() => restoreMuted(row)}
+                              >
+                                Khôi phục
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <Badge variant="warning">Ưu tiên xuất dùng trước trong 48h - 7 ngày</Badge>
-          </div>
+          )
+        ) : filteredLots.length === 0 ? (
+          <EmptyState title="Không có lô nguyên liệu cận hạn hoặc hết hạn." />
+        ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table
+              className={`data-table ${ui.density === "compact" ? "text-xs" : ""}`}
+            >
               <thead>
                 <tr>
-                  <th>Mã Lô (Batch ID)</th>
-                  <th>Tên Nguyên Liệu</th>
-                  <th>Kho Lưu Trữ</th>
-                  <th>Số Lượng Tồn</th>
-                  <th>Hạn Sử Dụng (EXP)</th>
-                  <th>Số Ngày Còn Lại</th>
-                  <th>Hành Động Khuyến Nghị</th>
-                  <th>Thao Tác</th>
+                  <th>Số lô &amp; Nguyên liệu</th>
+                  <th>Điểm lưu trữ</th>
+                  <th className="text-right">Số lượng còn lại</th>
+                  <th>Ngày hết hạn</th>
+                  <th>Tình trạng hạn</th>
+                  <th className="text-right">Hướng xử lý</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredExpiringLots.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-6 text-xs text-[var(--muted)]">
-                      Không có lô nguyên liệu cận date tại kho đã chọn.
+                {filteredLots.map((lot) => (
+                  <tr
+                    key={lot.id}
+                    className={
+                      lot.remainingTone === "danger"
+                        ? "border-l-4 border-l-rose-500"
+                        : "border-l-4 border-l-amber-500"
+                    }
+                  >
+                    <td>
+                      <div className="font-semibold text-[var(--text)]">
+                        <HighlightText text={lot.name} query={ui.search} />
+                      </div>
+                      <div className="text-[11px] text-[var(--muted)] font-mono mt-0.5">
+                        Lô: {lot.batchId}
+                      </div>
+                    </td>
+                    <td>{lot.warehouse}</td>
+                    <td className="text-right tabular-nums font-semibold">
+                      {lot.quantity}
+                    </td>
+                    <td className="tabular-nums">{lot.expDate}</td>
+                    <td>
+                      <StatusPill
+                        label={lot.remainingText}
+                        tone={lot.remainingTone}
+                      />
+                    </td>
+                    <td className="text-right">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() =>
+                          toast.info(lot.actionNote, {
+                            title: `Đề xuất xử lý lô ${lot.batchId}`,
+                          })
+                        }
+                      >
+                        {lot.actionButtonText}
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  filteredExpiringLots.map((lot) => (
-                    <tr
-                      key={lot.batchId}
-                      className={lot.remainingTone === "danger" ? "bg-red-50/50" : ""}
-                    >
-                      <td className="font-bold text-red-600">{lot.batchId}</td>
-                      <td className="font-semibold text-[var(--text)]">{lot.name}</td>
-                      <td>
-                        <Badge variant="info">{lot.warehouse}</Badge>
-                      </td>
-                      <td className="font-bold">{lot.quantity}</td>
-                      <td className="font-bold text-red-600">{lot.expDate}</td>
-                      <td>
-                        <Badge variant={lot.remainingTone}>{lot.remainingText}</Badge>
-                      </td>
-                      <td className="text-xs font-semibold text-red-700">{lot.actionNote}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className={`btn btn-sm ${
-                            lot.remainingTone === "danger" ? "btn-primary" : "btn-secondary"
-                          }`}
-                          onClick={() =>
-                            toast.info(`Thực hiện: ${lot.actionButtonText} cho lô ${lot.batchId}`, {
-                              title: "FEFO",
-                            })
-                          }
-                        >
-                          {lot.actionButtonText}
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
       </section>
 
-      {/* Inventory Valuation Table */}
-      <section aria-label="Bảng tồn kho chi tiết">
-        <div className="card p-0 overflow-hidden">
-          <div className="py-3 px-5 border-b border-[var(--border)] flex items-center justify-between">
-            <h3 className="text-[15px] font-bold text-[var(--text)] mb-0">
-              Bảng Đối Soát Tồn Kho &amp; Định Mức Tồn An Toàn
-            </h3>
-            <span className="text-xs text-[var(--muted)]">
-              Cập nhật tự động sau mỗi đơn POS &amp; Nhập kho
-            </span>
+      {/* SideDrawer: Threshold Rule & Multi-Branch Comparison */}
+      <SideDrawer
+        isOpen={!!selectedRuleItem}
+        onClose={() => setSelectedRuleItem(null)}
+        title={`Quy tắc ngưỡng an toàn · ${selectedRuleItem?.name ?? ""}`}
+        subtitle={
+          selectedRuleItem
+            ? `${selectedRuleItem.sku} · Điểm kiểm tra: ${selectedRuleItem.warehouse}`
+            : ""
+        }
+        widthClass="max-w-[500px]"
+        footer={
+          <div className="flex justify-between w-full">
+            {(canVisit("/purchases/new") || (activeBranch !== "ALL" && activeBranch !== "Kho Tổng")) && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setSelectedRuleItem(null);
+                  navigate(
+                    (activeBranch === "ALL" || activeBranch === "Kho Tổng") && canVisit("/purchases/new")
+                      ? "/purchases/new"
+                      : "/production/planning",
+                  );
+                }}
+              >
+                {(activeBranch === "ALL" || activeBranch === "Kho Tổng") && canVisit("/purchases/new")
+                  ? "+ Lập đơn mua PO"
+                  : "+ Đề xuất bổ sung tạm thời"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setSelectedRuleItem(null)}
+            >
+              Đóng
+            </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Mã SKU</th>
-                  <th>Tên Nguyên Liệu</th>
-                  <th>Kho Lưu Trữ</th>
-                  <th>Nhóm Mặt Hàng</th>
-                  <th>Đơn Vị</th>
-                  <th className="text-right">Tồn Thực Tế</th>
-                  <th className="text-right">Tồn Tối Thiểu</th>
-                  <th className="text-right">Đơn Giá Vốn</th>
-                  <th className="text-right">Giá Trị Tồn (VNĐ)</th>
-                  <th className="text-center">Trạng Thái Kho</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStockItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="text-center py-6 text-xs text-[var(--muted)]">
-                      Không có dữ liệu nguyên liệu tồn kho tại kho đã chọn.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStockItems.map((item) => (
-                    <tr key={item.sku}>
-                      <td className="font-bold">{item.sku}</td>
-                      <td className="font-semibold text-[var(--text)]">{item.name}</td>
-                      <td>
-                        <Badge variant="info">{item.warehouse}</Badge>
-                      </td>
-                      <td>
-                        <Badge variant={item.categoryTone}>{item.category}</Badge>
-                      </td>
-                      <td>{item.unit}</td>
-                      <td className="text-right font-bold">{item.stockActual}</td>
-                      <td className="text-right text-[var(--muted)]">{item.stockMin}</td>
-                      <td className="text-right">{item.costPrice.toLocaleString("vi-VN")} ₫</td>
-                      <td className="text-right font-bold text-[var(--text)]">
-                        {item.totalValue.toLocaleString("vi-VN")} ₫
-                      </td>
-                      <td className="text-center">
-                        <Badge variant={item.statusTone}>{item.status}</Badge>
-                      </td>
-                    </tr>
-                  ))
+        }
+      >
+        {selectedRuleItem && (() => {
+          const ing = getIngredient(data, selectedRuleItem.ingredientId);
+          return (
+            <div className="space-y-4 text-xs">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 space-y-1.5">
+                <div className="font-semibold text-[var(--heading-color)]">
+                  Cơ sở thiết lập ngưỡng tại điểm kho
+                </div>
+                <p className="text-[var(--muted)] leading-relaxed">
+                  {ing?.thresholdRuleText ||
+                    "Ngưỡng được hệ thống thiết lập dựa trên mức tiêu thụ trung bình ngày, thời gian giao hàng của nhà cung cấp và tồn dự phòng tại điểm bán."}
+                </p>
+                {ing?.avgDailyUsage != null && (
+                  <div className="pt-1 flex flex-wrap gap-3 text-[11px]">
+                    <span>
+                      Tiêu thụ bình quân:{" "}
+                      <strong>
+                        {formatNumber(ing.avgDailyUsage)} {ing.baseUnit}/ngày
+                      </strong>
+                    </span>
+                    {ing.leadTimeDays != null && (
+                      <span>
+                        Chu kỳ giao: <strong>{ing.leadTimeDays} ngày</strong>
+                      </span>
+                    )}
+                    {ing.safetyStock != null && (
+                      <span>
+                        Dự phòng chuẩn:{" "}
+                        <strong>
+                          {formatNumber(ing.safetyStock)} {ing.baseUnit}
+                        </strong>
+                      </span>
+                    )}
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+              </div>
+
+              {ing?.branchMinimums && (
+                <div>
+                  <div className="font-semibold text-[var(--heading-color)] mb-2">
+                    Ngưỡng áp dụng riêng theo từng điểm kho
+                  </div>
+                  <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
+                    {Object.entries(ing.branchMinimums).map(([loc, minVal]) => (
+                      <div
+                        key={loc}
+                        className={`px-3 py-2 flex items-center justify-between ${loc === selectedRuleItem.warehouse
+                          ? "bg-sky-50/50 dark:bg-sky-950/20 font-semibold"
+                          : ""
+                          }`}
+                      >
+                        <span>{loc}</span>
+                        <span className="tabular-nums">
+                          {formatNumber(minVal)} {ing.baseUnit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </SideDrawer>
     </div>
   );
 }
-

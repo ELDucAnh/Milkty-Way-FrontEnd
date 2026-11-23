@@ -1,611 +1,1110 @@
-import { dashboardDemo, demoBranches } from "../../data/sales/dashboard-demo";
-import TemplateChart from "../../components/sales/TemplateChart";
-import { salesData, customerData } from "../../data/sales/charts";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import Badge from "../../components/common/Badge";
-import DataTable from "../../components/common/DataTable";
-import type { DataTableColumn } from "../../components/common/DataTable";
-import StatCard from "../../components/common/StatCard";
+import TemplateChart, { type ChartSeriesItem } from "../../components/sales/TemplateChart";
 import { useToast } from "../../components/common/useToast";
-import { loadOrders } from "../shared/sales-orders-store";
 import {
-    branches,
-    channelLabels,
-    channelVariants,
-    formatCurrency,
-    formatDateTime,
-    parseVietnameseDate,
-    paymentStatuses,
-    recentOrders,
-    SalesStatIcon,
-    shiftLabels,
-} from "./sales-support";
-import type { SalesOrder } from "./sales-support";
+  BRANCH_TRAFFIC_PROFILES,
+  CHAIN_CUPS_SERIES,
+  CHAIN_CUSTOMER_SERIES,
+  CHAIN_REVENUE_SERIES,
+  CHART_LABELS,
+  TIME_UNIT_META,
+  type TimeUnit,
+} from "../../data/sales/charts";
+import {
+  ConfirmInline,
+  EmptyState,
+  InfoTip,
+  KpiStrip,
+  MiniProgress,
+  ScopeBadge,
+  SegmentedControl,
+  SideDrawer,
+  StatusPill,
+  UndoBanner,
+  usePageUiState,
+} from "../../components/shared/ui-kit";
+import { homePath, scopedBranch, sessionUser } from "../../utils/auth";
+import {
+  getBranchMinimum,
+  getIngredient,
+  relativeDateISO,
+} from "../shared/business-demo";
+import { formatCurrency, getTodayISO, makeId } from "../shared/formatters";
+import { buildStockSummary, type StockItemRow } from "../shared/stock-summary";
+import { useDemoState } from "../shared/useDemoState";
 
-interface DashboardFilters {
-    branchId: string;
-    shift: string;
-    from: string;
-    to: string;
-}
+type ChartTab = "revenue" | "customers" | "cups";
 
-interface LowStockIngredient {
-    id: string;
-    name: string;
-    available: number;
-    minimum: number;
-    unit: string;
-}
-
-interface DashboardMetric {
-    label: string;
-    value: string | number;
-}
-
-const emptyFilters: DashboardFilters = {
-    branchId: "",
-    shift: "",
-    from: "",
-    to: "",
-};
-
-const ingredients: readonly LowStockIngredient[] = [
-    { id: "NL-TCK", name: "Trân châu khô", available: 15, minimum: 30, unit: "kg" },
-    { id: "NL-TOL", name: "Trà ô long", available: 8, minimum: 20, unit: "kg" },
-    { id: "NL-ST", name: "Sữa tươi", available: 0, minimum: 50, unit: "lít" },
+const MUTE_REASONS = [
+  "Ngưng kinh doanh món dùng nguyên liệu này",
+  "Đã chuyển sang mã nguyên liệu thay thế",
+  "Nguyên liệu thời vụ đã kết thúc",
 ];
 
 export default function DashboardPage() {
-    const toast = useToast();
-    const [draft, setDraft] = useState<DashboardFilters>(emptyFilters);
-    const [filters, setFilters] = useState<DashboardFilters>(emptyFilters);
-    const [salesPeriod, setSalesPeriod] = useState("monthly");
-    const [customerPeriod, setCustomerPeriod] = useState("monthly");
+  const toast = useToast();
+  const branchScope = scopedBranch();
+  const [demoState, setDemoState] = useDemoState();
 
-    const from = filters.from ? parseVietnameseDate(filters.from) : null;
-    const to = filters.to ? parseVietnameseDate(filters.to) : null;
+  const [ui, setUi] = usePageUiState<{
+    branch: string;
+    timeUnit: TimeUnit;
+    chartTab: ChartTab;
+    rangePreset: "today" | "week" | "month";
+    visibleTrafficBranches: string[];
+  }>("mw_ui_dashboard_v1", {
+    branch: branchScope ?? "ALL",
+    timeUnit: "month",
+    chartTab: "revenue",
+    rangePreset: "month",
+    visibleTrafficBranches: ["CN01", "CN05", "CN02"],
+  });
 
-    const allRecentOrders = useMemo<SalesOrder[]>(() => {
-        try {
-            const stored = loadOrders();
-            const newOrders = stored.filter(
-                (so) => !recentOrders.some((ro) => ro.id === so.id) && so.id !== "DH-00122"
-            );
-            const updatedRecent = recentOrders.map((ro) => {
-                const match = stored.find((so) => so.id === ro.id);
-                return match ? { ...ro, payment: match.payment, total: match.total } : ro;
-            });
-            return [...newOrders, ...updatedRecent];
-        } catch {
-            return [...recentOrders];
-        }
-    }, []);
+  const activeBranch = branchScope ?? ui.branch;
+  const warehouseKey = activeBranch === "ALL" ? "Kho Tổng" : activeBranch;
 
-    const visibleOrders = allRecentOrders.filter((order) => {
-        // Dữ liệu mẫu có timestamp UTC+7, cùng múi giờ nghiệp vụ.
-        const businessDate = order.createdAt.slice(0, 10);
+  // Drawers & Popovers
+  const [kpiDrawerKey, setKpiDrawerKey] = useState<string | null>(null);
+  const [rulesDrawerOpen, setRulesDrawerOpen] = useState(false);
+  const [compareThresholdIngId, setCompareThresholdIngId] = useState<string | null>(null);
+  const [mutedListDrawerOpen, setMutedListDrawerOpen] = useState(false);
+  const [allAlertsDrawerOpen, setAllAlertsDrawerOpen] = useState(false);
+  const [muteTarget, setMuteTarget] = useState<StockItemRow | null>(null);
+  const [muteScope, setMuteScope] = useState<"branch" | "ALL">("branch");
+  const [muteReason, setMuteReason] = useState(MUTE_REASONS[0]);
+  const [undoMuteRuleId, setUndoMuteRuleId] = useState<{ id: string; name: string } | null>(null);
 
-        return (
-            (!filters.branchId || order.branchId === filters.branchId) &&
-            (!filters.shift || order.shift === filters.shift) &&
-            (!from || businessDate >= from) &&
-            (!to || businessDate <= to)
-        );
+  const stockSummary = useMemo(
+    () => buildStockSummary(demoState, warehouseKey),
+    [demoState, warehouseKey],
+  );
+
+  const lowStockItems = useMemo(
+    () =>
+      stockSummary.stockItems
+        .filter((item) => item.statusTone !== "success")
+        .sort((a, b) => a.stockActual - b.stockActual),
+    [stockSummary.stockItems],
+  );
+
+  const mutedRules = useMemo(() => {
+    const allMuted = demoState.ignoredThresholds ?? [];
+    if (activeBranch === "ALL") return allMuted;
+    return allMuted.filter((r) => r.scope === "ALL" || r.scope === activeBranch);
+  }, [demoState.ignoredThresholds, activeBranch]);
+
+  // Scale factor per selected branch (real profile weights so metrics change cleanly per branch)
+  const branchWeight = useMemo(() => {
+    if (activeBranch === "ALL") return 1;
+    const found = BRANCH_TRAFFIC_PROFILES.find((p) => p.branchId === activeBranch);
+    return found?.weight ?? 0.08;
+  }, [activeBranch]);
+
+  const timeMeta = TIME_UNIT_META[ui.timeUnit];
+  const labels = CHART_LABELS[ui.timeUnit];
+
+  const scaledRevenue = useMemo(
+    () =>
+      CHAIN_REVENUE_SERIES[ui.timeUnit].map((v) =>
+        Number((v * branchWeight).toFixed(1)),
+      ),
+    [ui.timeUnit, branchWeight],
+  );
+
+  const scaledCups = useMemo(
+    () => CHAIN_CUPS_SERIES[ui.timeUnit].map((v) => Math.round(v * branchWeight)),
+    [ui.timeUnit, branchWeight],
+  );
+
+  const customerSeries = useMemo<ChartSeriesItem[]>(() => {
+    const base = CHAIN_CUSTOMER_SERIES[ui.timeUnit];
+    if (activeBranch !== "ALL") {
+      const profile = BRANCH_TRAFFIC_PROFILES.find((p) => p.branchId === activeBranch);
+      return [
+        {
+          label: profile?.branchName ?? activeBranch,
+          data: base.map((v) => Math.round(v * branchWeight)),
+          color: profile?.color ?? "#10B981",
+        },
+      ];
+    }
+    const activeProfiles = BRANCH_TRAFFIC_PROFILES.filter((p) =>
+      ui.visibleTrafficBranches.includes(p.branchId),
+    );
+    const chosen = activeProfiles.length > 0 ? activeProfiles : BRANCH_TRAFFIC_PROFILES.slice(0, 3);
+    return chosen.map((p) => ({
+      label: p.branchId,
+      data: base.map((v) => Math.round(v * p.weight)),
+      color: p.color,
+    }));
+  }, [ui.timeUnit, activeBranch, branchWeight, ui.visibleTrafficBranches]);
+
+  const totalRevenueLatest = useMemo(() => {
+    const total = scaledRevenue.reduce((sum, n) => sum + n, 0);
+    return Math.round(total * 1_000_000);
+  }, [scaledRevenue]);
+
+  const totalCupsLatest = useMemo(
+    () => scaledCups.reduce((sum, n) => sum + n, 0),
+    [scaledCups],
+  );
+
+  const totalCustomersLatest = useMemo(() => {
+    const total = CHAIN_CUSTOMER_SERIES[ui.timeUnit].reduce(
+      (sum, v) => sum + Math.round(v * branchWeight),
+      0,
+    );
+    return total;
+  }, [ui.timeUnit, branchWeight]);
+
+  const estimatedAov = useMemo(
+    () => (totalCustomersLatest > 0 ? Math.round(totalRevenueLatest / totalCustomersLatest) : 68000),
+    [totalRevenueLatest, totalCustomersLatest],
+  );
+
+  function confirmMuteIngredient() {
+    if (!muteTarget) return;
+    const id = makeId("mute");
+    const scope = muteScope === "ALL" ? "ALL" : muteTarget.warehouse;
+    const rule = {
+      id,
+      ingredientId: muteTarget.ingredientId,
+      scope,
+      reason: muteReason,
+      ignoredBy: sessionUser().name,
+      ignoredAt: getTodayISO(),
+    };
+    setDemoState((prev) => ({
+      ...prev,
+      ignoredThresholds: [rule, ...(prev.ignoredThresholds ?? [])],
+    }));
+    setUndoMuteRuleId({ id, name: muteTarget.name });
+    toast.success(`Đã bỏ qua cảnh báo "${muteTarget.name}" (${scope === "ALL" ? "Toàn chuỗi" : scope}).`);
+    setMuteTarget(null);
+  }
+
+  function restoreMutedRule(ruleId: string) {
+    setDemoState((prev) => ({
+      ...prev,
+      ignoredThresholds: (prev.ignoredThresholds ?? []).filter((r) => r.id !== ruleId),
+    }));
+    toast.info("Đã khôi phục theo dõi ngưỡng nguyên liệu.");
+  }
+
+  const branchComparisonRows = useMemo(() => {
+    const baseRev = CHAIN_REVENUE_SERIES[ui.timeUnit].reduce((s, n) => s + n, 0) * 1_000_000;
+    const baseCust = CHAIN_CUSTOMER_SERIES[ui.timeUnit].reduce((s, n) => s + n, 0);
+    return BRANCH_TRAFFIC_PROFILES.filter(
+      (p) => activeBranch === "ALL" || p.branchId === activeBranch,
+    ).map((p) => {
+      const cust = Math.round(baseCust * p.weight);
+      const rev = Math.round(baseRev * p.weight);
+      const avgUnit = Math.round(cust / Math.max(1, labels.length));
+      return { ...p, cust, rev, avgUnit };
     });
+  }, [ui.timeUnit, activeBranch, labels.length]);
 
-    function applyFilters() {
-        const fromDate = draft.from ? parseVietnameseDate(draft.from) : null;
-        const toDate = draft.to ? parseVietnameseDate(draft.to) : null;
+  const compareIngredient = compareThresholdIngId
+    ? getIngredient(demoState, compareThresholdIngId)
+    : null;
 
-        if (
-            (draft.from && !fromDate) ||
-            (draft.to && !toDate) ||
-            (fromDate && toDate && fromDate > toDate)
-        ) {
-            toast.warning("Khoảng ngày không hợp lệ. Vui lòng nhập dd/MM/yyyy.");
-            return;
-        }
-
-        setFilters({ ...draft });
-        toast.info("Đã áp dụng bộ lọc.");
-    }
-
-    function setPeriodStart(period: "month" | "year") {
-        const parts = new Intl.DateTimeFormat("en-GB", {
-            timeZone: "Asia/Ho_Chi_Minh",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-        }).formatToParts(new Date());
-
-        const day = parts.find((part) => part.type === "day")?.value ?? "01";
-        const month = parts.find((part) => part.type === "month")?.value ?? "01";
-        const year = parts.find((part) => part.type === "year")?.value ?? "2026";
-
-        const nextFrom = `01/${period === "year" ? "01" : month}/${year}`;
-        const nextTo = `${day}/${month}/${year}`;
-
-        setDraft((current) => {
-            const next = {
-                ...current,
-                from: nextFrom,
-                to: nextTo,
-            };
-            setFilters(next);
-            return next;
-        });
-    }
-
-    const orderColumns: readonly DataTableColumn<SalesOrder>[] = [
-        {
-            id: "id",
-            header: "Mã đơn",
-            render: (order) => (
-                <>
-                    <div className="font-semibold whitespace-nowrap">{order.id}</div>
-                    {order.largeOrder && <Badge variant="warning">Đơn lớn</Badge>}
-                </>
-            ),
-        },
-        {
-            id: "branch",
-            header: "Chi nhánh / Ca",
-            className: "whitespace-nowrap",
-            render: (order) => `${order.branchId} · ${shiftLabels[order.shift]}`,
-        },
-        {
-            id: "customer",
-            header: "Khách hàng",
-            render: (order) => (
-                <>
-                    <div className="font-medium name-ellipsis" title={order.customer}>
-                        {order.customer}
-                    </div>
-                    <div className="text-xs text-[var(--muted)] whitespace-nowrap">
-                        {order.phone}
-                    </div>
-                </>
-            ),
-        },
-        {
-            id: "channel",
-            header: "Kênh bán",
-            render: (order) => (
-                <Badge variant={channelVariants[order.channel]}>
-                    {channelLabels[order.channel]}
-                </Badge>
-            ),
-        },
-        {
-            id: "time",
-            header: "Thời gian",
-            className: "whitespace-nowrap",
-            render: (order) => (
-                <time dateTime={order.createdAt}>{formatDateTime(order.createdAt)}</time>
-            ),
-        },
-        {
-            id: "total",
-            header: "Tổng tiền",
-            className: "font-semibold whitespace-nowrap",
-            render: (order) => formatCurrency(order.total),
-        },
-        {
-            id: "payment",
-            header: "Thanh toán",
-            render: (order) => (
-                <Badge variant={paymentStatuses[order.payment].variant}>
-                    {paymentStatuses[order.payment].label}
-                </Badge>
-            ),
-        },
-        {
-            id: "actions",
-            header: "Thao tác",
-            render: (order) => (
-                <Link className="btn btn-secondary btn-sm" to={`/invoices/invoice-details?orderId=${encodeURIComponent(order.id)}`}>Xem</Link>
-            ),
-        },
-    ];
-
-    const stockColumns: readonly DataTableColumn<LowStockIngredient>[] = [
-        {
-            id: "name",
-            header: "Nguyên liệu",
-            render: (item) => (
-                <span className="name-ellipsis" title={item.name}>{item.name}</span>
-            ),
-        },
-        { id: "id", header: "Mã nguyên liệu", render: (item) => item.id },
-        {
-            id: "available",
-            header: "Tồn khả dụng",
-            render: (item) => <span className={item.available === 0 ? "text-[var(--danger)] font-semibold" : "text-[var(--warning)] font-semibold"}>{item.available} {item.unit}</span>,
-        },
-        {
-            id: "minimum",
-            header: "Ngưỡng tối thiểu",
-            render: (item) => `${item.minimum} ${item.unit}`,
-        },
-        {
-            id: "status",
-            header: "Trạng thái",
-            render: (item) => (
-                <Badge variant={item.available === 0 ? "danger" : "warning"}>
-                    {item.available === 0 ? "Hết tồn khả dụng" : "Dưới ngưỡng"}
-                </Badge>
-            ),
-        },
-        {
-            id: "actions",
-            header: "Thao tác",
-            render: (item) => (
-                <Link className="btn btn-outline btn-sm" to="/purchases/new">Đặt mua</Link>
-            ),
-        },
-    ];
-
-    return (
-        <div className="max-w-[1400px]">
-            <div className="welcome-banner animate-slideInUp">
-                <div className="welcome-banner-content">
-                    <div className="welcome-banner-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
-                    <div>
-                        <h1 className="welcome-title">Chào mừng trở lại, Anh!</h1>
-                        <p className="welcome-subtitle">
-                            Theo dõi doanh thu, số ly bán và cảnh báo tại các chi nhánh.
-                        </p>
-                    </div>
-                </div>
-                <div className="welcome-actions">
-                    <button
-                        type="button"
-                        className="btn-welcome-outline"
-                        onClick={() => setPeriodStart("month")}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Từ đầu tháng
-                    </button>
-                    <button
-                        type="button"
-                        className="btn-welcome-outline"
-                        onClick={() => setPeriodStart("year")}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Từ đầu năm
-                    </button>
-                    <button
-                        type="button"
-                        className="btn-welcome-export"
-                        onClick={() => toast.info("Chưa tích hợp xuất dữ liệu tổng quan.")}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Xuất dữ liệu
-                    </button>
-                </div>
-            </div>
-
-            <section className="card mb-6" aria-labelledby="dashboard-filter-title">
-                <h2 id="dashboard-filter-title" className="card-title mb-4">Bộ lọc tổng quan</h2>
-                <form onSubmit={(event) => {
-                    event.preventDefault();
-                    applyFilters();
-                }}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
-                        <div className="min-w-0">
-                            <label className="form-label" htmlFor="dashboard-branch">Chi nhánh</label>
-                            <select
-                                id="dashboard-branch"
-                                className="form-input form-select w-full h-11"
-                                value={draft.branchId}
-                                onChange={(event) => setDraft((current) => ({
-                                    ...current, branchId: event.target.value,
-                                }))}
-                            >
-                                <option value="">Toàn chuỗi — 12 chi nhánh</option>
-                                {branches.map((branch) => (
-                                    <option key={branch.id} value={branch.id}>
-                                        {branch.id} — {branch.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="min-w-0">
-                            <label className="form-label" htmlFor="dashboard-shift">Ca làm việc</label>
-                            <select
-                                id="dashboard-shift"
-                                className="form-input form-select w-full h-11"
-                                value={draft.shift}
-                                onChange={(event) => setDraft((current) => ({
-                                    ...current, shift: event.target.value,
-                                }))}
-                            >
-                                <option value="">Tất cả ca</option>
-                                {Object.entries(shiftLabels).map(([value, label]) => (
-                                    <option key={value} value={value}>{label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="min-w-0">
-                            <label className="form-label" htmlFor="dashboard-from">Từ ngày</label>
-                            <input
-                                id="dashboard-from"
-                                className="form-input w-full h-11"
-                                placeholder="dd/MM/yyyy"
-                                maxLength={10}
-                                value={draft.from}
-                                onChange={(event) => setDraft((current) => ({
-                                    ...current, from: event.target.value,
-                                }))}
-                            />
-                        </div>
-                        <div className="min-w-0">
-                            <label className="form-label" htmlFor="dashboard-to">Đến ngày</label>
-                            <input
-                                id="dashboard-to"
-                                className="form-input w-full h-11"
-                                placeholder="dd/MM/yyyy"
-                                maxLength={10}
-                                value={draft.to}
-                                onChange={(event) => setDraft((current) => ({
-                                    ...current, to: event.target.value,
-                                }))}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <button type="submit" className="btn btn-primary h-11">Áp dụng</button>
-                        <button
-                            type="button"
-                            className="btn btn-secondary h-11"
-                            onClick={() => {
-                                setDraft(emptyFilters);
-                                setFilters(emptyFilters);
-                            }}
-                        >
-                            Xóa bộ lọc
-                        </button>
-                    </div>
-                </form>
-                
-            </section>
-
-      <div className="page-section grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
-        
-        <div className="dash-stat-card animate-slideInUp stagger-1">
-          <div className="dash-stat-top">
-            <div className="dash-stat-icon icon-bg-success">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            </div>
-            <div className="trend-up">↑ 8.2%</div>
-          </div>
-          
-          <div className="dash-stat-value">786</div>
-          <div className="dash-stat-label">Số ly đã bán</div>
-          <div className="dash-stat-bar"><div className="dash-stat-bar-fill" style={{ width: "78%", background: "var(--primary)" }}></div></div>
+  return (
+    <div>
+      <div className="page-header !mb-4">
+        <div>
+          <nav className="breadcrumb" aria-label="Đường dẫn trang">
+            <Link to={homePath()}>Trang chủ</Link>
+            <span className="sep">/</span>
+            <span className="current">Bảng điều khiển</span>
+          </nav>
+          <h1 className="page-title">Tổng quan vận hành</h1>
+          <p className="page-subtitle">
+            Theo dõi doanh thu, lượng khách, sản lượng ly theo chi nhánh và cảnh báo tồn kho ngưỡng an toàn.
+          </p>
         </div>
 
-        
-        <div className="dash-stat-card animate-slideInUp stagger-2">
-          <div className="dash-stat-top">
-            <div className="dash-stat-icon icon-bg-info">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            </div>
-            <div className="trend-up">↑ 12.5%</div>
-          </div>
-          
-          <div className="dash-stat-value">{formatCurrency(dashboardDemo.revenue)}</div>
-          <div className="dash-stat-label">Doanh thu</div>
-          <div className="dash-stat-bar"><div className="dash-stat-bar-fill" style={{ width: "85%", background: "var(--info)" }}></div></div>
-        </div>
-
-        
-        <div role="button" tabIndex={0} onClick={() => document.getElementById("dashboard-ingredients")?.scrollIntoView({behavior:"smooth", block:"start"})} onKeyDown={event => {if (event.key === "Enter" || event.key === " ") {event.preventDefault(); document.getElementById("dashboard-ingredients")?.scrollIntoView({behavior:"smooth", block:"start"});}}} className="dash-stat-card animate-slideInUp stagger-3">
-          <div className="dash-stat-top">
-            <div className="dash-stat-icon icon-bg-danger">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
-            </div>
-            <div className="trend-down">↓ 3.1%</div>
-          </div>
-          
-          <div className="dash-stat-value">12</div>
-          <div className="dash-stat-label">Lô nguyên liệu cận hạn</div>
-          <div className="dash-stat-bar"><div className="dash-stat-bar-fill" style={{ width: "62%", background: "var(--danger)" }}></div></div>
-        </div>
-
-        
-        
-        <div role="button" tabIndex={0} onClick={() => document.getElementById("dashboard-branches")?.scrollIntoView({behavior:"smooth", block:"start"})} onKeyDown={event => {if (event.key === "Enter" || event.key === " ") {event.preventDefault(); document.getElementById("dashboard-branches")?.scrollIntoView({behavior:"smooth", block:"start"});}}} className="dash-stat-card animate-slideInUp stagger-4">
-          <div className="dash-stat-top">
-            <div className="dash-stat-icon icon-bg-warning">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            </div>
-            <div className="trend-up">↑ 18.4%</div>
-          </div>
-          
-          <div className="dash-stat-value">2</div>
-          <div className="dash-stat-label">Chi nhánh cần xem xét hòa vốn</div>
-          <div className="dash-stat-bar"><div className="dash-stat-bar-fill" style={{ width: "45%", background: "var(--warning)" }}></div></div>
+        <div className="page-header-actions flex-wrap">
+          <SegmentedControl<TimeUnit>
+            ariaLabel="Đơn vị thời gian toàn Dashboard"
+            value={ui.timeUnit}
+            onChange={(next) => setUi((p) => ({ ...p, timeUnit: next }))}
+            options={[
+              { value: "hour", label: "Giờ" },
+              { value: "day", label: "Ngày" },
+              { value: "week", label: "Tuần" },
+              { value: "month", label: "Tháng" },
+              { value: "quarter", label: "Quý" },
+            ]}
+          />
+          <select
+            aria-label="Khoảng dữ liệu"
+            value={ui.rangePreset}
+            onChange={(e) =>
+              setUi((p) => ({
+                ...p,
+                rangePreset: e.target.value as "today" | "week" | "month",
+              }))
+            }
+            className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-xs font-medium text-[var(--text)]"
+          >
+            <option value="today">Hôm nay ({relativeDateISO(0)})</option>
+            <option value="week">7 ngày gần nhất</option>
+            <option value="month">Tháng hiện tại</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setRulesDrawerOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 h-8 text-xs font-medium text-[var(--text)] hover:border-[var(--primary)]"
+          >
+            <span>⋯</span>
+            <span>Thuyết minh chỉ số</span>
+          </button>
         </div>
       </div>
 
+      {/* Scope Bar */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-4">
+        <ScopeBadge
+          branchScope={branchScope}
+          value={activeBranch}
+          onChange={(next) => setUi((p) => ({ ...p, branch: next }))}
+          stores={demoState.stores}
+          allLabel="Toàn chuỗi (12 CN)"
+        />
+      </div>
 
+      {/* Stat Cards (app.css .stat-card) */}
+      <KpiStrip
+        items={[
+          {
+            key: "cups",
+            label: "Số ly đã bán",
+            value: `${totalCupsLatest.toLocaleString("vi-VN")} ly`,
+            subLabel: "so với kỳ trước",
+            icon: "cup",
+            tone: "primary",
+            delta: "+8.2%",
+            deltaTone: "up",
+            onClick: () => setKpiDrawerKey("cups"),
+            info: {
+              summary: `Tổng sản lượng đồ uống phục vụ (${timeMeta.label.toLowerCase()}) theo chi nhánh đang chọn.`,
+              details: [
+                { label: "Phạm vi", value: activeBranch === "ALL" ? "12 chi nhánh" : activeBranch },
+                { label: "Đơn vị thời gian", value: timeMeta.label },
+              ],
+            },
+          },
+          {
+            key: "revenue",
+            label: "Doanh thu thuần",
+            value: formatCurrency(totalRevenueLatest),
+            subLabel: "sau khuyến mãi",
+            icon: "currency",
+            tone: "success",
+            delta: "+12.5%",
+            deltaTone: "up",
+            valueTone: "success",
+            onClick: () => setKpiDrawerKey("revenue"),
+            info: {
+              summary: "Doanh thu sau khấu trừ khuyến mãi và hoàn tiền đơn hàng.",
+              details: [
+                { label: "Tại quầy (62%)", value: formatCurrency(Math.round(totalRevenueLatest * 0.62)) },
+                { label: "Online / Mang đi (38%)", value: formatCurrency(Math.round(totalRevenueLatest * 0.38)) },
+              ],
+            },
+          },
+          {
+            key: "customers",
+            label: "Lượng khách",
+            value: totalCustomersLatest.toLocaleString("vi-VN"),
+            subLabel: "tại quầy & online",
+            icon: "branch",
+            tone: "info",
+            delta: "+9.4%",
+            deltaTone: "up",
+            onClick: () => setKpiDrawerKey("customers"),
+            info: {
+              summary: "Tổng lượt khách giao dịch tại quầy & online theo chi nhánh và đơn vị thời gian.",
+              details: [
+                { label: "Hội viên quay lại", value: `${Math.round(totalCustomersLatest * 0.61).toLocaleString("vi-VN")} lượt` },
+                { label: "Khách mới / vãng lai", value: `${Math.round(totalCustomersLatest * 0.39).toLocaleString("vi-VN")} lượt` },
+              ],
+            },
+          },
+          {
+            key: "aov",
+            label: "Đơn TB (AOV)",
+            value: formatCurrency(estimatedAov),
+            subLabel: "trên mỗi giao dịch",
+            icon: "receipt",
+            tone: "purple",
+            delta: "+3.1%",
+            deltaTone: "up",
+            onClick: () => setKpiDrawerKey("aov"),
+            info: {
+              summary: "Average Order Value — Giá trị chi tiêu bình quân trên mỗi lượt khách.",
+            },
+          },
+          {
+            key: "returns",
+            label: "Hủy / Hoàn đơn",
+            value: activeBranch === "ALL" ? "11 đơn" : "2 đơn",
+            subLabel: "tỷ lệ phát sinh",
+            icon: "transfer",
+            tone: "warning",
+            delta: "0.8%",
+            deltaTone: "neutral",
+            onClick: () => setKpiDrawerKey("returns"),
+            info: {
+              summary: "Tổng đơn bị hủy hoặc phát sinh phiếu đổi/hoàn tiền trong kỳ.",
+            },
+          },
+          {
+            key: "lowstock",
+            label: "NL dưới ngưỡng",
+            value: `${lowStockItems.length} mặt hàng`,
+            subLabel: `tại ${warehouseKey}`,
+            icon: "warning",
+            tone: lowStockItems.length > 0 ? "danger" : "success",
+            valueTone: lowStockItems.length > 0 ? "warning" : "success",
+            onClick: () => setAllAlertsDrawerOpen(true),
+            info: {
+              summary: `Đang theo dõi tại ${warehouseKey}. Đã lọc bỏ ${mutedRules.length} nguyên liệu ngưng sử dụng.`,
+              details: [
+                { label: "Hết tồn (0 lô)", value: `${lowStockItems.filter((i) => i.stockActual === 0).length} mục` },
+                { label: "Đã bỏ qua cảnh báo", value: `${mutedRules.length} mục` },
+              ],
+            },
+          },
+        ]}
+      />
 
-      
-      <div className="page-section grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
-
-        
-        <div className="card lg:col-span-2 animate-slideInUp stagger-3">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-              </div>
-              <div>
-                <h2 className="card-title">Doanh thu theo thời gian</h2>
-                <p className="card-subtitle">Tổng quan doanh thu theo tháng</p>
-              </div>
+      {/* Main Split Grid: 8/12 Unified Chart + 4/12 Alerts */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3.5">
+        {/* Left 8/12: Unified Chart */}
+        <section className="xl:col-span-8 card p-4 border border-[var(--border)] flex flex-col justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--heading-color)] flex items-center gap-1.5">
+                <span>
+                  {ui.chartTab === "revenue"
+                    ? "Doanh thu theo thời gian"
+                    : ui.chartTab === "customers"
+                      ? "Lượng khách theo chi nhánh & thời gian"
+                      : "Sản lượng ly phục vụ"}
+                </span>
+                <span className="text-xs font-normal text-[var(--muted)]">
+                  · Theo {timeMeta.label}
+                </span>
+              </h2>
+              <p className="text-[11px] text-[var(--muted)]">
+                Trục dọc:{" "}
+                {ui.chartTab === "revenue"
+                  ? timeMeta.revenueAxisY
+                  : ui.chartTab === "customers"
+                    ? timeMeta.customerAxisY
+                    : timeMeta.cupAxisY}{" "}
+                · Trục ngang: {timeMeta.axisX}
+              </p>
             </div>
-            <div className="flex gap-1.5">
-              <button onClick={() => setSalesPeriod("daily")} className={`btn btn-sm ${salesPeriod === "daily" ? "btn-primary" : "btn-secondary"}`} aria-label="Xem đơn hàng theo ngày">Ngày</button>
-              <button onClick={() => setSalesPeriod("weekly")} className={`btn btn-sm ${salesPeriod === "weekly" ? "btn-primary" : "btn-secondary"}`} aria-label="Xem đơn hàng theo tuần">Tuần</button>
-              <button onClick={() => setSalesPeriod("monthly")} className={`btn btn-sm ${salesPeriod === "monthly" ? "btn-primary" : "btn-secondary"}`} aria-label="Xem đơn hàng theo tháng">Tháng</button>
+
+            <SegmentedControl<ChartTab>
+              ariaLabel="Chuyển loại biểu đồ"
+              value={ui.chartTab}
+              onChange={(next) => setUi((p) => ({ ...p, chartTab: next }))}
+              options={[
+                { value: "revenue", label: "Doanh thu" },
+                { value: "customers", label: "Lượng khách" },
+                { value: "cups", label: "Số ly" },
+              ]}
+            />
+          </div>
+
+          {ui.chartTab === "customers" && activeBranch === "ALL" && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+              <span className="text-[11px] text-[var(--muted)] mr-1">
+                So sánh chi nhánh:
+              </span>
+              {BRANCH_TRAFFIC_PROFILES.map((p) => {
+                const on = ui.visibleTrafficBranches.includes(p.branchId);
+                return (
+                  <button
+                    key={p.branchId}
+                    type="button"
+                    onClick={() =>
+                      setUi((prev) => ({
+                        ...prev,
+                        visibleTrafficBranches: on
+                          ? prev.visibleTrafficBranches.filter((b) => b !== p.branchId)
+                          : [...prev.visibleTrafficBranches, p.branchId],
+                      }))
+                    }
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${on
+                      ? "border-[var(--border)] bg-[var(--background)] text-[var(--heading-color)] font-semibold"
+                      : "border-transparent text-[var(--muted)] opacity-60 hover:opacity-100"
+                      }`}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: p.color }}
+                    />
+                    <span>{p.branchId}</span>
+                  </button>
+                );
+              })}
             </div>
+          )}
+
+          <div className="h-[270px] w-full">
+            {ui.chartTab === "revenue" && (
+              <TemplateChart
+                values={scaledRevenue}
+                labels={labels}
+                seriesLabel={`Doanh thu (${activeBranch === "ALL" ? "Toàn chuỗi" : activeBranch})`}
+                unitSuffix="Triệu đ"
+                xAxisTitle={timeMeta.axisX}
+                yAxisTitle={timeMeta.revenueAxisY}
+              />
+            )}
+            {ui.chartTab === "customers" && (
+              <TemplateChart
+                series={customerSeries}
+                labels={labels}
+                bars={false}
+                seriesLabel="Lượng khách"
+                unitSuffix="khách"
+                xAxisTitle={timeMeta.axisX}
+                yAxisTitle={timeMeta.customerAxisY}
+              />
+            )}
+            {ui.chartTab === "cups" && (
+              <TemplateChart
+                bars
+                values={scaledCups}
+                labels={labels}
+                seriesLabel="Sản lượng"
+                unitSuffix="ly"
+                xAxisTitle={timeMeta.axisX}
+                yAxisTitle={timeMeta.cupAxisY}
+              />
+            )}
           </div>
-          <div className="flex items-baseline gap-3 mb-5">
-            <div className="dash-chart-total">67.347.000 ₫</div>
-            <span className="trend-up" style={{"fontSize": "12px"}}>↑ 8.2% so với kỳ trước</span>
+
+          <div className="mt-2.5 pt-2 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--muted)]">
+            <span>
+              Giờ cao điểm chuỗi: <b className="text-[var(--text)]">11:00–13:00</b> &amp;{" "}
+              <b className="text-[var(--text)]">18:00–20:00</b> · CN01 dẫn đầu lưu lượng
+            </span>
+            <button
+              type="button"
+              onClick={() => setRulesDrawerOpen(true)}
+              className="font-semibold text-[var(--primary)] hover:underline"
+            >
+              So sánh chi tiết chi nhánh →
+            </button>
           </div>
-          <div className="chart-container h-[240px]">
-            <TemplateChart values={salesData[salesPeriod as keyof typeof salesData.labels]} labels={salesData.labels[salesPeriod as keyof typeof salesData.labels]} />
-          </div>
+        </section>
+
+        {/* Right 4/12: Below Threshold + Expiring Lots */}
+        <div className="xl:col-span-4 space-y-3">
+          {/* Below Threshold */}
+          <section className="card p-4 border border-[var(--border)]">
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h2 className="text-sm font-semibold text-[var(--heading-color)] truncate">
+                  Nguyên liệu dưới ngưỡng
+                </h2>
+                <StatusPill
+                  label={String(lowStockItems.length)}
+                  tone={lowStockItems.length > 0 ? "warning" : "success"}
+                />
+              </div>
+              <span className="text-[11px] text-[var(--muted)]">{warehouseKey}</span>
+            </div>
+
+            {lowStockItems.length === 0 ? (
+              <EmptyState title={`Toàn bộ nguyên liệu tại ${warehouseKey} đều đang trên ngưỡng an toàn.`} />
+            ) : (
+              <div className="space-y-2 max-h-[210px] overflow-y-auto pr-0.5">
+                {lowStockItems.slice(0, 6).map((item) => {
+                  const ing = getIngredient(demoState, item.ingredientId);
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-lg border border-[var(--border)] px-2.5 py-2 border-l-[3px] ${item.stockActual === 0
+                        ? "border-l-rose-500"
+                        : "border-l-amber-500"
+                        }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          title={`${item.sku} — ${item.name} (${item.warehouse})`}
+                          className="text-xs font-semibold text-[var(--heading-color)] truncate"
+                        >
+                          {item.name}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {item.stockActual === 0 && (
+                            <StatusPill label="Hết hàng" tone="danger" />
+                          )}
+                          <InfoTip
+                            title={`Cách tính ngưỡng — ${item.name}`}
+                            summary={
+                              ing?.thresholdRuleText ??
+                              "Ngưỡng cảnh báo đặt hàng lại (ROP) do hệ thống tính từ mức tiêu thụ trung bình ngày tại điểm kho và thời gian chờ cấp hàng."
+                            }
+                            details={[
+                              {
+                                label: "Điểm kho áp dụng",
+                                value: item.warehouse,
+                              },
+                              {
+                                label: "Tiêu thụ TB/ngày",
+                                value: `${(ing?.avgDailyUsage ?? 500).toLocaleString("vi-VN")} ${item.unit}/ngày`,
+                              },
+                              {
+                                label: "Thời gian chờ nhập",
+                                value: `${ing?.leadTimeDays ?? 1} ngày`,
+                              },
+                              {
+                                label: "Tồn an toàn dự phòng",
+                                value: `${(ing?.safetyStock ?? 300).toLocaleString("vi-VN")} ${item.unit}`,
+                              },
+                              {
+                                label: `Ngưỡng áp dụng (${item.warehouse})`,
+                                value: `${item.stockMin.toLocaleString("vi-VN")} ${item.unit}`,
+                              },
+                            ]}
+                            footerAction={{
+                              label: "So sánh ngưỡng giữa các điểm kho",
+                              onClick: () => setCompareThresholdIngId(item.ingredientId),
+                            }}
+                          />
+                          <button
+                            type="button"
+                            title="Khóa / Bỏ qua cảnh báo nguyên liệu không còn xài nữa"
+                            onClick={() => {
+                              setMuteTarget(item);
+                              setMuteScope("branch");
+                              setMuteReason(MUTE_REASONS[0]);
+                            }}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded border border-[var(--border)] text-[11px] text-[var(--muted)] hover:border-amber-400 hover:text-amber-600"
+                          >
+                            <svg
+                              width="11"
+                              height="11"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              aria-hidden="true"
+                            >
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-1.5">
+                        <MiniProgress
+                          value={item.stockActual}
+                          max={item.stockMin}
+                          tone={item.stockActual === 0 ? "danger" : "warning"}
+                          label={`${item.stockActual.toLocaleString("vi-VN")} / ${item.stockMin.toLocaleString("vi-VN")} ${item.unit}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-2.5 pt-2 border-t border-[var(--border)] flex items-center justify-between text-[11px]">
+              <button
+                type="button"
+                onClick={() => setMutedListDrawerOpen(true)}
+                className="text-[var(--muted)] hover:text-[var(--heading-color)] font-medium"
+              >
+                Đã bỏ qua ({mutedRules.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllAlertsDrawerOpen(true)}
+                className="font-semibold text-[var(--primary)] hover:underline"
+              >
+                Xem tất cả ({lowStockItems.length}) →
+              </button>
+            </div>
+          </section>
+
+          {/* Compact Expiring FEFO */}
+          <section className="card p-4 border border-[var(--border)]">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h2 className="text-sm font-semibold text-[var(--heading-color)]">
+                Lô cận hạn FEFO
+              </h2>
+              <StatusPill
+                label={`${stockSummary.expiringLots.length} lô`}
+                tone={stockSummary.expiringLots.length > 0 ? "danger" : "success"}
+              />
+            </div>
+            {stockSummary.expiringLots.length === 0 ? (
+              <p className="text-xs text-[var(--muted)] py-2">
+                Không có lô cận hạn trong 7 ngày tới.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {stockSummary.expiringLots.slice(0, 4).map((lot) => (
+                  <div
+                    key={lot.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate" title={lot.name}>
+                        {lot.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--muted)]">
+                        {lot.batchId} · {lot.quantity}
+                      </div>
+                    </div>
+                    <StatusPill
+                      label={lot.remainingText}
+                      tone={lot.remainingTone === "danger" ? "danger" : "warning"}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
+      </div>
 
-        
-        <div className="card animate-slideInUp stagger-4">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-card-icon icon-bg-success w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      {/* Bottom Row: Customer Traffic by Branch + Top Selling Drinks */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+        <section className="card p-0 overflow-hidden border border-[var(--border)]">
+          <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--heading-color)]">
+                Lượng khách theo chi nhánh ({timeMeta.label})
+              </h2>
+              <p className="text-[11px] text-[var(--muted)]">
+                Phân tích khách hàng và khung giờ cao điểm từng điểm bán
+              </p>
+            </div>
+            <Link
+              to="/reports/profit-loss"
+              className="text-xs font-semibold text-[var(--primary)] hover:underline"
+            >
+              Xem Lãi/Lỗ →
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px] text-left">
+              <thead className="bg-[var(--background)] text-[var(--muted)] text-xs border-b border-[var(--border)]">
+                <tr>
+                  <th className="px-3.5 py-2 font-semibold">Chi nhánh</th>
+                  <th className="px-3 py-2 font-semibold text-right">Tổng khách</th>
+                  <th className="px-3 py-2 font-semibold text-right">TB / {timeMeta.label}</th>
+                  <th className="px-3 py-2 font-semibold">Cơ cấu / Cao điểm</th>
+                  <th className="px-3 py-2 font-semibold text-right">Tăng trưởng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {branchComparisonRows.map((row) => (
+                  <tr
+                    key={row.branchId}
+                    className="border-t border-[var(--border)] hover:bg-[var(--background)]"
+                  >
+                    <td className="px-3.5 py-2 font-semibold text-[var(--heading-color)]">
+                      {row.branchName}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {row.cust.toLocaleString("vi-VN")}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[var(--muted)]">
+                      {row.avgUnit.toLocaleString("vi-VN")}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[var(--muted)]">
+                      {row.memberRate} · <b className="text-[var(--text)]">{row.peakWindow}</b>
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                      {row.growthPct}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="card p-0 overflow-hidden border border-[var(--border)]">
+          <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--heading-color)]">
+                Top 5 món bán chạy ({activeBranch === "ALL" ? "Toàn chuỗi" : activeBranch})
+              </h2>
+              <p className="text-[11px] text-[var(--muted)]">
+                Theo đơn vị {timeMeta.label.toLowerCase()}
+              </p>
+            </div>
+            <Link
+              to="/inventory/products"
+              className="text-xs font-semibold text-[var(--primary)] hover:underline"
+            >
+              Xem thực đơn →
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px] text-left">
+              <thead className="bg-[var(--background)] text-[var(--muted)] text-xs border-b border-[var(--border)]">
+                <tr>
+                  <th className="px-3.5 py-2 font-semibold">Món đồ uống</th>
+                  <th className="px-3 py-2 font-semibold text-right">Sản lượng</th>
+                  <th className="px-3 py-2 font-semibold text-right">Doanh thu ước tính</th>
+                  <th className="px-3 py-2 font-semibold text-right">Xu hướng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {demoState.products
+                  .filter((p) => p.category !== "topping")
+                  .slice(0, 5)
+                  .map((p, idx) => {
+                    const cups = Math.max(
+                      12,
+                      Math.round((totalCupsLatest * (0.3 - idx * 0.04))),
+                    );
+                    const estRev = cups * (p.variants[0]?.price ?? 38000);
+                    return (
+                      <tr
+                        key={p.id}
+                        className="border-t border-[var(--border)] hover:bg-[var(--background)]"
+                      >
+                        <td className="px-3.5 py-2 font-medium text-[var(--heading-color)]">
+                          {p.name}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {cups.toLocaleString("vi-VN")} ly
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-[var(--muted)]">
+                          {formatCurrency(estRev)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          +{14 - idx * 2}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      {/* Inline Mute Ingredient Popover Drawer */}
+      <SideDrawer
+        isOpen={muteTarget !== null}
+        onClose={() => setMuteTarget(null)}
+        title="Bỏ qua cảnh báo nguyên liệu"
+        subtitle={
+          muteTarget
+            ? `${muteTarget.sku} · ${muteTarget.name} (${muteTarget.warehouse})`
+            : undefined
+        }
+        widthClass="max-w-[440px]"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setMuteTarget(null)}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={confirmMuteIngredient}
+            >
+              Xác nhận bỏ qua
+            </button>
+          </>
+        }
+      >
+        {muteTarget && (
+          <div className="space-y-4 text-xs">
+            <p className="text-[var(--muted)]">
+              Các nguyên liệu không còn sử dụng hoặc đã ngừng nhập sẽ được lọc bỏ khỏi
+              danh sách cảnh báo dưới ngưỡng để tránh nhiễu thông tin.
+            </p>
+            <div>
+              <div className="font-semibold mb-1.5">Phạm vi áp dụng</div>
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-2 rounded-lg border border-[var(--border)] p-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="muteScope"
+                    checked={muteScope === "branch"}
+                    onChange={() => setMuteScope("branch")}
+                    className="accent-emerald-600"
+                  />
+                  <span>
+                    Chỉ ẩn tại <b>{muteTarget.warehouse}</b>
+                  </span>
+                </label>
+                {!branchScope && (
+                  <label className="flex items-center gap-2 rounded-lg border border-[var(--border)] p-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="muteScope"
+                      checked={muteScope === "ALL"}
+                      onChange={() => setMuteScope("ALL")}
+                      className="accent-emerald-600"
+                    />
+                    <span>
+                      Ẩn trên <b>Toàn chuỗi (Tất cả chi nhánh &amp; Kho Tổng)</b>
+                    </span>
+                  </label>
+                )}
               </div>
-              <h2 className="card-title">Doanh thu và chi phí</h2>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="mute-reason-select">
+                Lý do ngưng theo dõi
+              </label>
+              <select
+                id="mute-reason-select"
+                className="form-input form-select text-xs"
+                value={muteReason}
+                onChange={(e) => setMuteReason(e.target.value)}
+              >
+                {MUTE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          <div className="flex flex-col gap-3">
-            {[
-              {label: "Chi phí vận hành", description: "Chi phí cố định và biến đổi", value: dashboardDemo.cost, color: "var(--danger)"},
-              {label: "Doanh thu online", description: "Bán qua kênh trực tuyến", value: dashboardDemo.onlineRevenue, color: "var(--info)"},
-              {label: "Doanh thu tại quầy", description: "Bán trực tiếp tại cửa hàng", value: dashboardDemo.counterRevenue, color: "var(--primary)"},
-              {label: "Lợi nhuận", description: "Doanh thu trừ chi phí vận hành", value: dashboardDemo.revenue - dashboardDemo.cost, color: "var(--warning)"},
-            ].map(item => (
-              <div key={item.label} className="dash-revenue-item">
-                <div className="flex items-center gap-3">
-                  <span className="dash-revenue-dot" style={{background: item.color}} />
+        )}
+      </SideDrawer>
+
+      {/* Compare Thresholds Across Locations Drawer */}
+      <SideDrawer
+        isOpen={compareIngredient !== null}
+        onClose={() => setCompareThresholdIngId(null)}
+        title={`Ngưỡng theo điểm kho — ${compareIngredient?.name ?? ""}`}
+        subtitle="Ngưỡng tối thiểu được hệ thống tính riêng cho quy mô tiêu thụ của từng quầy và Kho Tổng"
+        widthClass="max-w-[480px]"
+      >
+        {compareIngredient && (
+          <div className="space-y-3 text-xs">
+            <p className="text-[var(--muted)]">
+              {compareIngredient.thresholdRuleText ??
+                "Mỗi điểm kho có ngưỡng riêng dựa trên lượng ly bán ngày và thời gian cấp bù."}
+            </p>
+            <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-[var(--background)] text-[var(--muted)] border-b border-[var(--border)]">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Điểm kho</th>
+                    <th className="px-3 py-2 font-semibold text-right">Ngưỡng áp dụng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {["Kho Tổng", "Khu chế biến", ...demoState.stores.slice(0, 5).map((s) => s.id)].map(
+                    (loc) => (
+                      <tr key={loc} className="border-t border-[var(--border)]">
+                        <td className="px-3 py-2 font-medium">{loc}</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {getBranchMinimum(compareIngredient, loc).toLocaleString("vi-VN")}{" "}
+                          {compareIngredient.baseUnit}
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </SideDrawer>
+
+      {/* Muted Ingredients Drawer (Restore anytime) */}
+      <SideDrawer
+        isOpen={mutedListDrawerOpen}
+        onClose={() => setMutedListDrawerOpen(false)}
+        title={`Nguyên liệu đã bỏ qua (${mutedRules.length})`}
+        subtitle="Các nguyên liệu đã khóa cảnh báo thừa — có thể khôi phục bất kỳ lúc nào"
+        widthClass="max-w-[480px]"
+      >
+        {mutedRules.length === 0 ? (
+          <EmptyState title="Chưa có nguyên liệu nào bị khóa cảnh báo." />
+        ) : (
+          <div className="space-y-2">
+            {mutedRules.map((rule) => {
+              const ing = getIngredient(demoState, rule.ingredientId);
+              return (
+                <div
+                  key={rule.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-3 text-xs"
+                >
                   <div>
-                    <div className="dash-revenue-label">{item.label}</div>
-                    <div className="dash-revenue-desc">{item.description}</div>
+                    <div className="font-semibold text-[var(--heading-color)]">
+                      {ing?.name ?? rule.ingredientId}
+                    </div>
+                    <div className="text-[var(--muted)] mt-0.5">
+                      Phạm vi: <b>{rule.scope === "ALL" ? "Toàn chuỗi" : rule.scope}</b> ·{" "}
+                      {rule.reason}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)]">
+                      {rule.ignoredBy} · {rule.ignoredAt}
+                    </div>
+                  </div>
+                  {(!branchScope || rule.scope === branchScope) && (
+                    <ConfirmInline
+                      triggerLabel="Khôi phục"
+                      confirmText="Bật lại?"
+                      tone="primary"
+                      onConfirm={() => restoreMutedRule(rule.id)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </SideDrawer>
+
+      {/* All Low-Stock Drawer */}
+      <SideDrawer
+        isOpen={allAlertsDrawerOpen}
+        onClose={() => setAllAlertsDrawerOpen(false)}
+        title={`Tất cả cảnh báo dưới ngưỡng (${lowStockItems.length})`}
+        subtitle={`Điểm kho: ${warehouseKey}`}
+        widthClass="max-w-[520px]"
+      >
+        {lowStockItems.length === 0 ? (
+          <EmptyState title="Không còn cảnh báo tồn kho thấp." />
+        ) : (
+          <div className="space-y-2 text-xs">
+            {lowStockItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-[var(--heading-color)]">
+                    {item.sku} · {item.name}
+                  </div>
+                  <div className="mt-1">
+                    <MiniProgress
+                      value={item.stockActual}
+                      max={item.stockMin}
+                      tone={item.stockActual === 0 ? "danger" : "warning"}
+                      label={`${item.stockActual.toLocaleString("vi-VN")} / ${item.stockMin.toLocaleString("vi-VN")} ${item.unit}`}
+                    />
                   </div>
                 </div>
-                <span className="dash-revenue-amount">{formatCurrency(item.value)}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAllAlertsDrawerOpen(false);
+                    setMuteTarget(item);
+                  }}
+                  className="btn btn-secondary btn-sm shrink-0"
+                >
+                  Bỏ qua
+                </button>
               </div>
             ))}
           </div>
-        </div>
-      </div>
+        )}
+      </SideDrawer>
 
-      
-      <section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div><h2 className="card-title">Kho tổng</h2></div></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="dash-metric-card"><div className="dash-metric-icon icon-bg-primary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div><div className="dash-metric-value">{dashboardDemo.ingredientTypes}</div><div className="dash-metric-label">Loại nguyên liệu đang có trong kho</div></div>
-          <div className="dash-metric-card"><div className="dash-metric-icon icon-bg-warning"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div className="dash-metric-value">{dashboardDemo.incomingPurchaseOrders}</div><div className="dash-metric-label">Đơn nguyên liệu đã đặt, chờ nhận</div></div>
-        </div>
-      </section>
-      <div className="page-section grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+      {/* Rules & Per-Branch Inspector Drawer */}
+      <SideDrawer
+        isOpen={rulesDrawerOpen || kpiDrawerKey !== null}
+        onClose={() => {
+          setRulesDrawerOpen(false);
+          setKpiDrawerKey(null);
+        }}
+        title="Thuyết minh chỉ số & So sánh chi nhánh"
+        subtitle={`Đơn vị đang xem: ${timeMeta.label} · Phạm vi: ${activeBranch === "ALL" ? "Toàn chuỗi" : activeBranch}`}
+        widthClass="max-w-[540px]"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="rounded-xl border border-[var(--border)] p-3 space-y-2">
+            <h3 className="font-semibold text-[var(--heading-color)]">
+              Quy tắc tổng hợp chỉ số (Tính bởi hệ thống)
+            </h3>
+            <ul className="space-y-1.5 text-[var(--muted)] list-disc pl-4">
+              <li>
+                <b>Doanh thu thuần</b>: Tổng tiền bán thực thu sau khi trừ chiết khấu khuyến mãi và hoàn tiền đơn.
+              </li>
+              <li>
+                <b>Lượng khách theo chi nhánh</b>: Tổng hợp giao dịch theo từng chi nhánh và khung thời gian ({timeMeta.label}).
+              </li>
+              <li>
+                <b>Ngưỡng cảnh báo đặt hàng lại (ROP)</b>: Căn cứ tiêu thụ bình quân ngày của từng điểm kho, thời gian giao hàng và lượng tồn dự phòng an toàn.
+              </li>
+              <li>
+                <b>Tồn khả dụng</b>: Lượng tồn còn hạn sử dụng trừ đi lượng đang giữ cho mẻ/đơn chưa xuất.
+              </li>
+            </ul>
+          </div>
 
-        
-        <div className="card lg:col-span-2 animate-slideInUp stagger-3">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-icon icon-bg-info w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </div>
-              <div>
-                <h2 className="card-title">Lượng khách theo thời gian</h2>
-                <p className="card-subtitle">Khách mới và khách quay lại</p>
-              </div>
-            </div>
-            <div className="flex gap-1.5">
-              <button onClick={() => setCustomerPeriod("weekly")} className={`btn btn-sm ${customerPeriod === "weekly" ? "btn-primary" : "btn-secondary"}`} aria-label="Xem khách hàng theo tuần">Tuần</button>
-              <button onClick={() => setCustomerPeriod("monthly")} className={`btn btn-sm ${customerPeriod === "monthly" ? "btn-primary" : "btn-secondary"}`} aria-label="Xem khách hàng theo tháng">Tháng</button>
-            </div>
-          </div>
-          <div className="flex items-baseline gap-3 mb-5">
-            <div className="dash-chart-total">1,377</div>
-            <span className="dash-chart-subtitle">khách trong tháng cao điểm</span>
-          </div>
-          <div className="chart-container h-[240px]">
-            <TemplateChart bars values={customerData[customerPeriod as keyof typeof customerData.labels]} labels={customerData.labels[customerPeriod as keyof typeof customerData.labels]} />
-          </div>
-        </div>
-
-        
-        <div className="card animate-slideInUp stagger-4">
-          <div className="card-header">
-            <div className="flex items-center gap-2">
-              <div className="stat-icon icon-bg-warning w-8 h-8 rounded-lg">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-              </div>
-              <h2 className="card-title">Khách hàng và đơn hàng</h2>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="dash-purchase-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-purchase-icon icon-bg-purple">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium">Số lượng khách hàng</span>
-                    <span className="text-[15px] font-bold">{dashboardDemo.customers}</span>
-                  </div>
-                  <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "65%", "background": "#8B5CF6"}}></div></div>
-                </div>
-              </div>
-            </div>
-            <div className="dash-purchase-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-purchase-icon icon-bg-warning">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium">Đơn mua</span>
-                    <span className="text-[15px] font-bold">{dashboardDemo.orders}</span>
-                  </div>
-                  <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "40%", "background": "var(--warning)"}}></div></div>
-                </div>
-              </div>
-            </div>
-            <div className="dash-purchase-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-purchase-icon icon-bg-danger">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium">Đơn đã hủy</span>
-                    <span className="text-[15px] font-bold text-[var(--danger)]">04</span>
-                  </div>
-                  <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "12%", "background": "var(--danger)"}}></div></div>
-                </div>
-              </div>
-            </div>
-            <div className="dash-purchase-item">
-              <div className="flex items-center gap-3">
-                <div className="dash-purchase-icon icon-bg-success">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium">Đổi trả</span>
-                    <span className="text-[15px] font-bold">07</span>
-                  </div>
-                  <div className="dash-progress-track"><div className="dash-progress-fill" style={{"width": "18%", "background": "var(--primary)"}}></div></div>
-                </div>
-              </div>
+          <div>
+            <h3 className="font-semibold text-[var(--heading-color)] mb-2">
+              Bảng chỉ số theo chi nhánh
+            </h3>
+            <div className="rounded-xl border border-[var(--border)] overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-[var(--background)] text-[var(--muted)] border-b border-[var(--border)]">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Chi nhánh</th>
+                    <th className="px-3 py-2 font-semibold text-right">Doanh thu</th>
+                    <th className="px-3 py-2 font-semibold text-right">Lượng khách</th>
+                    <th className="px-3 py-2 font-semibold text-right">Tăng trưởng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branchComparisonRows.map((row) => (
+                    <tr key={row.branchId} className="border-t border-[var(--border)]">
+                      <td className="px-3 py-2 font-medium">{row.branchId}</td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                        {formatCurrency(row.rev)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.cust.toLocaleString("vi-VN")}
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-emerald-600">
+                        {row.growthPct}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      </div>
+      </SideDrawer>
 
-<section className="page-section card"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-primary w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><h2 className="card-title">Đơn hàng gần đây</h2><p className="card-subtitle">Giao dịch gần đây</p></div></div><Link to="/sales" className="btn btn-secondary btn-sm">Xem tất cả đơn hàng</Link></div><DataTable columns={orderColumns} data={visibleOrders} rowKey={o => o.id} caption="Danh sách đơn hàng gần đây" pagination={false} /></section><section id="dashboard-ingredients" className="page-section card scroll-mt-24"><div className="card-header"><div className="flex items-center gap-2"><div className="stat-card-icon icon-bg-danger w-8 h-8 rounded-lg"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div><div><h2 className="card-title">Nguyên liệu dưới ngưỡng</h2><p className="card-subtitle">Mặt hàng cần nhập thêm</p></div><Badge variant="danger">3 nguyên liệu</Badge></div><Link to="/inventory/ingredients" className="btn btn-secondary btn-sm">Xem nguyên liệu</Link></div><DataTable columns={stockColumns} data={ingredients} rowKey={o => o.id} caption="Nguyên liệu dưới ngưỡng tại kho tổng" pagination={false} /></section><section id="dashboard-branches" className="page-section card scroll-mt-24"><h2 className="card-title mb-4">Chi nhánh cần xem xét hòa vốn</h2><p className="card-subtitle mb-4">Dữ liệu demo ngày 28/10/2026 · Chi phí biến đổi 40% doanh thu, chi phí cố định 1.500.000 VND/chi nhánh.</p>
-<DataTable data={demoBranches} pagination={false} rowKey={branch => branch.id} columns={[
-    {id: "id", header: "Mã chi nhánh", render: branch => branch.id},
-    {id: "name", header: "Chi nhánh", render: branch => branch.name},
-    {id: "revenue", header: "Doanh thu", render: branch => formatCurrency(branch.revenue)},
-    {id: "cost", header: "Chi phí vận hành", render: branch => formatCurrency(branch.cost)},
-    {id: "breakEven", header: "Doanh thu hòa vốn", render: branch => formatCurrency(branch.breakEvenRevenue)},
-    {id: "profit", header: "Lợi nhuận", render: branch => formatCurrency(branch.profit)},
-    {id: "status", header: "Đánh giá", render: branch => <Badge variant={branch.revenue < branch.breakEvenRevenue ? "warning" : "success"}>{branch.revenue < branch.breakEvenRevenue ? "Dưới hòa vốn" : "Trên hòa vốn"}</Badge>},
-]} caption="Đánh giá hòa vốn theo chi nhánh" /></section></div>);
+      <UndoBanner
+        message={
+          undoMuteRuleId
+            ? `Đã bỏ qua cảnh báo "${undoMuteRuleId.name}".`
+            : null
+        }
+        onUndo={() => {
+          if (undoMuteRuleId) {
+            restoreMutedRule(undoMuteRuleId.id);
+            setUndoMuteRuleId(null);
+          }
+        }}
+        onDismiss={() => setUndoMuteRuleId(null)}
+      />
+    </div>
+  );
 }

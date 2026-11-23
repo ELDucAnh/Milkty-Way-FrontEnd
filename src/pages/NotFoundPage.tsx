@@ -1,5 +1,5 @@
-import { homePath } from "../utils/auth";
 import { Link, useNavigate } from "react-router-dom";
+import { homePath } from "../utils/auth";
 
 export default function NotFoundPage() {
   const navigate = useNavigate();

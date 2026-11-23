@@ -103,9 +103,15 @@ export default function PosCart({ items, onRemove, onClear, branchId, staffId, c
     const submitting = useRef(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const checkout = useRef({ id: crypto.randomUUID() as string, fingerprint: "" });
-    const [drafts, setDrafts] = useState<PosDraft[]>([]);
+    const [drafts, setDrafts] = useState<PosDraft[]>(() => {
+        try { return listPosDrafts(context); } catch { return []; }
+    });
     const [draftId, setDraftId] = useState("");
     const [draftSearch, setDraftSearch] = useState("");
+    useEffect(() => {
+        try { setDrafts(listPosDrafts({ staffId, branchId, counterId, shiftId })); }
+        catch { setDrafts([]); }
+    }, [staffId, branchId, counterId, shiftId]);
     const matchingDrafts = drafts.filter(d => `${d.id} ${d.createdAt} ${d.phone} ${d.memberName} ${d.items.map(item => item.name).join(" ")}`.toLocaleLowerCase("vi-VN").includes(draftSearch.trim().toLocaleLowerCase("vi-VN")));
     function holdSale() {
         if (submitting.current) return;
@@ -134,6 +140,7 @@ export default function PosCart({ items, onRemove, onClear, branchId, staffId, c
         }
  setDiscountInput(draft.discountInput); setFlatDiscount(draft.flatDiscount ?? 0); setTaxInput(draft.taxInput); setPaidInput(draft.paidInput); setPaymentMethod(draft.paymentMethod);
         checkout.current = { id: draft.checkoutId, fingerprint: "" };
+        setPanel(null);
         toast.success("Đã khôi phục đơn giữ.");
       } catch (error) { toast.error(error instanceof Error ? error.message : "Không khôi phục được đơn."); }
     }
@@ -149,7 +156,7 @@ export default function PosCart({ items, onRemove, onClear, branchId, staffId, c
         }
 
         const found = findPosMember(cleanPhone);
-        setFlatDiscount(found?.tier.includes("Bạc") ? 5000 : !found || found.tier.includes("Thành Viên") ? 2000 : 0);
+        setFlatDiscount(found?.tier.includes("Bạc") ? 5000 : found?.tier.includes("Thành Viên") ? 2000 : 0);
         setDiscountInput(String(found?.discount ?? 0));
         if (found && checkLogin() === "cashier") {
             setMemberName(found.name);
@@ -280,7 +287,8 @@ export default function PosCart({ items, onRemove, onClear, branchId, staffId, c
         setMemberInfo(null);
         setMemberName("");
         checkout.current = { id: crypto.randomUUID(), fingerprint: "" };
-        setDrafts([]); setDraftId("");
+        try { setDrafts(listPosDrafts(context)); } catch { setDrafts([]); }
+        setDraftId("");
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Không lưu được giao dịch. Giỏ được giữ lại.");
         } finally { submitting.current = false; setIsSubmitting(false); }
@@ -310,7 +318,7 @@ export default function PosCart({ items, onRemove, onClear, branchId, staffId, c
           <div><strong>Đơn hiện tại <span className="pos-cup-count">{items.reduce((n, item) => n + item.quantity, 0)} ly</span></strong>
             <div className="pos-cart-context">{branchId} · {counterId} · <select aria-label="Loại đơn" value={channel} onChange={e => setChannel(e.target.value as "counter" | "takeaway")}><option value="counter">Bán trực tiếp tại quầy</option><option value="takeaway">Mang đi</option></select></div>
           </div>
-          <button type="button" className="btn btn-ghost btn-sm text-[var(--danger)]" disabled={!items.length || isSubmitting || !!pricingError} onClick={() => setClearOpen(true)}>Xóa giỏ</button>
+          <button type="button" className="btn btn-ghost btn-sm text-[var(--danger)]" disabled={!items.length || isSubmitting} onClick={() => setClearOpen(true)}>Xóa giỏ</button>
         </div>
         <div className="pos-cart-scroll pos-line-items">{customizer}
           {!items.length && <p className="pos-empty-cart">Chưa có món trong giỏ. Chọn món bên trái để bắt đầu.</p>}

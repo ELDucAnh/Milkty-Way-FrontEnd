@@ -6,7 +6,7 @@ import { CASH_SHIFTS_CHANGED } from "../shared/cash-shift-workflow";
 import { formatCurrency, formatDateTime } from "./sales-support";
 
 /** A3 handover documents are read directly; B6 retains its own inventory approval workflow. */
-function readSignedShifts(): { records: CashShift[]; error: string } {
+function readSignedShifts(activeBranch: string): { records: CashShift[]; error: string } {
     try {
         const actor = currentStaff();
         if (actor?.loginRole !== "owner" && actor?.loginRole !== "manager") {
@@ -14,7 +14,9 @@ function readSignedShifts(): { records: CashShift[]; error: string } {
         }
         const records = loadCashShifts().filter(shift =>
             shift.status === "closed" && shift.audit?.handover?.second &&
-            (actor.loginRole === "owner" || shift.branchId === actor.branchId)
+            (actor.loginRole === "owner"
+                ? (activeBranch === "ALL" || shift.branchId === activeBranch)
+                : shift.branchId === actor.branchId)
         );
         return { records, error: "" };
     } catch (error) {
@@ -22,10 +24,10 @@ function readSignedShifts(): { records: CashShift[]; error: string } {
     }
 }
 
-export default function CashShiftReconciliationInbox() {
-    const [{ records, error }, setSnapshot] = useState(readSignedShifts);
+export default function CashShiftReconciliationInbox({ activeBranch = "ALL" }: { activeBranch?: string }) {
+    const [{ records, error }, setSnapshot] = useState(() => readSignedShifts(activeBranch));
     useEffect(() => {
-        const refresh = () => setSnapshot(readSignedShifts());
+        const refresh = () => setSnapshot(readSignedShifts(activeBranch));
         const storage = (event: StorageEvent) => { if (event.key === null || event.key === STORAGE_SHIFTS) refresh(); };
         refresh();
         window.addEventListener("storage", storage);
@@ -38,7 +40,7 @@ export default function CashShiftReconciliationInbox() {
             window.removeEventListener(STAFF_SESSION_CHANGED, refresh);
             window.removeEventListener(CASH_SHIFTS_CHANGED, refresh);
         };
-    }, []);
+    }, [activeBranch]);
     const actor = currentStaff();
     if (actor?.loginRole !== "owner" && actor?.loginRole !== "manager") return null;
     return <section className="card mb-6">

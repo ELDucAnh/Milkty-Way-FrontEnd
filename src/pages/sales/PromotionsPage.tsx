@@ -569,466 +569,466 @@ export default function PromotionsPage() {
                 </p>
             )}
 
-<section
-    aria-label="Danh sách khuyến mãi"
-    className="card data-list-card"
->
-    <form
-        className="data-list-toolbar"
-        onSubmit={event => {
-            event.preventDefault();
-            setFilters({ ...draftFilters });
-        }}
-    >
-        <div className="data-list-summary">
-            <span>
-                Tổng <strong>{rows.length}</strong>
-            </span>
-
-            <span>
-                <span className="status-dot text-success" aria-hidden="true" />
-                Đang chạy <strong>{runningCount}</strong>
-            </span>
-
-            <span>
-                Đã dùng{" "}
-                <strong className="numeric">
-                    {formatCurrency(totalBudgetUsed)}
-                </strong>
-            </span>
-
-            <span>
-                Lượt{" "}
-                <strong className="numeric">
-                    {totalUsage.toLocaleString("vi-VN")}
-                </strong>
-            </span>
-        </div>
-
-        <div className="search-box data-list-search">
-            <svg
-                className="search-icon"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.65"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            <section
+                aria-label="Danh sách khuyến mãi"
+                className="card data-list-card"
             >
-                <circle cx="10.5" cy="10.5" r="6.5" />
-                <path d="m16 16 4 4" />
-            </svg>
+                <form
+                    className="data-list-toolbar"
+                    onSubmit={event => {
+                        event.preventDefault();
+                        setFilters({ ...draftFilters });
+                    }}
+                >
+                    <div className="data-list-summary">
+                        <span>
+                            Tổng <strong>{rows.length}</strong>
+                        </span>
 
-            <input
-                aria-label="Tìm khuyến mãi"
-                type="search"
-                className="form-input"
-                placeholder="Mã, tên, quy định..."
-                value={draftFilters.search}
-                onChange={event => setDraftFilters(current => ({
-                    ...current,
-                    search: event.target.value,
-                }))}
-            />
-        </div>
+                        <span>
+                            <span className="status-dot text-success" aria-hidden="true" />
+                            Đang chạy <strong>{runningCount}</strong>
+                        </span>
 
-        <select
-            aria-label="Lọc trạng thái"
-            className="form-input form-select data-list-status-filter"
-            value={draftFilters.status}
-            onChange={event => setDraftFilters(current => ({
-                ...current,
-                status: event.target.value,
-            }))}
-        >
-            <option value="">Mọi trạng thái</option>
-            {Object.entries(statusLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                    {label}
-                </option>
-            ))}
-        </select>
+                        <span>
+                            Đã dùng{" "}
+                            <strong className="numeric">
+                                {formatCurrency(totalBudgetUsed)}
+                            </strong>
+                        </span>
 
-        <select
-            aria-label="Lọc kênh bán"
-            className="form-input form-select data-list-channel-filter"
-            value={draftFilters.channel}
-            onChange={event => setDraftFilters(current => ({
-                ...current,
-                channel: event.target.value,
-            }))}
-        >
-            <option value="">Mọi kênh</option>
-            {Object.entries(channelLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                    {label}
-                </option>
-            ))}
-        </select>
+                        <span>
+                            Lượt{" "}
+                            <strong className="numeric">
+                                {totalUsage.toLocaleString("vi-VN")}
+                            </strong>
+                        </span>
+                    </div>
 
-        <button type="submit" className="btn btn-primary btn-sm">
-            Lọc
-        </button>
-
-        <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => {
-                setFilters(emptyFilters);
-                setDraftFilters(emptyFilters);
-            }}
-        >
-            Xóa lọc
-        </button>
-    </form>
-
-    <DataTable>
-        <table className="data-table data-table--detail w-full table-fixed min-w-[1100px]">
-            <caption className="sr-only">
-                Danh sách chương trình khuyến mãi
-            </caption>
-
-            <colgroup>
-                <col style={{ width: isChainAdmin ? "26%" : "29%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: isChainAdmin ? "28%" : "31%" }} />
-                <col style={{ width: "16%" }} />
-                <col style={{ width: "10%" }} />
-                {isChainAdmin && <col style={{ width: "6%" }} />}
-            </colgroup>
-
-            <thead>
-                <tr>
-                    <th scope="col">Chương trình & Quy định</th>
-                    <th scope="col">Mức ưu đãi</th>
-                    <th scope="col">Tổng / Số lượng / Tiền</th>
-                    <th scope="col">Ràng buộc & Kết thúc</th>
-                    <th scope="col">Thời gian & CN</th>
-                    {isChainAdmin && (
-                        <th scope="col" className="table-actions-heading">
-                            Thao tác
-                        </th>
-                    )}
-                </tr>
-            </thead>
-
-            <tbody>
-                {!visibleRows.length && (
-                    <tr>
-                        <td
-                            colSpan={isChainAdmin ? 6 : 5}
-                            className="table-empty"
+                    <div className="search-box data-list-search">
+                        <svg
+                            className="search-icon"
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.65"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
                         >
-                            Không có chương trình phù hợp.
-                        </td>
-                    </tr>
-                )}
+                            <circle cx="10.5" cy="10.5" r="6.5" />
+                            <path d="m16 16 4 4" />
+                        </svg>
 
-                {visibleRows.map(row => {
-                    const status = getPromotionStatus(row);
-                    const forecast = getPromotionForecast(row);
-                    const capacity = promotionUsageCapacity(row);
-                    let relatedCodes: string[] = [];
-                    let relationError = false;
-                    try {
-                        relatedCodes = findPromotionConflicts(row, rows).map(other => other.code);
-                    } catch {
-                        relationError = true;
-                    }
-                    const startsAt = Date.parse(`${row.startDate}T${row.hourFrom}:00+07:00`);
-                    const endsAt = Date.parse(`${row.endDate}T${row.hourTo}:00+07:00`);
-                    const timePercent = endsAt > startsAt
-                        ? Math.max(0, Math.min(100, (Date.now() - startsAt) / (endsAt - startsAt) * 100))
-                        : 0;
+                        <input
+                            aria-label="Tìm khuyến mãi"
+                            type="search"
+                            className="form-input"
+                            placeholder="Mã, tên, quy định..."
+                            value={draftFilters.search}
+                            onChange={event => setDraftFilters(current => ({
+                                ...current,
+                                search: event.target.value,
+                            }))}
+                        />
+                    </div>
 
-                    const usagePercent = capacity
-                        ? Math.min(100, row.usageCount / capacity * 100)
-                        : 0;
+                    <select
+                        aria-label="Lọc trạng thái"
+                        className="form-input form-select data-list-status-filter"
+                        value={draftFilters.status}
+                        onChange={event => setDraftFilters(current => ({
+                            ...current,
+                            status: event.target.value,
+                        }))}
+                    >
+                        <option value="">Mọi trạng thái</option>
+                        {Object.entries(statusLabels).map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
 
-                    const budgetPercent = row.budget
-                        ? Math.min(100, row.budgetUsed / row.budget * 100)
-                        : 100;
+                    <select
+                        aria-label="Lọc kênh bán"
+                        className="form-input form-select data-list-channel-filter"
+                        value={draftFilters.channel}
+                        onChange={event => setDraftFilters(current => ({
+                            ...current,
+                            channel: event.target.value,
+                        }))}
+                    >
+                        <option value="">Mọi kênh</option>
+                        {Object.entries(channelLabels).map(([value, label]) => (
+                            <option key={value} value={value}>
+                                {label}
+                            </option>
+                        ))}
+                    </select>
 
-                    const forecastTitle = {
-                        budget: "Chạm trần ngân sách trước",
-                        usage: "Chạm trần số lượt trước",
-                        time: "Chạm trần thời gian trước",
-                    }[forecast.predictedBindingLimit];
+                    <button type="submit" className="btn btn-primary btn-sm">
+                        Lọc
+                    </button>
 
-                    const isEnabled =
-                        row.status === "active" ||
-                        row.status === "scheduled";
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                            setFilters(emptyFilters);
+                            setDraftFilters(emptyFilters);
+                        }}
+                    >
+                        Xóa lọc
+                    </button>
+                </form>
 
-                    return (
-                        <tr key={row.id}>
-                            <td>
-                                <div className="table-item-title">
-                                    {row.name}
-                                </div>
+                <DataTable>
+                    <table className="data-table data-table--detail w-full table-fixed min-w-[1100px]">
+                        <caption className="sr-only">
+                            Danh sách chương trình khuyến mãi
+                        </caption>
 
-                                <div className="table-item-meta">
-                                    <span className="reference-code">
-                                        {row.code}
-                                    </span>
+                        <colgroup>
+                            <col style={{ width: isChainAdmin ? "26%" : "29%" }} />
+                            <col style={{ width: "14%" }} />
+                            <col style={{ width: isChainAdmin ? "28%" : "31%" }} />
+                            <col style={{ width: "16%" }} />
+                            <col style={{ width: "10%" }} />
+                            {isChainAdmin && <col style={{ width: "6%" }} />}
+                        </colgroup>
 
-                                    <Badge
-                                        variant={statusVariants[status]}
-                                        className="badge-subtle badge-with-dot"
+                        <thead>
+                            <tr>
+                                <th scope="col">Chương trình & Quy định</th>
+                                <th scope="col">Mức ưu đãi</th>
+                                <th scope="col">Tổng / Số lượng / Tiền</th>
+                                <th scope="col">Ràng buộc & Kết thúc</th>
+                                <th scope="col">Thời gian & CN</th>
+                                {isChainAdmin && (
+                                    <th scope="col" className="table-actions-heading">
+                                        Thao tác
+                                    </th>
+                                )}
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {!visibleRows.length && (
+                                <tr>
+                                    <td
+                                        colSpan={isChainAdmin ? 6 : 5}
+                                        className="table-empty"
                                     >
-                                        {statusLabels[status]}
-                                    </Badge>
-                                </div>
-
-                                <p className="table-item-rule">
-                                    {row.naturalRuleText}
-                                </p>
-
-                                {row.description && (
-                                    <p className="table-item-description">
-                                        {row.description}
-                                    </p>
-                                )}
-                            </td>
-
-                            <td>
-                                <span
-                                    className={
-                                        row.discountType === "buy_x_get_y"
-                                            ? "benefit-value benefit-value--text"
-                                            : "benefit-value"
-                                    }
-                                >
-                                    {row.discountType === "percent"
-                                        ? `−${row.discountValue}%`
-                                        : row.discountType === "fixed"
-                                            ? `−${formatCurrency(row.discountValue)}`
-                                            : row.discountType === "buy_x_get_y"
-                                                ? `Mua ${row.buyQuantity} tặng ${row.giftQuantity}`
-                                                : "Chưa cấu hình"}
-                                </span>
-
-                                <p className="table-item-line">
-                                    {row.productId
-                                        ? `SKU ${row.productId}`
-                                        : row.productCategory
-                                            ? `Nhóm ${row.productCategory}`
-                                            : "Tất cả món"}
-                                </p>
-
-                                <p className="table-item-description">
-                                    Tối thiểu {row.minQuantity ?? 1} ly
-                                </p>
-
-                                {row.benefit && (
-                                    <p className="table-item-description">
-                                        {row.benefit}
-                                    </p>
-                                )}
-                            </td>
-
-                            <td>
-                                <div className="table-total">
-                                    <span>Tổng đã dùng</span>
-
-                                    <strong className="numeric">
-                                        {row.usageCount.toLocaleString("vi-VN")} lượt
-                                    </strong>
-
-                                    <span aria-hidden="true">·</span>
-
-                                    <strong className="numeric">
-                                        {formatCurrency(row.budgetUsed)}
-                                    </strong>
-                                </div>
-
-                                <div className="table-metric">
-                                    <div className="table-metric-heading">
-                                        <span>Số lượng</span>
-
-                                        <strong className="numeric">
-                                            {row.usageCount.toLocaleString("vi-VN")}
-                                            <span className="table-metric-limit">
-                                                {" / "}
-                                                {capacity.toLocaleString("vi-VN")} lượt
-                                            </span>
-                                        </strong>
-                                    </div>
-
-                                    <ProgressBar
-                                        label={`Tiến độ lượt ${row.code}`}
-                                        value={usagePercent}
-                                        variant="info"
-                                        valueText={
-                                            `${row.usageCount.toLocaleString("vi-VN")}` +
-                                            ` trên ${capacity.toLocaleString("vi-VN")} lượt`
-                                        }
-                                    />
-
-                                    {row.usageScope === "branch" && (
-                                        <p className="table-item-description">
-                                            Trần {row.usageLimit} lượt / chi nhánh
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="table-metric">
-                                    <div className="table-metric-heading">
-                                        <span>Ngân sách</span>
-
-                                        <strong className="numeric">
-                                            {formatCurrency(row.budgetUsed)}
-                                            <span className="table-metric-limit">
-                                                {" / "}
-                                                {formatCurrency(row.budget)}
-                                            </span>
-                                        </strong>
-                                    </div>
-
-                                    <ProgressBar
-                                        label={`Tiến độ ngân sách ${row.code}`}
-                                        value={budgetPercent}
-                                        variant="success"
-                                        valueText={
-                                            `${formatCurrency(row.budgetUsed)}` +
-                                            ` trên ${formatCurrency(row.budget)}`
-                                        }
-                                    />
-                                </div>
-
-                                <div className="table-notice table-notice--warning">
-                                    <PromotionIcon
-                                        name={
-                                            forecast.predictedBindingLimit === "time"
-                                                ? "clock"
-                                                : "alert"
-                                        }
-                                    />
-
-                                    <div>
-                                        <strong>{forecastTitle}</strong>
-                                        <p>{forecast.bindingLimitNote}</p>
-                                    </div>
-                                </div>
-                            </td>
-
-                            <td>
-                                <p className="table-item-emphasis">
-                                    {row.stackWithOtherPromo === "exclusive"
-                                        ? "Độc quyền một mã"
-                                        : "Cho phép gộp mã"}
-                                </p>
-
-                                <p className="table-item-description">
-                                    {row.stackWithMemberTier
-                                        ? "Cộng dồn hạng thành viên"
-                                        : "Không cộng dồn hạng thành viên"}
-                                </p>
-
-                                <p className="table-item-description mt-2">
-                                    Ưu tiên:{" "}
-                                    <strong className="table-item-emphasis numeric">
-                                        {row.priority}/5
-                                    </strong>
-                                </p>
-
-                                {relatedCodes.length > 0 && <p className="table-item-description mt-2">
-                                    Trùng phạm vi áp dụng với: <strong>{relatedCodes.join(", ")}</strong>.
-                                    Kiểm tra quy tắc cộng dồn và thứ tự ưu tiên khi áp dụng.
-                                </p>}
-                                {relationError && <p className="table-item-description">Chưa đọc được các chương trình liên quan.</p>}
-                                {row.oncePerMember && <p className="table-item-description">Tối đa 1 lượt / SĐT hội viên.</p>}
-                                {row.usageScope === "daily" && <p className="table-item-description">Giới hạn {row.usageLimit} lượt mỗi ngày.</p>}
-
-                                <p className="table-end-rule">
-                                    Dừng ngay khi hết thời gian, đủ lượt
-                                    hoặc hết ngân sách.
-                                </p>
-                            </td>
-
-                            <td>
-                                <div className="table-date-range">
-                                    <p>{formatDate(row.startDate)}</p>
-                                    <p className="text-muted">
-                                        → {formatDate(row.endDate)}
-                                    </p>
-                                </div>
-
-                                <p className="table-item-description numeric">
-                                    {row.hourFrom}–{row.hourTo}
-                                </p>
-
-                                <ProgressBar label={`Thời gian chương trình ${row.code}`} value={timePercent}
-                                    valueText={`Đã qua ${Math.round(timePercent)}% thời gian chương trình`} />
-
-                                <div className="table-scope">
-                                    <p className="table-item-emphasis">
-                                        {row.branchMode === "all"
-                                            ? "Toàn chuỗi"
-                                            : `${row.branchMode === "exclude" ? "Trừ " : ""}${row.branchIds.join(", ") || "Không có CN"}`}
-                                    </p>
-
-                                    <p>
-                                        {row.channel === "all"
-                                            ? "Mọi kênh"
-                                            : channelLabels[row.channel]}
-                                    </p>
-
-                                    <p>
-                                        {row.shift === "all"
-                                            ? "Mọi ca"
-                                            : shiftLabels[row.shift]}
-                                    </p>
-                                </div>
-                            </td>
-
-                            {isChainAdmin && (
-                                <td>
-                                    <div className="table-row-actions">
-                                        <button
-                                            type="button"
-                                            className="btn btn-secondary btn-icon table-action-button"
-                                            title={`Sửa ${row.code}`}
-                                            aria-label={`Sửa ${row.code}`}
-                                            disabled={saving}
-                                            onClick={() => openEdit(row)}
-                                        >
-                                            <PromotionIcon name="edit" />
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className="btn btn-secondary btn-icon table-action-button"
-                                            title={
-                                                isEnabled
-                                                    ? "Dừng chương trình"
-                                                    : "Kích hoạt chương trình"
-                                            }
-                                            aria-label={
-                                                `${isEnabled ? "Dừng" : "Kích hoạt"}` +
-                                                ` chương trình ${row.code}`
-                                            }
-                                            disabled={saving}
-                                            onClick={() => {
-                                                void togglePromotionStatus(row.id);
-                                            }}
-                                        >
-                                            <PromotionIcon
-                                                name={isEnabled ? "pause" : "play"}
-                                            />
-                                        </button>
-                                    </div>
-                                </td>
+                                        Không có chương trình phù hợp.
+                                    </td>
+                                </tr>
                             )}
-                        </tr>
-                    );
-                })}
-            </tbody>
-        </table>
-    </DataTable>
-</section>
+
+                            {visibleRows.map(row => {
+                                const status = getPromotionStatus(row);
+                                const forecast = getPromotionForecast(row);
+                                const capacity = promotionUsageCapacity(row);
+                                let relatedCodes: string[] = [];
+                                let relationError = false;
+                                try {
+                                    relatedCodes = findPromotionConflicts(row, rows).map(other => other.code);
+                                } catch {
+                                    relationError = true;
+                                }
+                                const startsAt = Date.parse(`${row.startDate}T${row.hourFrom}:00+07:00`);
+                                const endsAt = Date.parse(`${row.endDate}T${row.hourTo}:00+07:00`);
+                                const timePercent = endsAt > startsAt
+                                    ? Math.max(0, Math.min(100, (Date.now() - startsAt) / (endsAt - startsAt) * 100))
+                                    : 0;
+
+                                const usagePercent = capacity
+                                    ? Math.min(100, row.usageCount / capacity * 100)
+                                    : 0;
+
+                                const budgetPercent = row.budget
+                                    ? Math.min(100, row.budgetUsed / row.budget * 100)
+                                    : 100;
+
+                                const forecastTitle = {
+                                    budget: "Chạm trần ngân sách trước",
+                                    usage: "Chạm trần số lượt trước",
+                                    time: "Chạm trần thời gian trước",
+                                }[forecast.predictedBindingLimit];
+
+                                const isEnabled =
+                                    status === "active" ||
+                                    status === "scheduled";
+
+                                return (
+                                    <tr key={row.id}>
+                                        <td>
+                                            <div className="table-item-title">
+                                                {row.name}
+                                            </div>
+
+                                            <div className="table-item-meta">
+                                                <span className="reference-code">
+                                                    {row.code}
+                                                </span>
+
+                                                <Badge
+                                                    variant={statusVariants[status]}
+                                                    className="badge-subtle badge-with-dot"
+                                                >
+                                                    {statusLabels[status]}
+                                                </Badge>
+                                            </div>
+
+                                            <p className="table-item-rule">
+                                                {row.naturalRuleText}
+                                            </p>
+
+                                            {row.description && (
+                                                <p className="table-item-description">
+                                                    {row.description}
+                                                </p>
+                                            )}
+                                        </td>
+
+                                        <td>
+                                            <span
+                                                className={
+                                                    row.discountType === "buy_x_get_y"
+                                                        ? "benefit-value benefit-value--text"
+                                                        : "benefit-value"
+                                                }
+                                            >
+                                                {row.discountType === "percent"
+                                                    ? `−${row.discountValue}%`
+                                                    : row.discountType === "fixed"
+                                                        ? `−${formatCurrency(row.discountValue)}`
+                                                        : row.discountType === "buy_x_get_y"
+                                                            ? `Mua ${row.buyQuantity} tặng ${row.giftQuantity}`
+                                                            : "Chưa cấu hình"}
+                                            </span>
+
+                                            <p className="table-item-line">
+                                                {row.productId
+                                                    ? `SKU ${row.productId}`
+                                                    : row.productCategory
+                                                        ? `Nhóm ${row.productCategory}`
+                                                        : "Tất cả món"}
+                                            </p>
+
+                                            <p className="table-item-description">
+                                                Tối thiểu {row.minQuantity ?? 1} ly
+                                            </p>
+
+                                            {row.benefit && (
+                                                <p className="table-item-description">
+                                                    {row.benefit}
+                                                </p>
+                                            )}
+                                        </td>
+
+                                        <td>
+                                            <div className="table-total">
+                                                <span>Tổng đã dùng</span>
+
+                                                <strong className="numeric">
+                                                    {row.usageCount.toLocaleString("vi-VN")} lượt
+                                                </strong>
+
+                                                <span aria-hidden="true">·</span>
+
+                                                <strong className="numeric">
+                                                    {formatCurrency(row.budgetUsed)}
+                                                </strong>
+                                            </div>
+
+                                            <div className="table-metric">
+                                                <div className="table-metric-heading">
+                                                    <span>Số lượng</span>
+
+                                                    <strong className="numeric">
+                                                        {row.usageCount.toLocaleString("vi-VN")}
+                                                        <span className="table-metric-limit">
+                                                            {" / "}
+                                                            {capacity.toLocaleString("vi-VN")} lượt
+                                                        </span>
+                                                    </strong>
+                                                </div>
+
+                                                <ProgressBar
+                                                    label={`Tiến độ lượt ${row.code}`}
+                                                    value={usagePercent}
+                                                    variant="info"
+                                                    valueText={
+                                                        `${row.usageCount.toLocaleString("vi-VN")}` +
+                                                        ` trên ${capacity.toLocaleString("vi-VN")} lượt`
+                                                    }
+                                                />
+
+                                                {row.usageScope === "branch" && (
+                                                    <p className="table-item-description">
+                                                        Trần {row.usageLimit} lượt / chi nhánh
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="table-metric">
+                                                <div className="table-metric-heading">
+                                                    <span>Ngân sách</span>
+
+                                                    <strong className="numeric">
+                                                        {formatCurrency(row.budgetUsed)}
+                                                        <span className="table-metric-limit">
+                                                            {" / "}
+                                                            {formatCurrency(row.budget)}
+                                                        </span>
+                                                    </strong>
+                                                </div>
+
+                                                <ProgressBar
+                                                    label={`Tiến độ ngân sách ${row.code}`}
+                                                    value={budgetPercent}
+                                                    variant="success"
+                                                    valueText={
+                                                        `${formatCurrency(row.budgetUsed)}` +
+                                                        ` trên ${formatCurrency(row.budget)}`
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="table-notice table-notice--warning">
+                                                <PromotionIcon
+                                                    name={
+                                                        forecast.predictedBindingLimit === "time"
+                                                            ? "clock"
+                                                            : "alert"
+                                                    }
+                                                />
+
+                                                <div>
+                                                    <strong>{forecastTitle}</strong>
+                                                    <p>{forecast.bindingLimitNote}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <p className="table-item-emphasis">
+                                                {row.stackWithOtherPromo === "exclusive"
+                                                    ? "Độc quyền một mã"
+                                                    : "Cho phép gộp mã"}
+                                            </p>
+
+                                            <p className="table-item-description">
+                                                {row.stackWithMemberTier
+                                                    ? "Cộng dồn hạng thành viên"
+                                                    : "Không cộng dồn hạng thành viên"}
+                                            </p>
+
+                                            <p className="table-item-description mt-2">
+                                                Ưu tiên:{" "}
+                                                <strong className="table-item-emphasis numeric">
+                                                    {row.priority}/5
+                                                </strong>
+                                            </p>
+
+                                            {relatedCodes.length > 0 && <p className="table-item-description mt-2">
+                                                Trùng phạm vi áp dụng với: <strong>{relatedCodes.join(", ")}</strong>.
+                                                Kiểm tra quy tắc cộng dồn và thứ tự ưu tiên khi áp dụng.
+                                            </p>}
+                                            {relationError && <p className="table-item-description">Chưa đọc được các chương trình liên quan.</p>}
+                                            {row.oncePerMember && <p className="table-item-description">Tối đa 1 lượt / SĐT hội viên.</p>}
+                                            {row.usageScope === "daily" && <p className="table-item-description">Giới hạn {row.usageLimit} lượt mỗi ngày.</p>}
+
+                                            <p className="table-end-rule">
+                                                Dừng ngay khi hết thời gian, đủ lượt
+                                                hoặc hết ngân sách.
+                                            </p>
+                                        </td>
+
+                                        <td>
+                                            <div className="table-date-range">
+                                                <p>{formatDate(row.startDate)}</p>
+                                                <p className="text-muted">
+                                                    → {formatDate(row.endDate)}
+                                                </p>
+                                            </div>
+
+                                            <p className="table-item-description numeric">
+                                                {row.hourFrom}–{row.hourTo}
+                                            </p>
+
+                                            <ProgressBar label={`Thời gian chương trình ${row.code}`} value={timePercent}
+                                                valueText={`Đã qua ${Math.round(timePercent)}% thời gian chương trình`} />
+
+                                            <div className="table-scope">
+                                                <p className="table-item-emphasis">
+                                                    {row.branchMode === "all"
+                                                        ? "Toàn chuỗi"
+                                                        : `${row.branchMode === "exclude" ? "Trừ " : ""}${row.branchIds.join(", ") || "Không có CN"}`}
+                                                </p>
+
+                                                <p>
+                                                    {row.channel === "all"
+                                                        ? "Mọi kênh"
+                                                        : channelLabels[row.channel]}
+                                                </p>
+
+                                                <p>
+                                                    {row.shift === "all"
+                                                        ? "Mọi ca"
+                                                        : shiftLabels[row.shift]}
+                                                </p>
+                                            </div>
+                                        </td>
+
+                                        {isChainAdmin && (
+                                            <td>
+                                                <div className="table-row-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-secondary btn-icon table-action-button"
+                                                        title={`Sửa ${row.code}`}
+                                                        aria-label={`Sửa ${row.code}`}
+                                                        disabled={saving}
+                                                        onClick={() => openEdit(row)}
+                                                    >
+                                                        <PromotionIcon name="edit" />
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-secondary btn-icon table-action-button"
+                                                        title={
+                                                            isEnabled
+                                                                ? "Dừng chương trình"
+                                                                : "Kích hoạt chương trình"
+                                                        }
+                                                        aria-label={
+                                                            `${isEnabled ? "Dừng" : "Kích hoạt"}` +
+                                                            ` chương trình ${row.code}`
+                                                        }
+                                                        disabled={saving}
+                                                        onClick={() => {
+                                                            void togglePromotionStatus(row.id);
+                                                        }}
+                                                    >
+                                                        <PromotionIcon
+                                                            name={isEnabled ? "pause" : "play"}
+                                                        />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </DataTable>
+            </section>
 
             {/* Modal Tạo chương trình khuyến mãi mới */}
             <Modal
@@ -1221,14 +1221,16 @@ export default function PromotionsPage() {
                                 <div className="flex items-center gap-1.5">
                                     <button
                                         type="button"
-                                        className="btn btn-secondary btn-sm text-[11px] h-7 px-2"
+                                        disabled={form.branchMode === "all"}
+                                        className="btn btn-secondary btn-sm text-[11px] h-7 px-2 disabled:opacity-50"
                                         onClick={() => updateForm("branchIds", branches.map((branch) => branch.id))}
                                     >
                                         Chọn tất cả
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn btn-ghost btn-sm text-[11px] h-7 px-2"
+                                        disabled={form.branchMode === "all"}
+                                        className="btn btn-ghost btn-sm text-[11px] h-7 px-2 disabled:opacity-50"
                                         onClick={() => updateForm("branchIds", [])}
                                     >
                                         Bỏ chọn
@@ -1239,12 +1241,13 @@ export default function PromotionsPage() {
                                 {branches.map((branch) => (
                                     <label
                                         key={branch.id}
-                                        className="flex items-center gap-2 p-1.5 text-xs rounded hover:bg-[var(--background)] cursor-pointer"
+                                        className={`flex items-center gap-2 p-1.5 text-xs rounded ${form.branchMode === "all" ? "opacity-50 cursor-not-allowed" : "hover:bg-[var(--background)] cursor-pointer"}`}
                                     >
                                         <input
                                             type="checkbox"
+                                            disabled={form.branchMode === "all"}
                                             className="w-3.5 h-3.5 accent-[var(--primary)]"
-                                            checked={form.branchIds.includes(branch.id)}
+                                            checked={form.branchMode === "all" || form.branchIds.includes(branch.id)}
                                             onChange={() => toggleBranch(branch.id)}
                                         />
                                         <span className="truncate">{branch.id} · {branch.name}</span>
@@ -1286,8 +1289,7 @@ export default function PromotionsPage() {
 
                             <PromotionInput
                                 id="promo-benefit"
-                                label="Nội dung ưu đãi *"
-                                required
+                                label="Nội dung ưu đãi"
                                 placeholder="Ví dụ: Tặng 1 phần trân châu hoàng kim"
                                 value={form.benefit}
                                 onChange={(event) => updateForm("benefit", event.target.value)}
@@ -1324,200 +1326,200 @@ export default function PromotionsPage() {
                             />
                         </div>
 
-                    <div className="form-panel">
-                        <h3 className="font-bold text-sm mb-3">
-                            Quy định, mức ưu đãi & Ràng buộc
-                        </h3>
+                        <div className="form-panel">
+                            <h3 className="font-bold text-sm mb-3">
+                                Quy định, mức ưu đãi & Ràng buộc
+                            </h3>
 
-                        <div className="flex flex-wrap gap-2 mb-3">
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => {
-                                    updateForm("naturalRuleText", "Áp dụng cho 100 lượt đến trước mỗi ngày");
-                                    updateForm("usageLimit", "100");
-                                    updateForm("usageScope", "daily");
-                                }}
-                            >
-                                100 lượt đến trước mỗi ngày
-                            </button>
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => {
+                                        updateForm("naturalRuleText", "Áp dụng cho 100 lượt đến trước mỗi ngày");
+                                        updateForm("usageLimit", "100");
+                                        updateForm("usageScope", "daily");
+                                    }}
+                                >
+                                    100 lượt đến trước mỗi ngày
+                                </button>
 
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => {
-                                    updateForm("naturalRuleText", "50 lượt đầu tiên tại mỗi chi nhánh");
-                                    updateForm("usageLimit", "50");
-                                    updateForm("usageScope", "branch");
-                                }}
-                            >
-                                50 lượt mỗi chi nhánh
-                            </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => {
+                                        updateForm("naturalRuleText", "50 lượt đầu tiên tại mỗi chi nhánh");
+                                        updateForm("usageLimit", "50");
+                                        updateForm("usageScope", "branch");
+                                    }}
+                                >
+                                    50 lượt mỗi chi nhánh
+                                </button>
 
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => {
-                                    updateForm("naturalRuleText", "Giới hạn 200 lượt trong khung giờ vàng của chương trình");
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => {
+                                        updateForm("naturalRuleText", "Giới hạn 200 lượt trong khung giờ vàng của chương trình");
+                                        updateForm("usageLimit", "200");
+                                        updateForm("usageScope", "chain");
+                                    }}
+                                >
+                                    200 lượt giờ vàng
+                                </button>
+                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                                    updateForm("oncePerMember", true);
+                                    updateForm("naturalRuleText", "Tối đa một lượt mỗi SĐT hội viên");
+                                }}>1 lượt mỗi SĐT hội viên</button>
+                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                                    updateForm("budget", "10000000");
                                     updateForm("usageLimit", "200");
                                     updateForm("usageScope", "chain");
-                                }}
-                            >
-                                200 lượt giờ vàng
-                            </button>
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-                                updateForm("oncePerMember", true);
-                                updateForm("naturalRuleText", "Tối đa một lượt mỗi SĐT hội viên");
-                            }}>1 lượt mỗi SĐT hội viên</button>
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
-                                updateForm("budget", "10000000");
-                                updateForm("usageLimit", "200");
-                                updateForm("usageScope", "chain");
-                                updateForm("naturalRuleText", "Dừng khi hết 10.000.000 ₫ hoặc đủ 200 lượt");
-                            }}>10 triệu ₫ hoặc 200 lượt</button>
-                        </div>
-
-                        <PromotionInput
-                            id="promo-natural-rule"
-                            label="Quy định dễ hiểu *"
-                            required
-                            value={form.naturalRuleText}
-                            onChange={event => updateForm("naturalRuleText", event.target.value)}
-                        />
-
-                        <p className="text-xs text-[var(--muted)] mt-2 mb-3">
-                            Trần tính theo lượt checkout, không xác minh số người duy nhất.
-                            Lượt theo ngày được tính theo giờ Việt Nam.
-                        </p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <label className="form-label">
-                                Loại ưu đãi
-                                <select
-                                    className="form-input form-select w-full"
-                                    value={form.discountType}
-                                    onChange={event => {
-                                        const value = event.target.value;
-                                        if (
-                                            value === "none" ||
-                                            value === "percent" ||
-                                            value === "fixed" ||
-                                            value === "buy_x_get_y"
-                                        ) updateForm("discountType", value);
-                                    }}
-                                >
-                                    <option value="none">Chưa cấu hình</option>
-                                    <option value="percent">Giảm phần trăm</option>
-                                    <option value="fixed">Giảm số tiền / đơn</option>
-                                    <option value="buy_x_get_y">Mua X tặng Y trong giỏ</option>
-                                </select>
-                            </label>
-
-                            <PromotionInput
-                                id="promo-discount-value"
-                                label={form.discountType === "percent" ? "Mức giảm (%)" : "Mức giảm (₫ / đơn)"}
-                                type="number"
-                                min="0"
-                                max={form.discountType === "percent" ? "100" : undefined}
-                                step="1"
-                                disabled={form.discountType === "buy_x_get_y"}
-                                value={form.discountValue}
-                                onChange={event => updateForm("discountValue", event.target.value)}
-                            />
-
-                            <label className="form-label">
-                                Nhóm món
-                                <select
-                                    className="form-input form-select w-full"
-                                    value={form.productCategory}
-                                    onChange={event => updateForm("productCategory", event.target.value)}
-                                >
-                                    <option value="">Tất cả nhóm</option>
-                                    {[...new Set(products.map(product => product.category))].map(category => (
-                                        <option key={category} value={category}>{category}</option>
-                                    ))}
-                                </select>
-                            </label>
-
-                            {form.discountType === "buy_x_get_y" && (
-                                <>
-                                    <PromotionInput
-                                        id="promo-buy-quantity"
-                                        label="Số ly mua X"
-                                        type="number"
-                                        min="1"
-                                        step="1"
-                                        value={form.buyQuantity}
-                                        onChange={event => updateForm("buyQuantity", event.target.value)}
-                                    />
-                                    <PromotionInput
-                                        id="promo-gift-quantity"
-                                        label="Số ly tặng Y"
-                                        type="number"
-                                        min="1"
-                                        step="1"
-                                        value={form.giftQuantity}
-                                        onChange={event => updateForm("giftQuantity", event.target.value)}
-                                    />
-                                </>
-                            )}
-
-                            <label className="form-label">
-                                Phạm vi trần lượt
-                                <select
-                                    className="form-input form-select w-full"
-                                    value={form.usageScope}
-                                    onChange={event => {
-                                        const value = event.target.value;
-                                        if (value === "chain" || value === "branch" || value === "daily") {
-                                            updateForm("usageScope", value);
-                                        }
-                                    }}
-                                >
-                                    <option value="chain">Tổng toàn chương trình</option>
-                                    <option value="branch">Riêng tại mỗi chi nhánh</option>
-                                    <option value="daily">Mỗi ngày (giờ Việt Nam)</option>
-                                </select>
-                            </label>
-
-                            <label className="form-label">
-                                <input type="checkbox" checked={form.oncePerMember}
-                                    onChange={event => updateForm("oncePerMember", event.target.checked)} />
-                                {" "}Tối đa một lượt mỗi SĐT hội viên
-                            </label>
-                            <PromotionInput
-                                id="promo-priority"
-                                label="Ưu tiên (1–5, số lớn ưu tiên trước)"
-                                type="number"
-                                min="1"
-                                max="5"
-                                step="1"
-                                value={form.priority}
-                                onChange={event => updateForm("priority", event.target.value)}
-                            />
-                        </div>
-
-                        <label className="flex items-center gap-2 mt-3 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={form.stackWithMemberTier}
-                                onChange={event => updateForm("stackWithMemberTier", event.target.checked)}
-                            />
-                            Cộng dồn với giảm hạng thành viên
-                        </label>
-
-                        <p className="mt-3 text-xs font-semibold">
-                            Tự động dừng khi hết thời gian HOẶC đủ lượt HOẶC hết ngân sách.
-                        </p>
-
-                        {conflictCodes.length > 0 && (
-                            <div role="status" className="mt-3 p-3 rounded-lg bg-amber-50 text-amber-900 text-sm">
-                                Có phạm vi món, thời gian, kênh và chi nhánh giao nhau với:
-                                {" "}<strong>{conflictCodes.join(", ")}</strong>.
-                                Kiểm tra quy tắc cộng dồn và ưu tiên trước khi kích hoạt.
+                                    updateForm("naturalRuleText", "Dừng khi hết 10.000.000 ₫ hoặc đủ 200 lượt");
+                                }}>10 triệu ₫ hoặc 200 lượt</button>
                             </div>
-                        )}
-                    </div>
+
+                            <PromotionInput
+                                id="promo-natural-rule"
+                                label="Quy định dễ hiểu *"
+                                required
+                                value={form.naturalRuleText}
+                                onChange={event => updateForm("naturalRuleText", event.target.value)}
+                            />
+
+                            <p className="text-xs text-[var(--muted)] mt-2 mb-3">
+                                Trần tính theo lượt checkout, không xác minh số người duy nhất.
+                                Lượt theo ngày được tính theo giờ Việt Nam.
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <label className="form-label">
+                                    Loại ưu đãi
+                                    <select
+                                        className="form-input form-select w-full"
+                                        value={form.discountType}
+                                        onChange={event => {
+                                            const value = event.target.value;
+                                            if (
+                                                value === "none" ||
+                                                value === "percent" ||
+                                                value === "fixed" ||
+                                                value === "buy_x_get_y"
+                                            ) updateForm("discountType", value);
+                                        }}
+                                    >
+                                        <option value="none">Chưa cấu hình</option>
+                                        <option value="percent">Giảm phần trăm</option>
+                                        <option value="fixed">Giảm số tiền / đơn</option>
+                                        <option value="buy_x_get_y">Mua X tặng Y trong giỏ</option>
+                                    </select>
+                                </label>
+
+                                <PromotionInput
+                                    id="promo-discount-value"
+                                    label={form.discountType === "percent" ? "Mức giảm (%)" : "Mức giảm (₫ / đơn)"}
+                                    type="number"
+                                    min="0"
+                                    max={form.discountType === "percent" ? "100" : undefined}
+                                    step="1"
+                                    disabled={form.discountType === "buy_x_get_y"}
+                                    value={form.discountValue}
+                                    onChange={event => updateForm("discountValue", event.target.value)}
+                                />
+
+                                <label className="form-label">
+                                    Nhóm món
+                                    <select
+                                        className="form-input form-select w-full"
+                                        value={form.productCategory}
+                                        onChange={event => updateForm("productCategory", event.target.value)}
+                                    >
+                                        <option value="">Tất cả nhóm</option>
+                                        {[...new Set(products.map(product => product.category))].map(category => (
+                                            <option key={category} value={category}>{category}</option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                {form.discountType === "buy_x_get_y" && (
+                                    <>
+                                        <PromotionInput
+                                            id="promo-buy-quantity"
+                                            label="Số ly mua X"
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            value={form.buyQuantity}
+                                            onChange={event => updateForm("buyQuantity", event.target.value)}
+                                        />
+                                        <PromotionInput
+                                            id="promo-gift-quantity"
+                                            label="Số ly tặng Y"
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            value={form.giftQuantity}
+                                            onChange={event => updateForm("giftQuantity", event.target.value)}
+                                        />
+                                    </>
+                                )}
+
+                                <label className="form-label">
+                                    Phạm vi trần lượt
+                                    <select
+                                        className="form-input form-select w-full"
+                                        value={form.usageScope}
+                                        onChange={event => {
+                                            const value = event.target.value;
+                                            if (value === "chain" || value === "branch" || value === "daily") {
+                                                updateForm("usageScope", value);
+                                            }
+                                        }}
+                                    >
+                                        <option value="chain">Tổng toàn chương trình</option>
+                                        <option value="branch">Riêng tại mỗi chi nhánh</option>
+                                        <option value="daily">Mỗi ngày (giờ Việt Nam)</option>
+                                    </select>
+                                </label>
+
+                                <label className="form-label">
+                                    <input type="checkbox" checked={form.oncePerMember}
+                                        onChange={event => updateForm("oncePerMember", event.target.checked)} />
+                                    {" "}Tối đa một lượt mỗi SĐT hội viên
+                                </label>
+                                <PromotionInput
+                                    id="promo-priority"
+                                    label="Ưu tiên (1–5, số lớn ưu tiên trước)"
+                                    type="number"
+                                    min="1"
+                                    max="5"
+                                    step="1"
+                                    value={form.priority}
+                                    onChange={event => updateForm("priority", event.target.value)}
+                                />
+                            </div>
+
+                            <label className="flex items-center gap-2 mt-3 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={form.stackWithMemberTier}
+                                    onChange={event => updateForm("stackWithMemberTier", event.target.checked)}
+                                />
+                                Cộng dồn với giảm hạng thành viên
+                            </label>
+
+                            <p className="mt-3 text-xs font-semibold">
+                                Tự động dừng khi hết thời gian HOẶC đủ lượt HOẶC hết ngân sách.
+                            </p>
+
+                            {conflictCodes.length > 0 && (
+                                <div role="status" className="mt-3 p-3 rounded-lg bg-amber-50 text-amber-900 text-sm">
+                                    Có phạm vi món, thời gian, kênh và chi nhánh giao nhau với:
+                                    {" "}<strong>{conflictCodes.join(", ")}</strong>.
+                                    Kiểm tra quy tắc cộng dồn và ưu tiên trước khi kích hoạt.
+                                </div>
+                            )}
+                        </div>
                         <label className="flex items-center gap-2.5 mt-3 text-xs font-medium cursor-pointer">
                             <input
                                 type="checkbox"

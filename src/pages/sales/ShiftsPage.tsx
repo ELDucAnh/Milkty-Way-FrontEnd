@@ -129,7 +129,24 @@ export default function ShiftsPage() {
         setRevision(current => current + 1);
     }
 
-    const [disabledCounters, setDisabledCounters] = useState<string[]>([]);
+    const targetCounterBranch = scopedBranch() || selectedShift?.branchId || "CN01";
+    const [disabledCountersByBranch, setDisabledCountersByBranch] = useState<Record<string, string[]>>(() => {
+        try {
+            const raw = localStorage.getItem("milktyway.disabledCounters.v1");
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    });
+    const disabledCounters = disabledCountersByBranch[targetCounterBranch] ?? [];
+    const setDisabledCounters = (updater: (prev: string[]) => string[]) => {
+        setDisabledCountersByBranch(prevMap => {
+            const nextList = updater(prevMap[targetCounterBranch] ?? []);
+            const updated = { ...prevMap, [targetCounterBranch]: nextList };
+            try { localStorage.setItem("milktyway.disabledCounters.v1", JSON.stringify(updated)); } catch { /* ignore */ }
+            return updated;
+        });
+    };
     const mayManageCounters = staff?.loginRole === "manager" && !!staff.branchId && canAtBranch("shift.openBranch", staff.branchId);
     let cashFromSales: number | null = null;
     let effectiveExpectedCash: number | null = null;
@@ -198,10 +215,10 @@ export default function ShiftsPage() {
             header: "Trạng thái",
             render: (shift) => (
                 <Badge variant={
-                           shift.status === "open"
-                               ? "success"
-                               : shift.status === "closing-requested" ? "warning" : "gray"
-                       }>
+                    shift.status === "open"
+                        ? "success"
+                        : shift.status === "closing-requested" ? "warning" : "gray"
+                }>
                     {shift.status === "open"
                         ? "Đang mở"
                         : shift.status === "closing-requested"
@@ -227,16 +244,16 @@ export default function ShiftsPage() {
             />
 
             {shiftSnapshot.error && (
-    <div className="card mb-6" role="alert">
-        <p className="text-sm text-red-600">
-            {shiftSnapshot.error}
-        </p>
-        <p className="text-sm text-[var(--muted)] mt-2">
-            Không thể mở hoặc đóng ca cho đến khi dữ liệu được kiểm tra.
-            Không xóa dữ liệu ca nếu chưa sao lưu.
-        </p>
-    </div>
-)}
+                <div className="card mb-6" role="alert">
+                    <p className="text-sm text-red-600">
+                        {shiftSnapshot.error}
+                    </p>
+                    <p className="text-sm text-[var(--muted)] mt-2">
+                        Không thể mở hoặc đóng ca cho đến khi dữ liệu được kiểm tra.
+                        Không xóa dữ liệu ca nếu chưa sao lưu.
+                    </p>
+                </div>
+            )}
             {!isCashier() && (
                 <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -284,7 +301,7 @@ export default function ShiftsPage() {
                                 { id: "Q3", name: "Quầy 03 (Take-away)", desc: "Quầy ưu tiên khách mang đi" },
                             ].map((counter) => {
                                 const isDisabled = disabledCounters.includes(counter.id);
-                                const activeShift = shifts.find(s => s.counterId === counter.id && s.status !== "closed");
+                                const activeShift = shifts.find(s => s.branchId === targetCounterBranch && s.counterId === counter.id && s.status !== "closed");
                                 return (
                                     <div key={counter.id} className="p-3.5 rounded-lg border border-[var(--border)] flex items-center justify-between gap-3">
                                         <div>
@@ -303,14 +320,14 @@ export default function ShiftsPage() {
                                             onClick={() => {
                                                 const branchId = currentStaff()?.branchId;
 
-if (
-    !branchId ||
-    currentStaff()?.loginRole !== "manager" ||
-    !canAtBranch("shift.openBranch", branchId)
-) {
-    toast.warning("Bạn không có quyền thay đổi trạng thái quầy.");
-    return;
-}
+                                                if (
+                                                    !branchId ||
+                                                    currentStaff()?.loginRole !== "manager" ||
+                                                    !canAtBranch("shift.openBranch", branchId)
+                                                ) {
+                                                    toast.warning("Bạn không có quyền thay đổi trạng thái quầy.");
+                                                    return;
+                                                }
                                                 if (!isDisabled && activeShift) {
                                                     toast.warning(`Không thể tạm ngưng ${counter.name} khi đang có ca mở (${activeShift.id}).`);
                                                     return;
@@ -354,7 +371,7 @@ if (
                 />
             </section>
 
-{!shiftSnapshot.error && (
+            {!shiftSnapshot.error && (
                 <section className="card mb-4">
                     <label
                         className="form-label"

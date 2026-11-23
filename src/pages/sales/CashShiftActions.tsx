@@ -225,6 +225,10 @@ export function CashShiftHandover({
   const [handoverReason, setHandoverReason] = useState("");
   const [inventoryReference, setInventoryReference] = useState("");
   const [legacyOpenerId, setLegacyOpenerId] = useState("");
+  const [legacyCredentials, setLegacyCredentials] = useState<ManagerCredentials>({
+    email: "",
+    password: "",
+  });
   const [credentials, setCredentials] = useState<ManagerCredentials>({
     email: "",
     password: "",
@@ -385,8 +389,8 @@ export function CashShiftHandover({
           </label>
 
           <CredentialsFields
-            value={credentials}
-            onChange={setCredentials}
+            value={legacyCredentials}
+            onChange={setLegacyCredentials}
           />
 
           <button
@@ -398,7 +402,7 @@ export function CashShiftHandover({
                 actorStaffId,
                 snapshot: shift,
                 openerStaffId: legacyOpenerId,
-                manager: credentials,
+                manager: legacyCredentials,
               });
             }, "Đã ghi nhận quản lý xác nhận danh tính người mở ca cũ.")}
           >
@@ -764,19 +768,19 @@ export function CashShiftHandover({
                 actor?.loginRole === "manager" ||
                 actorStaffId === shift.closeRequestedByStaffId
               ) && (
-                <button
-                  type="button"
-                  className="btn btn-secondary mt-3"
-                  onClick={() => run(() => {
-                    withdrawCashShiftClose({
-                      actorStaffId,
-                      snapshot: shift,
-                    });
-                  }, "Đã rút yêu cầu. Cần lập và ký lại biên bản.")}
-                >
-                  Rút yêu cầu để chỉnh sửa
-                </button>
-              )}
+                  <button
+                    type="button"
+                    className="btn btn-secondary mt-3"
+                    onClick={() => run(() => {
+                      withdrawCashShiftClose({
+                        actorStaffId,
+                        snapshot: shift,
+                      });
+                    }, "Đã rút yêu cầu. Cần lập và ký lại biên bản.")}
+                  >
+                    Rút yêu cầu để chỉnh sửa
+                  </button>
+                )}
             </>
           )}
         </div>

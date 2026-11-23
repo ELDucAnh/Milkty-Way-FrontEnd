@@ -558,6 +558,7 @@ body {
 .data-table tbody td {
   padding: 14px 16px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .data-table tbody tr:last-child {
@@ -2228,12 +2229,13 @@ footer a:hover {
 .stat-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px 22px;
+  gap: 12px;
+  padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
   transition: box-shadow 0.2s;
+  overflow: hidden;
 }
 
 .stat-card:hover {
@@ -2241,9 +2243,9 @@ footer a:hover {
 }
 
 .stat-card-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2363,7 +2365,6 @@ footer a:hover {
 .stat-card-body {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .stat-label {
@@ -2376,11 +2377,12 @@ footer a:hover {
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: clamp(18px, 1.4vw, 22px);
   font-weight: 700;
   color: var(--heading-color);
   letter-spacing: -0.02em;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .stat-sub-card {
@@ -2762,7 +2764,7 @@ a:focus-visible {
   }
 
   .stat-value {
-    font-size: 22px;
+    font-size: clamp(17px, 1.3vw, 20px);
   }
 
   .page-title {
@@ -2781,7 +2783,7 @@ a:focus-visible {
   }
 
   .stat-value {
-    font-size: 22px;
+    font-size: clamp(16px, 1.3vw, 19px);
   }
 
   .stat-card {
@@ -3781,21 +3783,19 @@ a:focus-visible {
   }
 }
 
-/* Sales/customer pages only: keep long names inside their existing layout. */
-.sales-ui .data-table td {
-  max-width: 20rem;
-  overflow-wrap: anywhere;
-}
-
-.sales-ui .data-table .font-medium,
+/* Keep explicit ellipsis helpers and POS product cards clean without breaking table cells */
 .sales-ui .name-ellipsis {
-  max-width: 14rem;
+  max-width: 16rem;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.sales-ui .data-table div,
 .sales-ui .pos-product-card {
   min-width: 0;
+}
+
+.overflow-x-auto > table th,
+.overflow-x-auto > table td {
+  white-space: nowrap;
 }

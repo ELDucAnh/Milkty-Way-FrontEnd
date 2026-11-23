@@ -1,971 +1,1411 @@
 import CashShiftReconciliationInbox from "../sales/CashShiftReconciliationInbox";
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import Badge from "../../components/common/Badge";
-import DataTable from "../../components/common/DataTable";
-import Modal from "../../components/common/Modal";
-import StatCard from "../../components/common/StatCard";
-import KpiIcon from "../shared/KpiIcon";
+import { useToast } from "../../components/common/useToast";
 import {
-  formatCurrency,
-  formatDate,
-  getTodayISO,
-  makeId,
-} from "../shared/formatters";
+  ConfirmInline,
+  EmptyState,
+  FilterBar,
+  HighlightText,
+  InfoTip,
+  KpiStrip,
+  ScopeBadge,
+  SegmentedControl,
+  SideDrawer,
+  SortableTh,
+  SortMenu,
+  StatusPill,
+  normalizeVi,
+  usePageUiState,
+  type PillTone,
+  type SortOption,
+} from "../../components/shared/ui-kit";
+import {
+  homePath,
+  isCashier,
+  isWarehouse,
+  scopedBranch,
+  sessionUser,
+} from "../../utils/auth";
 import {
   getIngredient,
   getStore,
   theoreticalBalance,
+  type BranchStaffMember,
+  type ReconciliationLine,
+  type ReconciliationStatus,
+  type Shift,
+  type ShiftReconciliation,
 } from "../shared/business-demo";
-import type {
-  DemoState,
-  ReconciliationLine,
-  ReconciliationStatus,
-  Shift,
-  ShiftReconciliation,
-} from "../shared/business-demo";
+import {
+  formatCurrency,
+  formatDate,
+  formatNumber,
+  getTodayISO,
+  makeId,
+  sumBy,
+} from "../shared/formatters";
 import { useDemoState } from "../shared/useDemoState";
 
-const REASONS = [
-  "Hết hạn",
-  "Nấu/chế biến hỏng",
-  "Pha sai",
-  "Đổ vỡ",
-  "Sai lệch kiểm đếm",
-  "Hủy sau pha",
-  "Khác",
+type RecSortKey = "date-desc" | "date-asc" | "variance-desc" | "variance-asc";
+
+const SORT_OPTIONS: SortOption<RecSortKey>[] = [
+  { key: "date-desc", label: "Mới nhất", fieldLabel: "Ngày đối soát" },
+  { key: "date-asc", label: "Cũ nhất", fieldLabel: "Ngày đối soát" },
+  {
+    key: "variance-desc",
+    label: "Chênh lệch nhiều → ít",
+    fieldLabel: "Giá trị chênh lệch",
+  },
+  {
+    key: "variance-asc",
+    label: "Chênh lệch ít → nhiều",
+    fieldLabel: "Giá trị chênh lệch",
+  },
 ];
+
 const STATUS_LABEL: Record<ReconciliationStatus, string> = {
   draft: "Bản nháp",
   pending: "Chờ duyệt",
-  approved: "Đã duyệt",
+  approved: "Đã chốt & khóa",
 };
-interface EditableLine extends ReconciliationLine {
-  countedText: string;
-  actualUseText: string;
-  wasteText: string;
-}
 
-interface ReasonMultiSelectProps {
-  selected: string;
-  onChange: (value: string) => void;
-  options: string[];
-  openUpward?: boolean;
-  ingredientName?: string;
-}
+const STATUS_TONE: Record<ReconciliationStatus, PillTone> = {
+  draft: "neutral",
+  pending: "warning",
+  approved: "success",
+};
 
-function ReasonMultiSelect({
-  selected,
-  onChange,
-  options,
-  openUpward = false,
-  ingredientName,
-}: ReasonMultiSelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+const VARIANCE_REASONS = [
+  "Hao hụt bán thành phẩm cuối ca",
+  "Pha chế lỗi / Đổ vỡ",
+  "Sai lệch kiểm đếm",
+  "Chưa kịp nhập phiếu ca trước",
+];
 
-  const selectedList = selected
-    ? selected
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
-  function toggleReason(item: string) {
-    let nextList: string[];
-    if (selectedList.includes(item)) {
-      nextList = selectedList.filter((s) => s !== item);
-    } else {
-      nextList = [...selectedList, item];
-    }
-    onChange(nextList.join(", "));
-  }
-
-  function clearAll() {
-    onChange("");
-  }
-
-  return (
-    <div
-      className="relative inline-block w-full min-w-[190px] max-w-[230px]"
-      ref={containerRef}
-    >
-      {/* Trigger Button - Gọn gàng, cố định chiều rộng, chống tràn bảng */}
-      <button
-        type="button"
-        aria-label={`Chọn nguyên nhân hao hụt ${ingredientName ?? ""}`}
-        className={`form-input flex items-center justify-between gap-1.5 w-full text-left cursor-pointer min-h-[38px] py-1 px-2.5 bg-[var(--surface)] transition-all ${
-          isOpen
-            ? "border-[var(--primary)] ring-1 ring-[var(--primary)]"
-            : "hover:border-[var(--primary)]"
-        }`}
-        onClick={() => setIsOpen((prev) => !prev)}
-      >
-        <div className="flex items-center gap-1 flex-1 overflow-hidden">
-          {selectedList.length === 0 ? (
-            <span className="text-xs text-[var(--muted)]">Chọn lý do...</span>
-          ) : selectedList.length === 1 ? (
-            <span
-              className="badge badge-warning text-[11px] truncate max-w-[145px]"
-              title={selectedList[0]}
-            >
-              {selectedList[0]}
-            </span>
-          ) : (
-            <div
-              className="flex items-center gap-1 overflow-hidden"
-              title={selectedList.join(", ")}
-            >
-              <span className="badge badge-warning text-[11px] truncate max-w-[95px]">
-                {selectedList[0]}
-              </span>
-              <span className="badge badge-gray text-[11px] shrink-0 font-medium">
-                +{selectedList.length - 1}
-              </span>
-            </div>
-          )}
-        </div>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          className={`shrink-0 text-[var(--muted)] transition-transform duration-150 ${
-            isOpen ? "rotate-180 text-[var(--primary)]" : ""
-          }`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-
-      {/* Popover Dropdown Checkboxes */}
-      {isOpen && (
-        <div
-          className={`absolute right-0 w-64 bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-2xl z-50 p-2.5 animate-fadeIn ${
-            openUpward ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
-          }`}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-[var(--border)] text-xs">
-            <span className="font-semibold text-[var(--heading-color)]">
-              Nguyên nhân hao hụt
-            </span>
-            {selectedList.length > 0 && (
-              <button
-                type="button"
-                className="text-[11px] text-[var(--danger)] hover:underline font-medium"
-                onClick={clearAll}
-              >
-                Xóa chọn
-              </button>
-            )}
-          </div>
-
-          {/* List Checkboxes */}
-          <div className="space-y-0.5 max-h-52 overflow-y-auto py-0.5">
-            {options.map((option) => {
-              const isChecked = selectedList.includes(option);
-              return (
-                <label
-                  key={option}
-                  className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
-                    isChecked
-                      ? "bg-[rgba(34,181,115,0.08)] text-[var(--text)] font-semibold"
-                      : "hover:bg-[var(--background)] text-[var(--text)]"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleReason(option)}
-                    className="w-4 h-4 rounded border-[var(--border)] text-[#22B573] focus:ring-[#22B573] focus:ring-offset-0 cursor-pointer accent-[#22B573]"
-                  />
-                  <span className="flex-1 truncate">{option}</span>
-                </label>
-              );
-            })}
-          </div>
-
-          {/* Footer */}
-          <div className="pt-2 mt-1.5 border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--muted)]">
-            <span>
-              Đã chọn:{" "}
-              <b className="text-[var(--primary)]">{selectedList.length}</b> lý
-              do
-            </span>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary !py-0.5 !px-2.5 !text-xs !h-6"
-              onClick={() => setIsOpen(false)}
-            >
-              Xong
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function buildSessionLines(
-  data: DemoState,
-  storeId: string,
-  date: string,
-  shift: Shift,
-): EditableLine[] {
-  return data.lots
-    .filter((lot) => lot.location === "counter" && lot.locationId === storeId)
-    .map((lot) => {
-      const snapshot = data.countSnapshots.find(
-        (item) =>
-          item.lotId === lot.id &&
-          (!item.date || item.date === date) &&
-          (item.shift == null || item.shift === shift),
-      );
-      const received =
-        snapshot?.received ??
-        data.allocations
-          .filter(
-            (ticket) =>
-              ticket.storeId === storeId &&
-              ticket.date === date &&
-              ticket.shift === shift &&
-              (ticket.status === "received" || ticket.status === "discrepancy"),
-          )
-          .flatMap((ticket) => ticket.lines)
-          .filter(
-            (line) =>
-              line.ingredientId === lot.ingredientId &&
-              line.batchId === lot.batchId,
-          )
-          .reduce((sum, line) => sum + (line.receivedQuantity ?? 0), 0);
-      const opening = snapshot?.opening ?? Math.max(0, lot.quantity - received);
-      const actualUse = snapshot?.actualUse ?? 0;
-      const waste = snapshot?.waste ?? 0;
-      return {
-        id: makeId("reconcile-line"),
-        ingredientId: lot.ingredientId,
-        lotId: lot.id,
-        opening,
-        received,
-        actualUse,
-        waste,
-        counted: lot.quantity,
-        countedText: String(lot.quantity),
-        actualUseText: String(actualUse),
-        wasteText: String(waste),
-        unitCost: lot.unitCost,
-        reason: "Sai lệch kiểm đếm",
-      };
-    });
-}
+const HANDOVER_REASONS = [
+  "Đổi ca giữa ngày theo lịch phân công",
+  "Nhân viên mở ca hỗ trợ quầy phụ",
+  "Ca trưởng đồng kiểm cuối ca",
+];
 
 export default function ShiftReconciliationPage() {
+  const toast = useToast();
   const [data, setData] = useDemoState();
-  const [storeId, setStoreId] = useState("CN01");
-  const [date, setDate] = useState(getTodayISO());
-  const [shift, setShift] = useState<Shift>("Ca sáng");
-  const [opener, setOpener] = useState("Thu ngân ca sáng");
-  const [counter, setCounter] = useState("Nhân viên kiểm đếm");
-  const [approver, setApprover] = useState("Quản lý cửa hàng");
-  const [note, setNote] = useState("");
-  const [lines, setLines] = useState<EditableLine[]>(() =>
-    buildSessionLines(data, "CN01", getTodayISO(), "Ca sáng"),
-  );
-  const [selectedRecord, setSelectedRecord] =
-    useState<ShiftReconciliation | null>(null);
-  const [error, setError] = useState("");
+  const branchScope = scopedBranch();
+  const currentUser = sessionUser();
+  const today = getTodayISO();
 
-  const theoretical = (line: EditableLine) =>
-    theoreticalBalance(
-      line.opening,
-      line.received,
-      Number(line.actualUseText || 0),
-      Number(line.wasteText || 0),
-    );
-  const variance = (line: EditableLine) =>
-    Number((theoretical(line) - Number(line.countedText || 0)).toFixed(3));
-  const totalWaste = lines.reduce(
-    (sum, line) => sum + (Number(line.wasteText) || 0),
-    0,
-  );
-  const totalVarianceValue = lines.reduce(
-    (sum, line) => sum + Math.abs(variance(line)) * line.unitCost,
-    0,
-  );
-  const changedLines = lines.filter(
-    (line) => Math.abs(variance(line)) > 0.0001 || Number(line.wasteText) > 0,
-  );
-  const pendingRecords = data.reconciliations.filter(
-    (record) => record.status === "pending",
-  );
-  const latestReceived = lines.reduce((sum, line) => sum + line.received, 0);
-  const historyValue = (record: ShiftReconciliation) =>
-    record.lines.reduce(
-      (sum, line) =>
-        sum +
-        Math.abs(
-          theoreticalBalance(
-            line.opening,
-            line.received,
-            line.actualUse,
-            line.waste,
-          ) - line.counted,
-        ) *
-          line.unitCost,
-      0,
-    );
+  const isAdminOversight = !branchScope && !isWarehouse() && !isCashier();
+  const canOperateBranch = Boolean(branchScope) && !isCashier();
 
-  function updateLine(id: string, patch: Partial<EditableLine>) {
-    setLines((current) =>
-      current.map((line) => (line.id === id ? { ...line, ...patch } : line)),
-    );
-  }
-  function changeStore(nextStoreId: string) {
-    setStoreId(nextStoreId);
-    setLines(buildSessionLines(data, nextStoreId, date, shift));
-  }
-  function changeDate(nextDate: string) {
-    setDate(nextDate);
-    setLines(buildSessionLines(data, storeId, nextDate, shift));
-  }
-  function changeShift(nextShift: Shift) {
-    setShift(nextShift);
-    setLines(buildSessionLines(data, storeId, date, nextShift));
-  }
+  const [ui, setUi] = usePageUiState<{
+    branch: string;
+    tab: "all" | ReconciliationStatus;
+    search: string;
+    sortBy: RecSortKey;
+    density: "normal" | "compact";
+  }>("mw_ui_shift_rec_v1", {
+    branch: branchScope ?? "ALL",
+    tab: "all",
+    search: "",
+    sortBy: "date-desc",
+    density: "normal",
+  });
 
-  function saveRecord(status: "draft" | "pending") {
-    if (
-      !date ||
-      !storeId ||
-      !opener.trim() ||
-      !counter.trim() ||
-      lines.length === 0
-    ) {
-      setError(
-        "Cần cửa hàng, ca, người mở ca và ít nhất một dòng nguyên liệu.",
-      );
-      return;
-    }
-    if (
-      lines.some((line) =>
-        [line.actualUseText, line.wasteText, line.countedText].some(
-          (value) => !Number.isFinite(Number(value)) || Number(value) < 0,
-        ),
-      )
-    ) {
-      setError("Tiêu hao thực tế, hủy và số đếm phải không âm.");
-      return;
-    }
-    if (
-      status === "pending" &&
-      changedLines.some((line) => !line.reason.trim())
-    ) {
-      setError("Dòng có chênh lệch/hủy phải có nguyên nhân.");
-      return;
-    }
-    const existingRecord = data.reconciliations.find(
-      (record) =>
-        record.date === date &&
-        record.storeId === storeId &&
-        record.shift === shift,
+  const activeBranch = branchScope ?? ui.branch;
+
+  // View / Edit / Create SideDrawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingRec, setEditingRec] = useState<ShiftReconciliation | null>(null);
+  const [readOnlyView, setReadOnlyView] = useState(false);
+
+  const [form, setForm] = useState<{
+    storeId: string;
+    date: string;
+    shift: Shift;
+    opener: string;
+    counter: string;
+    approver: string;
+    note: string;
+    handoverMismatchReason: string;
+    lines: ReconciliationLine[];
+  }>({
+    storeId: branchScope ?? "CN05",
+    date: today,
+    shift: "Ca chiều",
+    opener: "",
+    counter: "",
+    approver: "",
+    note: "",
+    handoverMismatchReason: "",
+    lines: [],
+  });
+
+  // Admin staff management drawer state
+  const [staffDrawerOpen, setStaffDrawerOpen] = useState(false);
+  const [staffBranchFilter, setStaffBranchFilter] = useState<string>("CN05");
+  const [newStaffForm, setNewStaffForm] = useState<{
+    name: string;
+    role: BranchStaffMember["role"];
+    phone: string;
+    storeId: string;
+  }>({
+    name: "",
+    role: "Thu ngân",
+    phone: "",
+    storeId: "CN05",
+  });
+
+  function buildSessionLines(storeId: string): ReconciliationLine[] {
+    const snapshots = data.countSnapshots.filter(
+      (s) => s.position === "counter" && s.locationId === storeId,
+    );
+    const snapshotByLotId = new Map(snapshots.map((s) => [s.lotId, s]));
+    const storeLots = data.lots.filter(
+      (l) => l.location === "counter" && l.locationId === storeId && l.quantity > 0,
     );
 
-    if (
-      existingRecord &&
-      (existingRecord.status === "pending" ||
-        existingRecord.status === "approved")
-    ) {
-      setError(
-        `Ca này đã có biên bản ${
-          existingRecord.status === "approved"
-            ? "đã duyệt"
-            : "đang chờ duyệt"
-        }. Vui lòng kiểm tra lịch sử trước khi tạo thêm.`,
-      );
-      return;
+    if (storeLots.length > 0) {
+      return storeLots.map((lot) => {
+        const snap = snapshotByLotId.get(lot.id);
+        if (snap) {
+          return {
+            id: makeId("recl"),
+            ingredientId: snap.ingredientId,
+            lotId: snap.lotId,
+            opening: snap.opening,
+            received: snap.received,
+            actualUse: snap.actualUse,
+            waste: snap.waste,
+            counted: theoreticalBalance(
+              snap.opening,
+              snap.received,
+              snap.actualUse,
+              snap.waste,
+            ),
+            unitCost: snap.unitCost,
+            reason: "",
+          };
+        }
+        return {
+          id: makeId("recl"),
+          ingredientId: lot.ingredientId,
+          lotId: lot.id,
+          opening: lot.quantity,
+          received: 0,
+          actualUse: 0,
+          waste: 0,
+          counted: lot.quantity,
+          unitCost: lot.unitCost,
+          reason: "",
+        };
+      });
     }
-    const record: ShiftReconciliation = {
-      id: existingRecord?.id ?? makeId("reconcile"),
-      date,
-      storeId,
-      shift,
-      opener: opener.trim(),
-      counter: counter.trim(),
-      approver: approver.trim(),
-      status,
-      note: note.trim(),
-      lines: lines.map((line) => ({
-        id: line.id,
-        ingredientId: line.ingredientId,
-        lotId: line.lotId,
-        opening: line.opening,
-        received: line.received,
-        actualUse: Number(line.actualUseText),
-        waste: Number(line.wasteText),
-        counted: Number(line.countedText),
-        unitCost: line.unitCost,
-        reason: line.reason,
-      })),
+
+    return snapshots.map((snap) => ({
+      id: makeId("recl"),
+      ingredientId: snap.ingredientId,
+      lotId: snap.lotId,
+      opening: snap.opening,
+      received: snap.received,
+      actualUse: snap.actualUse,
+      waste: snap.waste,
+      counted: theoreticalBalance(
+        snap.opening,
+        snap.received,
+        snap.actualUse,
+        snap.waste,
+      ),
+      unitCost: snap.unitCost,
+      reason: "",
+    }));
+  }
+
+  function getStaffForStore(storeId: string): BranchStaffMember[] {
+    return data.branchStaff.filter((s) => s.storeId === storeId && s.active);
+  }
+
+  function defaultRolesForStore(storeId: string) {
+    const staff = getStaffForStore(storeId);
+    const opener =
+      staff.find((s) => s.role === "Thu ngân")?.name ?? staff[0]?.name ?? "";
+    const counter =
+      staff.find((s) => s.role === "Thu ngân" || s.role === "Pha chế")?.name ??
+      staff[0]?.name ??
+      "";
+    const approverPool = staff.filter(
+      (s) =>
+        s.name !== counter &&
+        (s.role === "Quản lý chi nhánh" || s.role === "Ca trưởng"),
+    );
+    const approver =
+      approverPool[0]?.name ??
+      staff.find((s) => s.name !== counter)?.name ??
+      "";
+    return { opener, counter, approver };
+  }
+
+  function openCreateDrawer() {
+    const targetStore = branchScope ?? (activeBranch !== "ALL" ? activeBranch : "CN05");
+    const roles = defaultRolesForStore(targetStore);
+    setEditingRec(null);
+    setReadOnlyView(false);
+    setForm({
+      storeId: targetStore,
+      date: today,
+      shift: "Ca chiều",
+      opener: roles.opener,
+      counter: roles.counter,
+      approver: roles.approver,
+      note: "",
+      handoverMismatchReason: "",
+      lines: buildSessionLines(targetStore),
+    });
+    setDrawerOpen(true);
+  }
+
+  function openExistingDrawer(rec: ShiftReconciliation, forceReadOnly: boolean) {
+    setEditingRec(rec);
+    setReadOnlyView(
+      forceReadOnly || rec.status === "approved" || !canOperateBranch,
+    );
+    setForm({
+      storeId: rec.storeId,
+      date: rec.date,
+      shift: rec.shift,
+      opener: rec.opener,
+      counter: rec.counter,
+      approver: rec.approver,
+      note: rec.note,
+      handoverMismatchReason: rec.handoverMismatchReason ?? "",
+      lines: rec.lines.map((l) => ({ ...l })),
+    });
+    setDrawerOpen(true);
+  }
+
+  // Enrich rows with variance & mismatch metadata, strictly respecting scopedBranch()
+  const scopedReconciliations = useMemo(() => {
+    return data.reconciliations.filter((rec) => {
+      if (branchScope) return rec.storeId === branchScope;
+      if (activeBranch !== "ALL") return rec.storeId === activeBranch;
+      return true;
+    });
+  }, [data.reconciliations, branchScope, activeBranch]);
+
+  const tabCounts = useMemo(() => {
+    let draft = 0;
+    let pending = 0;
+    let approved = 0;
+    for (const r of scopedReconciliations) {
+      if (r.status === "draft") draft += 1;
+      else if (r.status === "pending") pending += 1;
+      else approved += 1;
+    }
+    return {
+      all: scopedReconciliations.length,
+      draft,
+      pending,
+      approved,
     };
+  }, [scopedReconciliations]);
+
+  const enrichedRows = useMemo(() => {
+    const q = normalizeVi(ui.search.trim());
+    const list = scopedReconciliations
+      .filter((rec) => {
+        if (ui.tab !== "all" && rec.status !== ui.tab) return false;
+        if (q) {
+          const blob = normalizeVi(
+            `${rec.storeId} ${rec.date} ${rec.shift} ${rec.opener} ${rec.counter} ${rec.approver} ${rec.note}`,
+          );
+          if (!blob.includes(q)) return false;
+        }
+        return true;
+      })
+      .map((rec) => {
+        const varianceValue = sumBy(rec.lines, (l) => {
+          const theo = theoreticalBalance(l.opening, l.received, l.actualUse, l.waste);
+          return Math.abs(theo - l.counted) * l.unitCost;
+        });
+        const totalDiffQty = sumBy(rec.lines, (l) => {
+          const theo = theoreticalBalance(l.opening, l.received, l.actualUse, l.waste);
+          return theo - l.counted;
+        });
+        const hasMismatchPerson =
+          Boolean(rec.opener) && Boolean(rec.counter) && rec.opener !== rec.counter;
+        return {
+          rec,
+          varianceValue,
+          totalDiffQty,
+          hasMismatchPerson,
+        };
+      });
+
+    list.sort((a, b) => {
+      if (ui.sortBy === "date-desc") return b.rec.date.localeCompare(a.rec.date);
+      if (ui.sortBy === "date-asc") return a.rec.date.localeCompare(b.rec.date);
+      if (ui.sortBy === "variance-asc") return a.varianceValue - b.varianceValue;
+      return b.varianceValue - a.varianceValue;
+    });
+    return list;
+  }, [scopedReconciliations, ui.tab, ui.search, ui.sortBy]);
+
+  // Save Draft or Pending
+  function saveRecord(targetStatus: "draft" | "pending") {
+    if (form.lines.length === 0) {
+      toast.error("Chi nhánh này chưa có nguyên liệu quầy để kiểm kê.");
+      return;
+    }
+    const mismatch = form.opener !== form.counter;
+    if (mismatch && !form.handoverMismatchReason.trim()) {
+      toast.error(
+        "Người mở ca khác người kiểm kê cuối ca — vui lòng ghi rõ lý do bàn giao.",
+      );
+      return;
+    }
+    if (!form.opener || !form.counter || !form.approver) {
+      toast.error("Vui lòng chọn đầy đủ nhân sự Mở ca, Đóng/Kiểm kê và Người duyệt.");
+      return;
+    }
+    if (form.counter === form.approver) {
+      toast.error("Người kiểm đếm không thể đồng thời là người duyệt chốt ca.");
+      return;
+    }
+
+    const payload: ShiftReconciliation = {
+      id: editingRec?.id ?? makeId("rec"),
+      date: form.date,
+      storeId: form.storeId,
+      shift: form.shift,
+      opener: form.opener,
+      counter: form.counter,
+      approver: form.approver,
+      status: targetStatus,
+      note: form.note.trim(),
+      handoverMismatchReason: mismatch
+        ? form.handoverMismatchReason.trim()
+        : undefined,
+      lines: form.lines,
+    };
+
+    setData((current) => {
+      const exists = current.reconciliations.some((r) => r.id === payload.id);
+      const next = exists
+        ? current.reconciliations.map((r) => (r.id === payload.id ? payload : r))
+        : [payload, ...current.reconciliations];
+      return { ...current, reconciliations: next };
+    });
+
+    setDrawerOpen(false);
+    toast.success(
+      targetStatus === "draft"
+        ? "Đã lưu nháp biên bản đối soát cuối ca."
+        : `Đã gửi duyệt biên bản đối soát ${form.storeId} (${form.shift}).`,
+    );
+  }
+
+  function handleDeleteRec(rec: ShiftReconciliation) {
+    if (rec.status === "approved") {
+      toast.error("Biên bản đã chốt duyệt bị khóa vĩnh viễn — không thể xóa.");
+      return;
+    }
     setData((current) => ({
       ...current,
-      reconciliations: existingRecord
-        ? current.reconciliations.map((item) =>
-            item.id === existingRecord.id ? record : item,
-          )
-        : [record, ...current.reconciliations],
+      reconciliations: current.reconciliations.filter((r) => r.id !== rec.id),
     }));
-    setError("");
+    toast.info(`Đã xóa biên bản ${rec.shift} ngày ${formatDate(rec.date)}.`);
   }
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    saveRecord("pending");
-  }
-  function approve(record: ShiftReconciliation) {
+
+  function handleApproveRec(rec: ShiftReconciliation) {
+    if (rec.status === "approved") return;
+    if (rec.counter === rec.approver) {
+      toast.error("Người kiểm đếm không thể đồng thời tự duyệt chốt ca.");
+      return;
+    }
+
     setData((current) => {
-      const currentRecord = current.reconciliations.find(
-        (item) => item.id === record.id,
-      );
-
-      // Không duyệt lại hoặc áp dụng điều chỉnh tồn hai lần.
-      if (!currentRecord || currentRecord.status !== "pending") {
-        return current;
-      }
-
-      const nextSnapshots = [...current.countSnapshots];
-
-      for (const line of record.lines) {
-        const index = nextSnapshots.findIndex(
-          (snapshot) =>
-            snapshot.position === "counter" &&
-            snapshot.locationId === record.storeId &&
-            snapshot.lotId === line.lotId &&
-            snapshot.date === record.date &&
-            snapshot.shift === record.shift,
+      const nextSnapshots = current.countSnapshots.map((snap) => {
+        const line = rec.lines.find(
+          (l) => l.lotId === snap.lotId || l.ingredientId === snap.ingredientId,
         );
-
-        const snapshot = {
-          id: index >= 0 ? nextSnapshots[index].id : makeId("snapshot"),
-          position: "counter" as const,
-          locationId: record.storeId,
-          ingredientId: line.ingredientId,
-          lotId: line.lotId,
-          opening: line.opening,
-          received: line.received,
-          actualUse: line.actualUse,
-          waste: line.waste,
-          unitCost: line.unitCost,
-          date: record.date,
-          shift: record.shift,
+        if (!line || snap.locationId !== rec.storeId) return snap;
+        return {
+          ...snap,
+          opening: line.counted,
+          received: 0,
+          actualUse: 0,
+          waste: 0,
         };
+      });
 
-        if (index >= 0) {
-          nextSnapshots[index] = snapshot;
-        } else {
-          nextSnapshots.push(snapshot);
-        }
-      }
+      const nextLots = current.lots.map((lot) => {
+        if (lot.location !== "counter" || lot.locationId !== rec.storeId) return lot;
+        const line = rec.lines.find((l) => l.lotId === lot.id);
+        if (!line) return lot;
+        return { ...lot, quantity: line.counted };
+      });
+
+      const nextRecs = current.reconciliations.map((r) =>
+        r.id === rec.id
+          ? {
+            ...r,
+            status: "approved" as const,
+            approvedAt: today,
+          }
+          : r,
+      );
 
       return {
         ...current,
-
-        reconciliations: current.reconciliations.map((item) =>
-          item.id === record.id
-            ? {
-                ...item,
-                status: "approved",
-                approver: approver.trim() || "Quản lý cửa hàng",
-              }
-            : item,
-        ),
-
-        lots: current.lots.map((lot) => {
-          const line = record.lines.find((item) => item.lotId === lot.id);
-
-          return line ? { ...lot, quantity: line.counted } : lot;
-        }),
-
         countSnapshots: nextSnapshots,
+        lots: nextLots,
+        reconciliations: nextRecs,
       };
     });
+
+    setDrawerOpen(false);
+    toast.success(
+      `Đã duyệt chốt & cập nhật tồn kho quầy ${rec.storeId}. Biên bản đã được khóa cứng!`,
+    );
   }
+
+  function exportCsv() {
+    const header =
+      "Ngay,Ca,Chi nhanh,Nguoi mo ca,Nguoi kiem ke,Nguoi duyet,Ly do giao ca,Chenh lech VND,Trang thai";
+    const esc = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+    const rows = enrichedRows.map(({ rec, varianceValue }) =>
+      [
+        rec.date,
+        esc(rec.shift),
+        rec.storeId,
+        esc(rec.opener),
+        esc(rec.counter),
+        esc(rec.approver),
+        esc(rec.handoverMismatchReason ?? ""),
+        varianceValue,
+        esc(STATUS_LABEL[rec.status]),
+      ].join(","),
+    );
+    const blob = new Blob(["\uFEFF" + [header, ...rows].join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `doi-soat-ca-${activeBranch}-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Đã xuất báo cáo đối soát ca (.CSV).");
+  }
+
+  // Admin staff transfer / add
+  function handleTransferStaff(staffId: string, nextStoreId: string) {
+    setData((current) => ({
+      ...current,
+      branchStaff: current.branchStaff.map((s) =>
+        s.id === staffId ? { ...s, storeId: nextStoreId } : s,
+      ),
+    }));
+    toast.success(`Đã điều chuyển nhân sự sang chi nhánh ${nextStoreId}.`);
+  }
+
+  function handleAddStaff(e: FormEvent) {
+    e.preventDefault();
+    if (!newStaffForm.name.trim()) return;
+    const seq = String(data.branchStaff.length + 1).padStart(2, "0");
+    const created: BranchStaffMember = {
+      id: makeId("st"),
+      code: `NV-${newStaffForm.storeId}-${seq}`,
+      name: newStaffForm.name.trim(),
+      role: newStaffForm.role,
+      storeId: newStaffForm.storeId,
+      phone: newStaffForm.phone.trim() || "0900 000 000",
+      active: true,
+    };
+    setData((current) => ({
+      ...current,
+      branchStaff: [created, ...current.branchStaff],
+    }));
+    setNewStaffForm((cur) => ({ ...cur, name: "", phone: "" }));
+    toast.success(`Đã thêm ${created.name} vào chi nhánh ${created.storeId}.`);
+  }
+
+  const formStaff = getStaffForStore(form.storeId);
+  const approverOptions = formStaff.filter(
+    (s) =>
+      s.name !== form.counter &&
+      (s.role === "Quản lý chi nhánh" || s.role === "Ca trưởng"),
+  );
+  const fallbackApproverOptions =
+    approverOptions.length > 0
+      ? approverOptions
+      : formStaff.filter((s) => s.name !== form.counter);
+  const isFormMismatch =
+    Boolean(form.opener) && Boolean(form.counter) && form.opener !== form.counter;
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header !mb-4">
         <div>
           <nav className="breadcrumb" aria-label="Đường dẫn trang">
-            <Link to="/dashboard">Trang chủ</Link>
+            <Link to={homePath()}>Trang chủ</Link>
             <span className="sep">/</span>
-            <Link to="/stores/ingredients">Vận hành tại quầy</Link>
+            <span>Cửa hàng &amp; Quầy bar</span>
             <span className="sep">/</span>
-            <span className="current">Đối soát cuối ca</span>
+            <span className="current">Đối soát kiểm kê cuối ca</span>
           </nav>
           <h1 className="page-title">Đối soát nguyên liệu cuối ca</h1>
           <p className="page-subtitle">
-            Đối chiếu tồn đầu, thực nhận, tiêu hao theo đơn đã pha, lượng hủy và
-            số đếm thực tế.
+            Kiểm kê thực tế cuối ca theo từng chi nhánh, xác thực người bàn giao và khóa cứng biên bản sau duyệt.
           </p>
         </div>
-        <span className="text-xs text-[var(--muted)]">
-          Cửa hàng · ca vận hành
-        </span>
-      </div>
-      <CashShiftReconciliationInbox />
-      <section className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard
-            label="Ca chờ duyệt"
-            value={String(pendingRecords.length)}
-            subLabel="Chênh lệch cần xác nhận"
-            tone="warning"
-            icon={<KpiIcon kind="clock" />}
-          />
-          <StatCard
-            label="Thực nhận trong ca"
-            value={latestReceived.toLocaleString("vi-VN")}
-            subLabel="Theo phiếu đã nhận"
-            tone="info"
-            icon={<KpiIcon kind="box" />}
-          />
-          <StatCard
-            label="Hủy chưa tính tiêu hao"
-            value={totalWaste.toLocaleString("vi-VN")}
-            subLabel="Ghi riêng, không trừ trùng"
-            tone="warning"
-            icon={<KpiIcon kind="warning" />}
-          />
-          <StatCard
-            label="Chênh lệch cần duyệt"
-            value={formatCurrency(totalVarianceValue)}
-            subLabel="Theo giá vốn từng lô"
-            tone={totalVarianceValue > 0 ? "danger" : "success"}
-            icon={<KpiIcon kind="balance" />}
-          />
+        <div className="page-header-actions flex-wrap">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={exportCsv}
+          >
+            Xuất CSV
+          </button>
+          {isAdminOversight && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setStaffBranchFilter(activeBranch !== "ALL" ? activeBranch : "CN05");
+                setStaffDrawerOpen(true);
+              }}
+            >
+              Phân công nhân sự
+            </button>
+          )}
+          {canOperateBranch && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openCreateDrawer}
+            >
+              + Lập đối soát cuối ca
+            </button>
+          )}
         </div>
-      </section>
-      <section className="card mb-6 border-l-4 border-[var(--warning)]">
-        <h2 className="text-sm font-bold mb-1">Công thức đối soát</h2>
-        <p className="text-sm text-[var(--muted)]">
-          Tồn lý thuyết = tồn đầu + thực nhận − tiêu hao thực tế − hủy chưa tính
-          vào tiêu hao. Chênh lệch = tồn lý thuyết − tồn thực đếm; số âm là
-          thừa. Không dùng định mức công thức thay cho actualUse.
-        </p>
+      </div>
+
+      {/* Scope Bar */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-4">
+        <ScopeBadge
+          branchScope={branchScope}
+          value={activeBranch}
+          onChange={(next) => setUi((p) => ({ ...p, branch: next }))}
+          stores={data.stores}
+          allLabel="Toàn chuỗi (Giám sát)"
+        />
+        <InfoTip
+          title="Quy tắc kiểm kê & chốt ca"
+          summary={
+            isAdminOversight
+              ? "Quản trị chuỗi xem toàn bộ lịch sử đối soát và phân công nhân sự các chi nhánh. Quản lý từng chi nhánh chịu trách nhiệm lập và chốt ca của đúng chi nhánh mình. Biên bản Đã chốt được khóa cứng."
+              : "Nhân sự Mở ca / Kiểm kê / Người duyệt phải thuộc đúng chi nhánh hiện tại và Người duyệt khác Người đếm. Biên bản đã chốt sẽ khóa cứng để bảo toàn lịch sử."
+          }
+        />
+      </div>
+
+      <CashShiftReconciliationInbox activeBranch={activeBranch} />
+
+      {/* Stat Cards (app.css .stat-card) */}
+      <KpiStrip
+        items={[
+          {
+            key: "all",
+            label: "Tổng biên bản",
+            value: String(tabCounts.all),
+            subLabel: "Trong phạm vi hiển thị",
+            icon: "clipboard",
+            tone: "primary",
+            active: ui.tab === "all",
+            onClick: () => setUi((p) => ({ ...p, tab: "all" })),
+          },
+          {
+            key: "pending",
+            label: "Chờ quản lý duyệt",
+            value: String(tabCounts.pending),
+            subLabel: "Cần xác nhận chốt ca",
+            icon: "clock",
+            tone: "warning",
+            valueTone: tabCounts.pending > 0 ? "warning" : "default",
+            active: ui.tab === "pending",
+            onClick: () =>
+              setUi((p) => ({
+                ...p,
+                tab: p.tab === "pending" ? "all" : "pending",
+              })),
+          },
+          {
+            key: "draft",
+            label: "Bản nháp",
+            value: String(tabCounts.draft),
+            subLabel: "Có thể chỉnh sửa hoặc xóa",
+            icon: "balance",
+            tone: "info",
+            active: ui.tab === "draft",
+            onClick: () =>
+              setUi((p) => ({
+                ...p,
+                tab: p.tab === "draft" ? "all" : "draft",
+              })),
+          },
+          {
+            key: "approved",
+            label: "Đã chốt & Khóa cứng",
+            value: String(tabCounts.approved),
+            subLabel: "Không thể sửa/xóa sau duyệt",
+            icon: "document-check",
+            tone: "success",
+            valueTone: "success",
+            active: ui.tab === "approved",
+            onClick: () =>
+              setUi((p) => ({
+                ...p,
+                tab: p.tab === "approved" ? "all" : "approved",
+              })),
+          },
+        ]}
+      />
+
+      {/* Filter & Status Tabs */}
+      <FilterBar
+        search={ui.search}
+        onSearchChange={(next) => setUi((p) => ({ ...p, search: next }))}
+        searchPlaceholder="Tìm theo nhân sự mở ca, người đếm, người duyệt hoặc ngày..."
+        density={ui.density}
+        onToggleDensity={() =>
+          setUi((p) => ({
+            ...p,
+            density: p.density === "compact" ? "normal" : "compact",
+          }))
+        }
+        filters={
+          <SegmentedControl<"all" | ReconciliationStatus>
+            value={ui.tab}
+            onChange={(next) => setUi((p) => ({ ...p, tab: next }))}
+            options={[
+              { value: "all", label: "Tất cả", badge: tabCounts.all },
+              { value: "pending", label: "Chờ duyệt", badge: tabCounts.pending },
+              { value: "draft", label: "Nháp", badge: tabCounts.draft },
+              { value: "approved", label: "Đã khóa", badge: tabCounts.approved },
+            ]}
+          />
+        }
+        sortMenu={
+          <SortMenu
+            options={SORT_OPTIONS}
+            value={ui.sortBy}
+            onChange={(next) => setUi((p) => ({ ...p, sortBy: next }))}
+          />
+        }
+      />
+
+      {/* Main Reconciliations Table */}
+      <section className="card p-0 overflow-hidden">
+        {enrichedRows.length === 0 ? (
+          <EmptyState
+            title="Chưa có phiếu đối soát ca nào trong phạm vi hiển thị."
+            actionLabel={canOperateBranch ? "+ Lập đối soát đầu tiên" : undefined}
+            onAction={canOperateBranch ? openCreateDrawer : undefined}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table
+              className={`data-table ${ui.density === "compact" ? "text-xs" : ""}`}
+            >
+              <thead>
+                <tr>
+                  <SortableTh
+                    label="Ngày & Ca"
+                    fieldHint="rec.date"
+                    ascKey="date-asc"
+                    descKey="date-desc"
+                    currentSort={ui.sortBy}
+                    onSort={(next) =>
+                      setUi((p) => ({ ...p, sortBy: next as RecSortKey }))
+                    }
+                  />
+                  <th>Chi nhánh</th>
+                  <th>Bàn giao nhân sự (Mở → Kiểm kê → Duyệt)</th>
+                  <SortableTh
+                    label="Chênh lệch"
+                    fieldHint="varianceValue"
+                    ascKey="variance-asc"
+                    descKey="variance-desc"
+                    currentSort={ui.sortBy}
+                    onSort={(next) =>
+                      setUi((p) => ({ ...p, sortBy: next as RecSortKey }))
+                    }
+                  />
+                  <th>Trạng thái</th>
+                  <th className="text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {enrichedRows.map(
+                  ({ rec, varianceValue, totalDiffQty, hasMismatchPerson }) => {
+                    const isLocked = rec.status === "approved";
+                    const hasWarnBorder = varianceValue > 0 || hasMismatchPerson;
+                    return (
+                      <tr
+                        key={rec.id}
+                        className={
+                          hasWarnBorder ? "border-l-4 border-l-amber-500" : ""
+                        }
+                      >
+                        <td>
+                          <div className="font-semibold text-[var(--text)]">
+                            {formatDate(rec.date)}
+                          </div>
+                          <div className="text-[11px] text-[var(--muted)]">
+                            {rec.shift} · {rec.lines.length} dòng NL
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="font-semibold text-[var(--text)]">
+                            {rec.storeId}
+                          </div>
+                          <div className="text-[11px] text-[var(--muted)]">
+                            {getStore(data, rec.storeId)?.name ?? ""}
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                            <span>
+                              Mở:{" "}
+                              <strong>
+                                <HighlightText text={rec.opener} query={ui.search} />
+                              </strong>
+                            </span>
+                            <span className="text-[var(--muted)]">→</span>
+                            <span>
+                              Đếm:{" "}
+                              <strong>
+                                <HighlightText text={rec.counter} query={ui.search} />
+                              </strong>
+                            </span>
+                            {hasMismatchPerson && (
+                              <StatusPill
+                                label="Đổi người giao ca"
+                                tone="warning"
+                                title={
+                                  rec.handoverMismatchReason ||
+                                  "Người mở ca khác người kiểm kê"
+                                }
+                              />
+                            )}
+                          </div>
+                          <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                            Duyệt:{" "}
+                            <HighlightText text={rec.approver} query={ui.search} />
+                            {rec.handoverMismatchReason && (
+                              <span> · Lý do: {rec.handoverMismatchReason}</span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="tabular-nums">
+                          {varianceValue > 0 ? (
+                            <div>
+                              <div className="font-semibold text-amber-600 dark:text-amber-400">
+                                {formatCurrency(varianceValue)}
+                              </div>
+                              <div className="text-[11px] text-[var(--muted)]">
+                                Lệch tổng {totalDiffQty > 0 ? "-" : "+"}
+                                {formatNumber(Math.abs(totalDiffQty))} đv
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                              Khớp sổ (0 đ)
+                            </span>
+                          )}
+                        </td>
+
+                        <td>
+                          <StatusPill
+                            label={STATUS_LABEL[rec.status]}
+                            tone={STATUS_TONE[rec.status]}
+                          />
+                          {isLocked && rec.approvedAt && (
+                            <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                              Khóa ngày {formatDate(rec.approvedAt)}
+                            </div>
+                          )}
+                        </td>
+
+                        <td>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isLocked || !canOperateBranch ? (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm inline-flex items-center gap-1"
+                                onClick={() => openExistingDrawer(rec, true)}
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                </svg>
+                                <span>Xem phiếu</span>
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => openExistingDrawer(rec, false)}
+                                >
+                                  Sửa
+                                </button>
+                                {rec.status === "pending" && (
+                                  <ConfirmInline
+                                    triggerLabel="Duyệt & Khóa"
+                                    confirmText="Chốt tồn & khóa vĩnh viễn?"
+                                    tone="primary"
+                                    onConfirm={() => handleApproveRec(rec)}
+                                  />
+                                )}
+                                <ConfirmInline
+                                  triggerLabel="Xóa"
+                                  confirmText="Xóa phiếu chưa chốt?"
+                                  tone="danger"
+                                  onConfirm={() => handleDeleteRec(rec)}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
-      <form className="space-y-6" onSubmit={submit}>
-        <section className="card">
-          <h2 className="font-bold mb-4">Thông tin ca</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <div>
-              <label className="form-label" htmlFor="reconcile-date">
-                Ngày *
-              </label>
-              <input
-                id="reconcile-date"
-                type="date"
-                className="form-input"
-                value={date}
-                onChange={(event) => changeDate(event.target.value)}
-                required
-              />
+      {/* SideDrawer 1: Create / Edit / View Reconciliation */}
+      <SideDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title={
+          readOnlyView
+            ? `Chi tiết biên bản đối soát (${form.storeId})`
+            : editingRec
+              ? `Chỉnh sửa đối soát ca (${form.storeId})`
+              : `Lập đối soát kiểm kê cuối ca`
+        }
+        subtitle={
+          readOnlyView
+            ? `Phiếu đã khóa hoặc chế độ giám sát chuỗi · ${formatDate(form.date)} · ${form.shift}`
+            : "Nhân sự Mở ca, Đếm ca và Người duyệt được ràng buộc theo đúng nhân viên chi nhánh"
+        }
+        widthClass="max-w-[740px]"
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <div className="text-xs text-[var(--muted)]">
+              {readOnlyView
+                ? "Biên bản đã chốt không cho phép chỉnh sửa nhằm đảm bảo tính minh bạch."
+                : "Mọi thay đổi chỉ cập nhật tồn kho quầy khi bấm Duyệt & Khóa."}
             </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDrawerOpen(false)}
+              >
+                {readOnlyView ? "Đóng" : "Hủy"}
+              </button>
+              {!readOnlyView && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => saveRecord("draft")}
+                  >
+                    Lưu nháp
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => saveRecord("pending")}
+                  >
+                    Gửi chờ duyệt
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="form-label" htmlFor="reconcile-store">
-                Cửa hàng *
+              <label className="form-label" htmlFor="rec-store">
+                Chi nhánh *
               </label>
               <select
-                id="reconcile-store"
+                id="rec-store"
                 className="form-input form-select"
-                value={storeId}
-                onChange={(event) => changeStore(event.target.value)}
+                disabled={Boolean(branchScope) || readOnlyView || Boolean(editingRec)}
+                value={form.storeId}
+                onChange={(e) => {
+                  const nextStore = e.target.value;
+                  const roles = defaultRolesForStore(nextStore);
+                  setForm((cur) => ({
+                    ...cur,
+                    storeId: nextStore,
+                    opener: roles.opener,
+                    counter: roles.counter,
+                    approver: roles.approver,
+                    handoverMismatchReason: "",
+                    lines: buildSessionLines(nextStore),
+                  }));
+                }}
               >
-                {data.stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.code} · {store.name}
+                {data.stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.id} · {s.name}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="form-label" htmlFor="reconcile-shift">
-                Ca *
+              <label className="form-label" htmlFor="rec-date">
+                Ngày đối soát *
+              </label>
+              <input
+                id="rec-date"
+                type="date"
+                className="form-input"
+                disabled={readOnlyView}
+                value={form.date}
+                onChange={(e) =>
+                  setForm((cur) => ({ ...cur, date: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="rec-shift">
+                Ca làm việc *
               </label>
               <select
-                id="reconcile-shift"
+                id="rec-shift"
                 className="form-input form-select"
-                value={shift}
-                onChange={(event) => changeShift(event.target.value as Shift)}
+                disabled={readOnlyView}
+                value={form.shift}
+                onChange={(e) =>
+                  setForm((cur) => ({ ...cur, shift: e.target.value as Shift }))
+                }
               >
-                <option>Ca sáng</option>
-                <option>Ca chiều</option>
-                <option>Ca tối</option>
+                <option value="Ca sáng">Ca sáng</option>
+                <option value="Ca chiều">Ca chiều</option>
+                <option value="Ca tối">Ca tối</option>
               </select>
             </div>
-            <div>
-              <label className="form-label" htmlFor="reconcile-opener">
-                Người mở ca *
-              </label>
-              <input
-                id="reconcile-opener"
-                className="form-input"
-                value={opener}
-                onChange={(event) => setOpener(event.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="form-label" htmlFor="reconcile-counter">
-                Người đối soát *
-              </label>
-              <input
-                id="reconcile-counter"
-                className="form-input"
-                value={counter}
-                onChange={(event) => setCounter(event.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className="form-label" htmlFor="reconcile-approver">
-                Người duyệt
-              </label>
-              <input
-                id="reconcile-approver"
-                className="form-input"
-                value={approver}
-                onChange={(event) => setApprover(event.target.value)}
-              />
-            </div>
           </div>
-        </section>
 
-        <section className="card p-0 overflow-hidden">
-          <div className="p-4 md:p-5 border-b border-[var(--border)]">
-            <h2 className="font-bold">Bảng đối soát theo lô</h2>
-            <p className="text-sm text-[var(--muted)] mt-1">
-              Tiêu hao thực tế nhập theo giao dịch đã pha; không tự lấy định mức
-              làm số thực dùng.
-            </p>
+          {/* Branch-Constrained Staff Selectors */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="form-label" htmlFor="rec-opener">
+                Người mở ca (thuộc {form.storeId}) *
+              </label>
+              <select
+                id="rec-opener"
+                className="form-input form-select"
+                disabled={readOnlyView}
+                value={form.opener}
+                onChange={(e) =>
+                  setForm((cur) => ({ ...cur, opener: e.target.value }))
+                }
+              >
+                {formStaff.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} ({s.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label" htmlFor="rec-counter">
+                Người đóng / Kiểm kê *
+              </label>
+              <select
+                id="rec-counter"
+                className="form-input form-select"
+                disabled={readOnlyView}
+                value={form.counter}
+                onChange={(e) => {
+                  const nextCounter = e.target.value;
+                  const nextApprovers = formStaff.filter(
+                    (s) =>
+                      s.name !== nextCounter &&
+                      (s.role === "Quản lý chi nhánh" || s.role === "Ca trưởng"),
+                  );
+                  setForm((cur) => ({
+                    ...cur,
+                    counter: nextCounter,
+                    approver:
+                      cur.approver === nextCounter
+                        ? (nextApprovers[0]?.name ??
+                          formStaff.find((s) => s.name !== nextCounter)?.name ??
+                          "")
+                        : cur.approver,
+                  }));
+                }}
+              >
+                {formStaff.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} ({s.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label" htmlFor="rec-approver">
+                Người duyệt (khác người đếm) *
+              </label>
+              <select
+                id="rec-approver"
+                className="form-input form-select"
+                disabled={readOnlyView}
+                value={form.approver}
+                onChange={(e) =>
+                  setForm((cur) => ({ ...cur, approver: e.target.value }))
+                }
+              >
+                {fallbackApproverOptions.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} ({s.role})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <DataTable>
-            <table className="w-full min-w-[1450px] text-sm text-left">
-              <thead className="bg-[var(--background)] text-[var(--muted)]">
-                <tr>
-                  {[
-                    "Nguyên liệu / lô",
-                    "Đơn vị",
-                    "Tồn đầu",
-                    "Thực nhận",
-                    "Tiêu hao thực tế",
-                    "Hủy",
-                    "Lý thuyết",
-                    "Thực đếm",
-                    "Chênh lệch",
-                    "Giá trị",
-                    "Nguyên nhân hao hụt",
-                  ].map((label) => (
-                    <th
-                      key={label}
-                      className="px-3 py-3 font-semibold whitespace-nowrap"
+
+          {/* Opener !== Counter Warning & Mandatory Reason */}
+          {isFormMismatch && (
+            <div className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-2">
+              <div className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                Lưu ý: Người mở ca ({form.opener}) khác người kiểm kê đóng ca ({form.counter}) — Yêu cầu xác thực lý do bàn giao
+              </div>
+              {!readOnlyView && (
+                <div className="flex flex-wrap gap-1.5">
+                  {HANDOVER_REASONS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() =>
+                        setForm((cur) => ({
+                          ...cur,
+                          handoverMismatchReason: preset,
+                        }))
+                      }
+                      className={`px-2 py-0.5 rounded-full text-[11px] border ${form.handoverMismatchReason === preset
+                        ? "bg-amber-600 text-white border-amber-600"
+                        : "bg-[var(--surface)] border-[var(--border)] text-[var(--text)]"
+                        }`}
                     >
-                      {label}
-                    </th>
+                      {preset}
+                    </button>
                   ))}
+                </div>
+              )}
+              <input
+                type="text"
+                disabled={readOnlyView}
+                placeholder="Nhập lý do thay người giao ca / đồng kiểm..."
+                value={form.handoverMismatchReason}
+                onChange={(e) =>
+                  setForm((cur) => ({
+                    ...cur,
+                    handoverMismatchReason: e.target.value,
+                  }))
+                }
+                className="form-input text-xs"
+              />
+            </div>
+          )}
+
+          {/* Lines Table */}
+          <div className="rounded-xl border border-[var(--border)] overflow-x-auto">
+            <table className="data-table text-xs">
+              <thead>
+                <tr>
+                  <th>Nguyên liệu tại quầy</th>
+                  <th className="text-right">Đầu ca</th>
+                  <th className="text-right">Bán + Hủy</th>
+                  <th className="text-right">Lý thuyết</th>
+                  <th className="text-right">Thực đếm</th>
+                  <th className="text-right">Chênh lệch</th>
                 </tr>
               </thead>
               <tbody>
-                {lines.map((line, index) => {
-                  const ingredient = getIngredient(data, line.ingredientId);
-                  const difference = variance(line);
+                {form.lines.map((line, idx) => {
+                  const ing = getIngredient(data, line.ingredientId);
+                  const theo = theoreticalBalance(
+                    line.opening,
+                    line.received,
+                    line.actualUse,
+                    line.waste,
+                  );
+                  const diff = theo - line.counted;
                   return (
-                    <tr
-                      key={line.id}
-                      className="border-t border-[var(--border)]"
-                    >
-                      <td className="px-3 py-3">
-                        {ingredient?.name}
-                        <div className="text-xs text-[var(--muted)]">
-                          {
-                            data.lots.find((lot) => lot.id === line.lotId)
-                              ?.lotCode
-                          }
+                    <tr key={line.id}>
+                      <td>
+                        <div className="font-semibold text-[var(--text)]">
+                          {ing?.name ?? line.ingredientId}
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)]">
+                          Đơn vị: {ing?.baseUnit ?? ""}
                         </div>
                       </td>
-                      <td className="px-3 py-3">{ingredient?.baseUnit}</td>
-                      <td className="px-3 py-3">{line.opening}</td>
-                      <td className="px-3 py-3">{line.received}</td>
-                      <td className="px-2 py-2">
+                      <td className="text-right tabular-nums">
+                        {formatNumber(line.opening + line.received)}
+                      </td>
+                      <td className="text-right tabular-nums text-[var(--muted)]">
+                        {formatNumber(line.actualUse + line.waste)}
+                      </td>
+                      <td className="text-right tabular-nums font-medium">
+                        {formatNumber(theo)}
+                      </td>
+                      <td className="text-right">
                         <input
-                          aria-label={`Tiêu hao thực tế ${ingredient?.name}`}
                           type="number"
-                          min="0"
-                          step="0.001"
-                          className="form-input w-28"
-                          value={line.actualUseText}
-                          onChange={(event) =>
-                            updateLine(line.id, {
-                              actualUseText: event.target.value,
-                            })
-                          }
+                          min={0}
+                          step="any"
+                          disabled={readOnlyView}
+                          value={line.counted}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            setForm((cur) => ({
+                              ...cur,
+                              lines: cur.lines.map((item, i) =>
+                                i === idx ? { ...item, counted: val } : item,
+                              ),
+                            }));
+                          }}
+                          className="w-24 h-7 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-right tabular-nums text-xs"
                         />
                       </td>
-                      <td className="px-2 py-2">
-                        <input
-                          aria-label={`Lượng hủy ${ingredient?.name}`}
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          className="form-input w-24"
-                          value={line.wasteText}
-                          onChange={(event) =>
-                            updateLine(line.id, {
-                              wasteText: event.target.value,
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="px-3 py-3">{theoretical(line)}</td>
-                      <td className="px-2 py-2">
-                        <input
-                          aria-label={`Tồn thực đếm ${ingredient?.name}`}
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          className="form-input w-28"
-                          value={line.countedText}
-                          onChange={(event) =>
-                            updateLine(line.id, {
-                              countedText: event.target.value,
-                            })
-                          }
-                        />
-                      </td>
-                      <td
-                        className={`px-3 py-3 font-semibold ${difference > 0 ? "text-[var(--danger)]" : difference < 0 ? "text-[var(--info)]" : "text-[var(--success)]"}`}
-                      >
-                        {difference > 0
-                          ? `Thiếu ${difference}`
-                          : difference < 0
-                            ? `Thừa ${Math.abs(difference)}`
-                            : "Khớp"}
-                      </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(Math.abs(difference) * line.unitCost)}
-                      </td>
-                      <td className="px-2 py-2">
-                        <ReasonMultiSelect
-                          ingredientName={ingredient?.name}
-                          selected={line.reason}
-                          options={REASONS}
-                          openUpward={index >= Math.max(1, lines.length - 2)}
-                          onChange={(newReason) =>
-                            updateLine(line.id, { reason: newReason })
-                          }
-                        />
+                      <td className="text-right tabular-nums">
+                        {diff === 0 ? (
+                          <span className="text-emerald-600 font-medium">Khớp</span>
+                        ) : (
+                          <div>
+                            <span className="font-semibold text-amber-600">
+                              {diff > 0 ? `-${formatNumber(diff)}` : `+${formatNumber(Math.abs(diff))}`}
+                            </span>
+                            {!readOnlyView && (
+                              <div className="mt-1 flex flex-wrap justify-end gap-1">
+                                {VARIANCE_REASONS.map((rs) => (
+                                  <button
+                                    key={rs}
+                                    type="button"
+                                    onClick={() =>
+                                      setForm((cur) => ({
+                                        ...cur,
+                                        lines: cur.lines.map((item, i) =>
+                                          i === idx ? { ...item, reason: rs } : item,
+                                        ),
+                                      }))
+                                    }
+                                    className={`px-1.5 py-0.5 rounded text-[10px] border ${line.reason === rs
+                                      ? "bg-slate-800 text-white border-slate-800"
+                                      : "border-[var(--border)] text-[var(--muted)]"
+                                      }`}
+                                  >
+                                    {rs}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {line.reason && (
+                              <div className="text-[10px] text-[var(--muted)] mt-0.5">
+                                {line.reason}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </DataTable>
-          <div className="p-4 border-t border-[var(--border)] flex flex-wrap justify-between gap-2 text-sm">
-            <span>{changedLines.length} dòng có chênh lệch/hủy</span>
-            <b>Giá trị chênh lệch: {formatCurrency(totalVarianceValue)}</b>
           </div>
-        </section>
 
-        <section className="card">
-          <label className="form-label" htmlFor="reconcile-note">
-            Biên bản / ghi chú chung
-          </label>
-          <textarea
-            id="reconcile-note"
-            rows={3}
-            className="form-input form-textarea"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Mô tả nguyên nhân, chứng từ hoặc thông tin liên quan..."
-          />
-          {error && (
-            <p role="alert" className="text-sm text-[var(--danger)] mt-2">
-              {error}
-            </p>
-          )}
-          <div className="flex flex-wrap justify-end gap-2 mt-4">
+          <div>
+            <label className="form-label" htmlFor="rec-note">
+              Ghi chú kiểm kê
+            </label>
+            <input
+              id="rec-note"
+              disabled={readOnlyView}
+              className="form-input text-xs"
+              placeholder="Ghi chú thêm cho ca tiếp theo hoặc quản lý duyệt..."
+              value={form.note}
+              onChange={(e) =>
+                setForm((cur) => ({ ...cur, note: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+      </SideDrawer>
+
+      {/* SideDrawer 2: Admin Staff Assignment across Branches */}
+      <SideDrawer
+        isOpen={staffDrawerOpen}
+        onClose={() => setStaffDrawerOpen(false)}
+        title="Phân công nhân sự theo chi nhánh"
+        subtitle="Quản trị chuỗi phân bổ nhân sự Thu ngân / Pha chế / Ca trưởng để giới hạn danh sách đối soát tại từng cửa hàng"
+        widthClass="max-w-[620px]"
+        footer={
+          <div className="flex justify-end">
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => saveRecord("draft")}
+              onClick={() => setStaffDrawerOpen(false)}
             >
-              Lưu bản nháp
-            </button>
-            <button type="submit" className="btn btn-primary">
-              Gửi đối soát
+              Đóng
             </button>
           </div>
-        </section>
-      </form>
-
-      <section className="card p-0 overflow-hidden mt-6">
-        <div className="p-4 md:p-5 border-b border-[var(--border)]">
-          <h2 className="font-bold">Lịch sử đối soát</h2>
-        </div>
-        <DataTable>
-          <table className="w-full min-w-[1000px] text-sm text-left">
-            <thead className="bg-[var(--background)] text-[var(--muted)]">
-              <tr>
-                {[
-                  "Ngày",
-                  "Cửa hàng",
-                  "Ca",
-                  "Số dòng",
-                  "Giá trị chênh lệch",
-                  "Người đếm",
-                  "Người duyệt",
-                  "Trạng thái",
-                  "Thao tác",
-                ].map((label) => (
-                  <th
-                    key={label}
-                    className="px-3 py-3 font-semibold whitespace-nowrap"
-                  >
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.reconciliations.map((record) => (
-                <tr key={record.id} className="border-t border-[var(--border)]">
-                  <td className="px-3 py-3">{formatDate(record.date)}</td>
-                  <td className="px-3 py-3">
-                    {getStore(data, record.storeId)?.code} ·{" "}
-                    {getStore(data, record.storeId)?.name}
-                  </td>
-                  <td className="px-3 py-3">{record.shift}</td>
-                  <td className="px-3 py-3">{record.lines.length}</td>
-                  <td className="px-3 py-3">
-                    {formatCurrency(historyValue(record))}
-                  </td>
-                  <td className="px-3 py-3">{record.counter}</td>
-                  <td className="px-3 py-3">
-                    {record.approver || "Chưa duyệt"}
-                  </td>
-                  <td className="px-3 py-3">
-                    <Badge
-                      variant={
-                        record.status === "approved"
-                          ? "success"
-                          : record.status === "pending"
-                            ? "warning"
-                            : "info"
-                      }
-                    >
-                      {STATUS_LABEL[record.status]}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => setSelectedRecord(record)}
-                      >
-                        Chi tiết
-                      </button>
-                      {record.status === "draft" && (
-                        <button
-                          className="btn btn-primary"
-                          onClick={() =>
-                            setData((current) => ({
-                              ...current,
-                              reconciliations: current.reconciliations.map(
-                                (item) =>
-                                  item.id === record.id &&
-                                  item.status === "draft"
-                                    ? { ...item, status: "pending" }
-                                    : item,
-                              ),
-                            }))
-                          }
-                        >
-                          Gửi đối soát
-                        </button>
-                      )}
-                      {record.status === "pending" && (
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => approve(record)}
-                        >
-                          Duyệt điều chỉnh
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </DataTable>
-      </section>
-      <Modal
-        isOpen={!!selectedRecord}
-        title="Chi tiết đối soát"
-        size="lg"
-        onClose={() => setSelectedRecord(null)}
+        }
       >
-        {selectedRecord && (
-          <div className="space-y-2">
-            <p>
-              {getStore(data, selectedRecord.storeId)?.name} ·{" "}
-              {selectedRecord.shift} · {formatDate(selectedRecord.date)}
-            </p>
-            {selectedRecord.lines.map((line) => (
-              <p key={line.id} className="text-sm">
-                {getIngredient(data, line.ingredientId)?.name}: đầu{" "}
-                {line.opening} + nhận {line.received} − dùng thực{" "}
-                {line.actualUse} − hủy {line.waste} = lý thuyết{" "}
-                {theoreticalBalance(
-                  line.opening,
-                  line.received,
-                  line.actualUse,
-                  line.waste,
-                )}
-                ; đếm {line.counted}.
-                {line.reason && (
-                  <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">
-                    [Lý do: {line.reason}]
-                  </span>
-                )}
-              </p>
-            ))}
-            <p className="text-sm text-[var(--muted)]">
-              {selectedRecord.note || "Không có ghi chú."}
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-medium text-[var(--muted)]" htmlFor="staff-br-filter">
+              Xem nhân sự chi nhánh:
+            </label>
+            <select
+              id="staff-br-filter"
+              value={staffBranchFilter}
+              onChange={(e) => {
+                setStaffBranchFilter(e.target.value);
+                if (e.target.value !== "ALL") {
+                  setNewStaffForm((c) => ({ ...c, storeId: e.target.value }));
+                }
+              }}
+              className="h-8 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+            >
+              <option value="ALL">Tất cả chi nhánh</option>
+              {data.stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id} · {s.name}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-      </Modal>
+
+          {/* Quick Add Staff Form */}
+          <form
+            onSubmit={handleAddStaff}
+            className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 space-y-2"
+          >
+            <div className="text-xs font-semibold text-[var(--heading-color)]">
+              + Thêm nhân sự vào chi nhánh
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <input
+                type="text"
+                placeholder="Họ và tên *"
+                value={newStaffForm.name}
+                onChange={(e) =>
+                  setNewStaffForm((c) => ({ ...c, name: e.target.value }))
+                }
+                className="form-input text-xs"
+                required
+              />
+              <select
+                value={newStaffForm.role}
+                onChange={(e) =>
+                  setNewStaffForm((c) => ({
+                    ...c,
+                    role: e.target.value as BranchStaffMember["role"],
+                  }))
+                }
+                className="form-input form-select text-xs"
+              >
+                <option value="Thu ngân">Thu ngân</option>
+                <option value="Pha chế">Pha chế</option>
+                <option value="Ca trưởng">Ca trưởng</option>
+                <option value="Nhân viên kho">Nhân viên kho</option>
+                <option value="Quản lý chi nhánh">Quản lý chi nhánh</option>
+              </select>
+              <select
+                value={newStaffForm.storeId}
+                onChange={(e) =>
+                  setNewStaffForm((c) => ({ ...c, storeId: e.target.value }))
+                }
+                className="form-input form-select text-xs"
+              >
+                {data.stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.id}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn btn-primary btn-sm">
+                Thêm nhân sự
+              </button>
+            </div>
+          </form>
+
+          {/* Staff List with Transfer */}
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+            {data.branchStaff
+              .filter(
+                (st) =>
+                  staffBranchFilter === "ALL" || st.storeId === staffBranchFilter,
+              )
+              .map((st) => (
+                <div
+                  key={st.id}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex items-center justify-between gap-2 text-xs"
+                >
+                  <div>
+                    <div className="font-semibold text-[var(--text)]">
+                      {st.name}{" "}
+                      <span className="font-mono text-[11px] text-[var(--muted)]">
+                        ({st.code})
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)]">
+                      {st.role} · {st.phone}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-[var(--muted)]">Điều chuyển:</span>
+                    <select
+                      aria-label={`Chi nhánh của ${st.name}`}
+                      value={st.storeId}
+                      onChange={(e) => handleTransferStaff(st.id, e.target.value)}
+                      className="h-7 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+                    >
+                      {data.stores.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </SideDrawer>
     </div>
   );
 }

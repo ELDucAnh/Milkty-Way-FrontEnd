@@ -1,6 +1,7 @@
 import OrderReturnHistory from "../sales/OrderReturnHistory";
 import { RETURNS_CHANGED } from "../shared/sales-returns-store";
-import { homePath, isCashier, scopedBranch } from "../../utils/auth";
+import { findStaff, homePath, scopedBranch } from "../../utils/auth";
+import { shiftLabels } from "../sales/sales-support";
 import { useEffect, useState, useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
@@ -25,8 +26,21 @@ export default function InvoiceDetailsPage() {
     };
   }, []);
   const branchScope = scopedBranch();
-  const invoices = useMemo(() => loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)), [branchScope, revision]);
-  const orders = useMemo(() => loadOrders().filter(o => !branchScope || o.branchId === branchScope), [branchScope, revision]);
+  const { invoices, orders, loadError } = useMemo(() => {
+    try {
+      return {
+        invoices: loadInvoices().filter(i => !branchScope || i.branch.startsWith(branchScope)),
+        orders: loadOrders().filter(o => !branchScope || o.branchId === branchScope),
+        loadError: "",
+      };
+    } catch (error) {
+      return {
+        invoices: [] as InvoiceRecord[],
+        orders: [] as SalesOrder[],
+        loadError: error instanceof Error ? error.message : "Không đọc được dữ liệu hóa đơn.",
+      };
+    }
+  }, [branchScope, revision]);
 
   const effectiveId = id && id !== "invoice-details" ? id : null;
 
@@ -68,6 +82,18 @@ export default function InvoiceDetailsPage() {
     if (orderIdParam || effectiveId) return undefined;
     return invoices[0];
   }, [effectiveId, orderIdParam, invoices, matchedOrder]);
+
+  if (loadError) {
+    return (
+      <div className="card space-y-3" role="alert">
+        <h1 className="page-title">Lỗi đọc dữ liệu hóa đơn</h1>
+        <p className="text-sm text-red-600">{loadError}</p>
+        <Link to="/invoices" className="btn btn-secondary">
+          Danh sách hóa đơn
+        </Link>
+      </div>
+    );
+  }
 
   if (!matchedInvoice && !matchedOrder) {
     return (
@@ -157,7 +183,7 @@ export default function InvoiceDetailsPage() {
             </svg>
             Danh sách hóa đơn
           </Link>
-          {!isCashier() && <><div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
+          <div className="inline-flex rounded-lg shadow-sm border border-[var(--border)] overflow-hidden">
             <button
               type="button"
               className={`btn btn-secondary border-none rounded-none text-xs px-3 ${printFormat === "k80" ? "bg-[var(--surface)]" : ""
@@ -202,7 +228,7 @@ export default function InvoiceDetailsPage() {
               <polyline points="22,6 12,13 2,6" />
             </svg>
             Gửi Cho Khách
-          </button></>}
+          </button>
         </div>
       </div>
 
@@ -217,12 +243,18 @@ export default function InvoiceDetailsPage() {
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
               <span className="text-[var(--muted)]">Thu ngân: </span>
-              <span className="font-semibold text-[var(--text)]">Nguyễn An (NV-01)</span>
+              <span className="font-semibold text-[var(--text)]">
+                {matchedOrder?.createdByStaffId
+                  ? (findStaff(matchedOrder.createdByStaffId)?.name ?? matchedOrder.createdByStaffId)
+                  : "—"}
+              </span>
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
               <span className="text-[var(--muted)]">Ca: </span>
-              <span className="font-semibold text-[var(--text)]">Ca Sáng (07:00–15:00)</span>
+              <span className="font-semibold text-[var(--text)]">
+                {matchedOrder?.shift ? (shiftLabels[matchedOrder.shift] ?? matchedOrder.shift) : "—"}
+              </span>
             </div>
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
             <div>
@@ -239,18 +271,18 @@ export default function InvoiceDetailsPage() {
 
       {/* Hóa đơn có thể in */}
       <div className="card printable-card max-w-4xl mx-auto p-6 md:p-10 relative shadow-md">
-        {/* Dấu trạng thái thanh toán */}
-        <div className="absolute top-[30px] right-[40px] border-[3px] border-[var(--primary)] text-[var(--primary)] font-black text-xl px-[18px] py-1 rounded-lg rotate-[8deg] tracking-[2px] uppercase opacity-[0.85] no-print">
+        {/* Dấu trạng thái thanh toán (watermark nằm dưới chữ, opacity thấp) */}
+        <div className="absolute top-[30px] right-[40px] z-0 pointer-events-none select-none border-[3px] border-[var(--primary)] text-[var(--primary)] font-black text-xl px-[18px] py-1 rounded-lg rotate-[8deg] tracking-[2px] uppercase opacity-65 no-print">
           {invoiceStatus.toUpperCase()}
         </div>
 
         {/* Header hóa đơn */}
-        <div className="flex justify-between items-start flex-wrap gap-5 mb-8 pb-6 border-b border-[var(--border)]">
+        <div className="relative z-10 flex justify-between items-start flex-wrap gap-5 mb-8 pb-6 border-b border-[var(--border)]">
           <div className="flex items-center gap-3">
             <div className="w-[48px] h-[48px] rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] flex items-center justify-center shadow-md">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="white" fillOpacity="0.2"/>
-                <circle cx="12" cy="12" r="3" fill="white"/>
+                <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" fill="white" fillOpacity="0.2" />
+                <circle cx="12" cy="12" r="3" fill="white" />
               </svg>
             </div>
             <div className="border-l border-[var(--border)] pl-3">
@@ -276,21 +308,25 @@ export default function InvoiceDetailsPage() {
             </div>
             <div className="text-[16px] font-bold text-[var(--text)]">{customerName}</div>
             <div className="text-[13px] text-[var(--muted)] mt-0.5">SĐT: {customerPhone}</div>
-            <div className="text-[13px] text-[var(--muted)]">
-              Hạng thành viên:{" "}
-              <span className="font-semibold text-emerald-600">
-                {memberTier === "VIP"
-                  ? "VIP (Chiết khấu 15%)"
-                  : memberTier === "Gold"
-                  ? "Gold (Chiết khấu 10%)"
-                  : memberTier === "Silver"
-                  ? "Silver (Chiết khấu 5%)"
-                  : "Member (Hội viên thân thiết)"}
-              </span>
-            </div>
-            <div className="text-[13px] text-[var(--muted)] mt-1">
-              Điểm tích lũy đơn này: <span className="font-bold text-[var(--primary)]">+{Math.round(total / 10000)} điểm</span>
-            </div>
+            {customerPhone && customerPhone !== "0900 000 000" && customerName !== "Khách Vãng Lai" && (
+              <>
+                <div className="text-[13px] text-[var(--muted)]">
+                  Hạng thành viên:{" "}
+                  <span className="font-semibold text-emerald-600">
+                    {memberTier === "VIP"
+                      ? "VIP (Giảm 10% / đơn)"
+                      : memberTier === "Gold"
+                        ? "Gold (Giảm 5% / đơn)"
+                        : memberTier === "Silver"
+                          ? "Silver (Giảm 5.000 ₫ / đơn)"
+                          : "Member (Giảm 2.000 ₫ / đơn)"}
+                  </span>
+                </div>
+                <div className="text-[13px] text-[var(--muted)] mt-1">
+                  Điểm tích lũy đơn này: <span className="font-bold text-[var(--primary)]">+{Math.round(total / 10000)} điểm</span>
+                </div>
+              </>
+            )}
           </div>
           <div className="bg-[var(--background)] p-4 rounded-xl flex flex-col gap-2">
             <div className="flex justify-between text-[13px]">
@@ -351,7 +387,7 @@ export default function InvoiceDetailsPage() {
         </div>
 
         {/* Tổng cộng */}
-        <div className="flex justify-end mb-8">
+        <div className="flex justify-end">
           <div className="w-[340px] flex flex-col gap-2.5">
             <div className="flex justify-between text-[13px]">
               <span className="text-[var(--muted)]">Tạm tính:</span>
@@ -379,6 +415,12 @@ export default function InvoiceDetailsPage() {
               <span className="text-[var(--muted)]">Tiền thừa trả lại:</span>
               <span className="text-[var(--text)]">{formatCurrency(change)}</span>
             </div>
+            {paid < total && (
+              <div className="flex justify-between text-[13px] font-semibold text-amber-700 bg-amber-50 py-2 px-3 rounded-lg">
+                <span>Còn phải thu:</span>
+                <span>{formatCurrency(total - paid)}</span>
+              </div>
+            )}
           </div>
         </div>
 
